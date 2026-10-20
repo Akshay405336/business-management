@@ -1,0 +1,10 @@
+{
+  "extends": "@techwin/tsconfig/nestjs.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["src", "prisma", "prisma.config.ts"]
+}

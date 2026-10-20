@@ -1,0 +1,17 @@
+.git
+.github
+.cursor
+.vscode
+.tmp
+coverage
+docs
+**/.next
+**/dist
+**/node_modules
+**/*.tsbuildinfo
+apps/api/src/generated
+.env
+.env.*
+!.env.example
+*.log
+README.md

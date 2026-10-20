@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+out
+.turbo
+coverage
+.tmp
+pnpm-lock.yaml
+apps/api/src/generated
+apps/web/next-env.d.ts
+.env
+.env.*
+!.env.example
+**/*.tsbuildinfo

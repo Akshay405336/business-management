@@ -1,0 +1,137 @@
+// Techwin database schema. The connection URL is configured in prisma.config.ts.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlatformAdminRole {
+  SUPER_ADMIN
+}
+
+enum PlatformAdminStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum PlatformSessionRevocationReason {
+  LOGOUT
+  LOGOUT_ALL
+  REVOKED
+  REFRESH_TOKEN_REUSE
+  CREDENTIALS_RESET
+}
+
+enum PlatformAuditEventType {
+  SUPER_ADMIN_BOOTSTRAPPED
+  SUPER_ADMIN_CREDENTIALS_RESET
+  PASSWORD_LOGIN_FAILED
+  PASSWORD_VERIFIED
+  TOTP_FAILED
+  SESSION_CREATED
+  REFRESH_TOKEN_REUSE_DETECTED
+  SESSION_REVOKED
+  LOGOUT
+  LOGOUT_ALL_DEVICES
+}
+
+/// Platform-level administrator. `email` is stored normalized (trimmed, lower-case).
+model PlatformAdmin {
+  id                   String              @id @db.Uuid
+  email                String              @unique @db.VarChar(254)
+  displayName          String              @map("display_name") @db.VarChar(120)
+  role                 PlatformAdminRole   @default(SUPER_ADMIN)
+  status               PlatformAdminStatus @default(ACTIVE)
+  passwordHash         String              @map("password_hash")
+  /// AES-256-GCM envelope; the plaintext secret is never stored.
+  totpSecretCiphertext String              @map("totp_secret_ciphertext")
+  totpEnrolledAt       DateTime?           @map("totp_enrolled_at") @db.Timestamptz(3)
+  /// Last accepted TOTP time step, used to reject code replay.
+  lastTotpTimeStep     BigInt?             @map("last_totp_time_step")
+  lastLoginAt          DateTime?           @map("last_login_at") @db.Timestamptz(3)
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  challenges  PlatformAuthChallenge[]
+  sessions    PlatformSession[]
+  auditEvents PlatformAuditEvent[]
+
+  @@map("platform_admins")
+}
+
+/// Short-lived, single-use proof that the password step succeeded.
+model PlatformAuthChallenge {
+  id             String    @id @db.Uuid
+  adminId        String    @map("admin_id") @db.Uuid
+  /// SHA-256 of the opaque challenge token held in an HttpOnly cookie.
+  tokenHash      String    @unique @map("token_hash") @db.Char(64)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(3)
+  failedAttempts Int       @default(0) @map("failed_attempts")
+  ipAddress      String?   @map("ip_address") @db.VarChar(64)
+  userAgent      String?   @map("user_agent") @db.VarChar(512)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, expiresAt])
+  @@map("platform_auth_challenges")
+}
+
+model PlatformSession {
+  id            String                           @id @db.Uuid
+  adminId       String                           @map("admin_id") @db.Uuid
+  /// SHA-256 of the session-bound CSRF token (double-submit cookie value).
+  csrfTokenHash String                           @map("csrf_token_hash") @db.Char(64)
+  ipAddress     String?                          @map("ip_address") @db.VarChar(64)
+  userAgent     String?                          @map("user_agent") @db.VarChar(512)
+  createdAt     DateTime                         @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastActiveAt  DateTime                         @map("last_active_at") @db.Timestamptz(3)
+  expiresAt     DateTime                         @map("expires_at") @db.Timestamptz(3)
+  revokedAt     DateTime?                        @map("revoked_at") @db.Timestamptz(3)
+  revokedReason PlatformSessionRevocationReason? @map("revoked_reason")
+
+  admin         PlatformAdmin          @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  refreshTokens PlatformRefreshToken[]
+
+  @@index([adminId, revokedAt, expiresAt])
+  @@map("platform_sessions")
+}
+
+/// Every refresh token ever issued for a session. Presenting a rotated token is
+/// treated as theft and revokes the whole session.
+model PlatformRefreshToken {
+  id        String    @id @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  rotatedAt DateTime? @map("rotated_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  session PlatformSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("platform_refresh_tokens")
+}
+
+model PlatformAuditEvent {
+  id        String                 @id @default(uuid()) @db.Uuid
+  adminId   String?                @map("admin_id") @db.Uuid
+  type      PlatformAuditEventType
+  ipAddress String?                @map("ip_address") @db.VarChar(64)
+  userAgent String?                @map("user_agent") @db.VarChar(512)
+  metadata  Json?
+  createdAt DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  admin PlatformAdmin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([adminId, createdAt])
+  @@index([type, createdAt])
+  @@map("platform_audit_events")
+}

@@ -1,0 +1,3 @@
+# The Techwin admin application must not be indexed.
+User-agent: *
+Disallow: /

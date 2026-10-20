@@ -1,0 +1,12 @@
+{
+  "extends": "./packages/tsconfig/node-library.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  "include": ["packages/scripts/src/**/*.mjs"]
+}

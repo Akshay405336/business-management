@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10 blocks dependency lifecycle scripts by default. Only these packages
+# need to run install scripts (native bindings and Prisma engines).
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - argon2
+  - prisma
+  - sharp
+  - turbo
+  - unrs-resolver

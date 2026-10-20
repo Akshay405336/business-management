@@ -1,0 +1,40 @@
+{
+  "name": "techwin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Techwin - reusable foundation for business applications (NestJS API + Next.js admin).",
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=22.12.0",
+    "pnpm": ">=10.28.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@techwin/api",
+    "dev:web": "turbo run dev --filter=@techwin/web",
+    "build": "turbo run build",
+    "start:api": "pnpm --filter @techwin/api run start",
+    "start:web": "pnpm --filter @techwin/web run start",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check:architecture": "turbo run check:architecture --filter=@techwin/scripts",
+    "db:generate": "turbo run db:generate --filter=@techwin/api",
+    "db:migrate": "turbo run db:migrate --filter=@techwin/api",
+    "db:migrate:deploy": "turbo run db:migrate:deploy --filter=@techwin/api",
+    "db:seed": "turbo run db:seed --filter=@techwin/api",
+    "db:setup": "turbo run db:setup --filter=@techwin/api",
+    "admin:bootstrap": "turbo run admin:bootstrap --filter=@techwin/api --",
+    "secrets:generate": "pnpm --filter @techwin/scripts run secrets:generate",
+    "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm check:architecture && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "prettier": "3.9.10",
+    "prettier-plugin-prisma": "5.0.0",
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "turbo": "2.11.9",
+    "typescript": "6.0.3"
+  }
+}

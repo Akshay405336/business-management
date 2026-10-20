@@ -1,0 +1,21 @@
+{
+  "name": "@techwin/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Repository tooling: architecture boundary checks and secret generation.",
+  "type": "module",
+  "scripts": {
+    "check:architecture": "node src/check-architecture.mjs",
+    "secrets:generate": "node src/generate-secrets.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p ../../tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "typescript": "6.0.3"
+  },
+  "devDependencies": {
+    "@techwin/eslint-config": "workspace:*",
+    "@types/node": "22.20.5",
+    "eslint": "9.39.5"
+  }
+}
