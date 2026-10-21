@@ -13,9 +13,12 @@ import type {
 import { CrmNotFoundError } from '../domain/errors/crm.errors.js';
 import {
   CRM_REPOSITORY,
+  type ChangeServicePackageStatusInput,
+  type CreateServicePackageInput,
   type CrmRepository,
   type LeadListFilters,
   type ProposalLineItemWriteInput,
+  type UpdateServicePackageInput,
 } from '../domain/repositories/crm.repository.js';
 
 export interface CrmActor {
@@ -406,6 +409,7 @@ export class CrmUseCases {
       notes?: string;
       terms?: string;
       lineItems?: readonly ProposalLineItemWriteInput[];
+      sourcePackageId?: string | null;
     },
   ) {
     const proposalId = crypto.randomUUID();
@@ -464,6 +468,62 @@ export class CrmUseCases {
 
   getProposalPrintData(actor: CrmActor, proposalId: string) {
     return this.crm.getProposalPrintData(actor.organizationId, proposalId);
+  }
+
+  listServicePackages(actor: CrmActor) {
+    return this.crm.listServicePackages(actor.organizationId);
+  }
+
+  getServicePackage(actor: CrmActor, packageId: string) {
+    return this.require(this.crm.getServicePackage(actor.organizationId, packageId), 'Service package');
+  }
+
+  previewServicePackageCode(actor: CrmActor) {
+    return this.crm.previewServicePackageCode(actor.organizationId);
+  }
+
+  createServicePackage(actor: CrmActor, input: CreateServicePackageInput) {
+    return this.crm.createServicePackage(actor.organizationId, input, {
+      type: 'SERVICE_PACKAGE_CREATED',
+      adminId: actor.adminId,
+      entityType: 'service_package',
+      entityId: 'pending',
+    });
+  }
+
+  updateServicePackage(
+    actor: CrmActor,
+    packageId: string,
+    input: UpdateServicePackageInput,
+  ) {
+    return this.crm.updateServicePackage(actor.organizationId, packageId, input, {
+      type: 'SERVICE_PACKAGE_UPDATED',
+      adminId: actor.adminId,
+      entityType: 'service_package',
+      entityId: packageId,
+    });
+  }
+
+  changeServicePackageStatus(
+    actor: CrmActor,
+    packageId: string,
+    input: ChangeServicePackageStatusInput,
+  ) {
+    return this.crm.changeServicePackageStatus(actor.organizationId, packageId, input, {
+      type: 'SERVICE_PACKAGE_UPDATED',
+      adminId: actor.adminId,
+      entityType: 'service_package',
+      entityId: packageId,
+    });
+  }
+
+  deleteServicePackage(actor: CrmActor, packageId: string) {
+    return this.crm.deleteServicePackage(actor.organizationId, packageId, {
+      type: 'SERVICE_PACKAGE_UPDATED',
+      adminId: actor.adminId,
+      entityType: 'service_package',
+      entityId: packageId,
+    });
   }
 
   private async require<T>(promise: Promise<T | null>, entity: string): Promise<T> {

@@ -15,8 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { clientNameFieldSchema, createClientRequestSchema } from '@techwin/validation';
+import { focusFirstInvalidField } from '@/shared/form/form-control-state';
+import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
+import { clearFormFieldError, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
+import { cn } from '@/shared/lib/utils';
 import {
   Select,
   SelectContent,
@@ -25,23 +30,30 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDateTime } from '@/shared/lib/format';
 import { createClient, getClient, listClients, updateClient } from '../api/clients';
+import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import { CLIENT_STATUSES, CLIENT_TYPES } from '../constants';
 import type { ClientStatus, ClientType, CrmClient } from '../types';
 import { describeCrmError } from '../utils/errors';
 import { labelClientStatus, labelClientType } from '../utils/labels';
-import { DataTableFrame } from '@/features/admin/components/data-table';
-import { CrmEmptyState, CrmErrorAlert, CrmLoadingRows, CrmPageHeader } from './crm-feedback';
+import {
+  DataTable,
+  deriveDataTablePhase,
+  isDataTableRefreshing,
+} from '@/features/admin/components/data-table';
+import { CRM_CLIENTS_TABLE_SKELETON } from '@/features/admin/components/data-table-presets';
+import { TablePagination } from '@/features/admin/components/table-pagination';
+import {
+  CrmErrorAlert,
+  CrmFormField,
+  CrmLoadingRows,
+  CrmPageHeader,
+  formGridClass,
+  formGridFullWidthClass,
+} from './crm-feedback';
 import { useAsyncAction } from '../hooks/use-async-action';
 
 type ClientForm = {
@@ -77,23 +89,34 @@ export function ClientsPage() {
   const { pending, run } = useAsyncAction();
 
   const [clients, setClients] = useState<readonly CrmClient[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ClientStatus>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | ClientType>('ALL');
 
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(null);
   const [form, setForm] = useState<ClientForm>(emptyForm);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const clientLiveFields = useZodFormFields(
+    { name: clientNameFieldSchema },
+    { name: form.name },
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CrmClient | null>(null);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const result = await listClients();
       setClients(result.clients);
       setError(null);
     } catch (failure) {
       setError(describeCrmError(failure));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -143,8 +166,41 @@ export function ClientsPage() {
     });
   }, [clients, search, statusFilter, typeFilter]);
 
+  const filtersActive = statusFilter !== 'ALL' || typeFilter !== 'ALL' || search.trim().length > 0;
+  const totalClients = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalClients / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pagedClients = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, pageSize, safePage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const tablePhase = deriveDataTablePhase({
+    loading,
+    error,
+    rowCount: filtered.length,
+  });
+  const tableRefreshing = isDataTableRefreshing({ loading, rowCount: filtered.length });
+
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter('ALL');
+    setTypeFilter('ALL');
+    setPage(1);
+  };
+
   const openCreate = () => {
     setForm(emptyForm());
+    setFormErrors({});
+    clientLiveFields.reset();
     setDialogMode('create');
   };
 
@@ -167,7 +223,7 @@ export function ClientsPage() {
   };
 
   const submit = async () => {
-    if (!form.name.trim()) return;
+    clientLiveFields.prepareSubmit();
     setError(null);
     const body = {
       type: form.type,
@@ -182,11 +238,17 @@ export function ClientsPage() {
       notes: form.notes.trim() || undefined,
       sourceLeadId: form.sourceLeadId.trim() || null,
     };
+    const parsed = createClientRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      setFormErrors(zodErrorToFieldMap(parsed.error));
+      focusFirstInvalidField();
+      return;
+    }
     try {
       if (dialogMode === 'create') {
-        await run(() => createClient(body));
+        await run(() => createClient(parsed.data));
       } else if (selectedId) {
-        await run(() => updateClient(selectedId, body));
+        await run(() => updateClient(selectedId, parsed.data));
       }
       setDialogMode(null);
       await load();
@@ -217,28 +279,25 @@ export function ClientsPage() {
         }
       />
 
-      {error ? <CrmErrorAlert message={error} /> : null}
+      {error && (clients?.length ?? 0) > 0 ? <CrmErrorAlert message={error} /> : null}
 
       <Card>
         <CardContent className="grid gap-3 pt-6 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="relative sm:col-span-2">
-            <Search
-              className="text-muted-foreground pointer-events-none absolute top-2.5 left-2.5 size-4"
-              aria-hidden="true"
-            />
+          <InputGroup leading={<Search aria-hidden="true" />} className="sm:col-span-2">
             <Input
-              className="pl-8"
-              placeholder="Search clients..."
+              className={cn(inputGroupPaddingClass({ leading: true }))}
+              placeholder={CRM_FORM_PLACEHOLDERS.searchClients}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
+              aria-label="Search clients"
             />
-          </div>
+          </InputGroup>
           <Select
             value={statusFilter}
             onValueChange={(value) => setStatusFilter(value as 'ALL' | ClientStatus)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Status" />
+              <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.filterStatus} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All statuses</SelectItem>
@@ -254,7 +313,7 @@ export function ClientsPage() {
             onValueChange={(value) => setTypeFilter(value as 'ALL' | ClientType)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Type" />
+              <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.filterType} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All types</SelectItem>
@@ -268,57 +327,80 @@ export function ClientsPage() {
         </CardContent>
       </Card>
 
-      {clients === null && !error ? <CrmLoadingRows rows={5} /> : null}
-
-      {clients && filtered.length === 0 ? (
-        <CrmEmptyState title="No clients found" description="Adjust filters or create a client." />
-      ) : null}
-
-      {filtered.length > 0 ? (
-        <DataTableFrame>
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Client</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((client) => (
-                <TableRow
-                  key={client.id}
-                  className="cursor-pointer"
-                  onClick={() => setSelectedId(client.id)}
-                >
-                  <TableCell>
-                    <div className="grid">
-                      <span className="font-medium">{client.name}</span>
-                      <span className="text-muted-foreground text-xs">
-                        {client.referenceNumber}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{labelClientType(client.type)}</TableCell>
-                  <TableCell>
-                    <Badge variant={client.status === 'ACTIVE' ? 'success' : 'secondary'}>
-                      {labelClientStatus(client.status)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground max-w-[12rem] truncate">
-                    {(client.email ?? client.phone ?? client.primaryContact) || '—'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDateTime(client.updatedAt)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </DataTableFrame>
-      ) : null}
+      <DataTable
+        phase={tablePhase}
+        colSpan={5}
+        skeletonColumns={CRM_CLIENTS_TABLE_SKELETON}
+        header={
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Client</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Contact</TableHead>
+            <TableHead>Updated</TableHead>
+          </TableRow>
+        }
+        empty={{
+          title:
+            filtersActive || (clients?.length ?? 0) > 0
+              ? 'No results match your filters'
+              : 'No clients yet',
+          description:
+            filtersActive || (clients?.length ?? 0) > 0
+              ? 'Try adjusting search, status, or type filters.'
+              : 'Create a client account or convert a lead to get started.',
+          action:
+            filtersActive || (clients?.length ?? 0) > 0
+              ? undefined
+              : { label: 'New client', onClick: openCreate },
+          secondaryAction: filtersActive
+            ? { label: 'Clear filters', onClick: clearFilters }
+            : undefined,
+        }}
+        errorMessage={error}
+        onRetry={() => void load()}
+        refreshing={tableRefreshing}
+        footer={
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            total={totalClients}
+            loading={tablePhase === 'initial-loading'}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        {pagedClients.map((client) => (
+          <TableRow
+            key={client.id}
+            className="cursor-pointer"
+            onClick={() => setSelectedId(client.id)}
+          >
+            <TableCell>
+              <div className="grid">
+                <span className="font-medium">{client.name}</span>
+                <span className="text-muted-foreground text-xs">{client.referenceNumber}</span>
+              </div>
+            </TableCell>
+            <TableCell>{labelClientType(client.type)}</TableCell>
+            <TableCell>
+              <Badge variant={client.status === 'ACTIVE' ? 'success' : 'secondary'}>
+                {labelClientStatus(client.status)}
+              </Badge>
+            </TableCell>
+            <TableCell className="text-muted-foreground max-w-[12rem] truncate">
+              {(client.email ?? client.phone ?? client.primaryContact) || '—'}
+            </TableCell>
+            <TableCell className="text-muted-foreground">
+              {formatDateTime(client.updatedAt)}
+            </TableCell>
+          </TableRow>
+        ))}
+      </DataTable>
 
       <Sheet open={selectedId !== null} onOpenChange={(open) => !open && setSelectedId(null)}>
         <SheetContent side="right" className="w-[min(28rem,92vw)] overflow-y-auto">
@@ -393,133 +475,137 @@ export function ClientsPage() {
             <DialogTitle>{dialogMode === 'create' ? 'Create client' : 'Edit client'}</DialogTitle>
             <DialogDescription>Client records can be linked to a converted lead.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label>Type</Label>
-                <Select
-                  value={form.type}
-                  onValueChange={(value) =>
-                    setForm((item) => ({ ...item, type: value as ClientType }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CLIENT_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {labelClientType(type)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-1.5">
-                <Label>Status</Label>
-                <Select
-                  value={form.status}
-                  onValueChange={(value) =>
-                    setForm((item) => ({ ...item, status: value as ClientStatus }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CLIENT_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {labelClientStatus(status)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="client-name">Name</Label>
+          <div className={formGridClass}>
+            <CrmFormField id="client-type" label="Type">
+              <Select
+                value={form.type}
+                onValueChange={(value) =>
+                  setForm((item) => ({ ...item, type: value as ClientType }))
+                }
+              >
+                <SelectTrigger id="client-type">
+                  <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectType} />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLIENT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {labelClientType(type)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CrmFormField>
+            <CrmFormField id="client-status" label="Status">
+              <Select
+                value={form.status}
+                onValueChange={(value) =>
+                  setForm((item) => ({ ...item, status: value as ClientStatus }))
+                }
+              >
+                <SelectTrigger id="client-status">
+                  <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectStatus} />
+                </SelectTrigger>
+                <SelectContent>
+                  {CLIENT_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {labelClientStatus(status)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CrmFormField>
+            <CrmFormField
+              id="client-name"
+              label="Name"
+              required
+              validated
+              error={clientLiveFields.errors.name ?? formErrors.name}
+              className={formGridFullWidthClass}
+            >
               <Input
                 id="client-name"
+                placeholder={CRM_FORM_PLACEHOLDERS.clientName}
                 value={form.name}
-                onChange={(event) => setForm((item) => ({ ...item, name: event.target.value }))}
+                {...clientLiveFields.controlProps('name', 'client-name')}
+                onChange={(event) => {
+                  setForm((item) => ({ ...item, name: event.target.value }));
+                  clearFormFieldError(setFormErrors, 'name');
+                }}
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="client-contact">Primary contact</Label>
+            </CrmFormField>
+            <CrmFormField id="client-contact" label="Primary contact" className={formGridFullWidthClass}>
               <Input
                 id="client-contact"
+                placeholder={CRM_FORM_PLACEHOLDERS.primaryContact}
                 value={form.primaryContact}
                 onChange={(event) =>
                   setForm((item) => ({ ...item, primaryContact: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="client-email">Email</Label>
-                <Input
-                  id="client-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => setForm((item) => ({ ...item, email: event.target.value }))}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="client-phone">Phone</Label>
-                <Input
-                  id="client-phone"
-                  value={form.phone}
-                  onChange={(event) => setForm((item) => ({ ...item, phone: event.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="client-website">Website</Label>
+            </CrmFormField>
+            <CrmFormField id="client-email" label="Email">
+              <Input
+                id="client-email"
+                type="email"
+                placeholder={CRM_FORM_PLACEHOLDERS.email}
+                value={form.email}
+                onChange={(event) => setForm((item) => ({ ...item, email: event.target.value }))}
+              />
+            </CrmFormField>
+            <CrmFormField id="client-phone" label="Phone">
+              <Input
+                id="client-phone"
+                placeholder={CRM_FORM_PLACEHOLDERS.phone}
+                value={form.phone}
+                onChange={(event) => setForm((item) => ({ ...item, phone: event.target.value }))}
+              />
+            </CrmFormField>
+            <CrmFormField id="client-website" label="Website">
               <Input
                 id="client-website"
+                placeholder={CRM_FORM_PLACEHOLDERS.website}
                 value={form.website}
                 onChange={(event) => setForm((item) => ({ ...item, website: event.target.value }))}
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="client-billing">Billing address</Label>
+            </CrmFormField>
+            <CrmFormField id="client-billing" label="Billing address" className={formGridFullWidthClass}>
               <Textarea
                 id="client-billing"
+                placeholder={CRM_FORM_PLACEHOLDERS.billingAddress}
                 value={form.billingAddress}
                 onChange={(event) =>
                   setForm((item) => ({ ...item, billingAddress: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="client-tax">Tax registration</Label>
+            </CrmFormField>
+            <CrmFormField id="client-tax" label="Tax registration">
               <Input
                 id="client-tax"
+                placeholder={CRM_FORM_PLACEHOLDERS.taxRegistration}
                 value={form.taxRegistration}
                 onChange={(event) =>
                   setForm((item) => ({ ...item, taxRegistration: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="client-lead-id">Source lead ID (optional)</Label>
+            </CrmFormField>
+            <CrmFormField id="client-lead-id" label="Source lead ID" optional>
               <Input
                 id="client-lead-id"
                 value={form.sourceLeadId}
                 onChange={(event) =>
                   setForm((item) => ({ ...item, sourceLeadId: event.target.value }))
                 }
-                placeholder="UUID from a converted lead"
+                placeholder={CRM_FORM_PLACEHOLDERS.sourceLeadId}
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="client-notes">Notes</Label>
+            </CrmFormField>
+            <CrmFormField id="client-notes" label="Notes" className={formGridFullWidthClass}>
               <Textarea
                 id="client-notes"
+                placeholder={CRM_FORM_PLACEHOLDERS.notes}
                 value={form.notes}
                 onChange={(event) => setForm((item) => ({ ...item, notes: event.target.value }))}
               />
-            </div>
+            </CrmFormField>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setDialogMode(null)}>

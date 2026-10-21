@@ -3,6 +3,7 @@
 import { ExternalLink, Loader2, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { cn } from '@/shared/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,14 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import {
   changeProposalStatus,
@@ -39,13 +33,27 @@ import {
   listProposals,
   updateProposal,
 } from '../api/proposals';
+import { listServicePackages } from '../api/service-packages';
 import { PROPOSAL_STATUSES, PROPOSAL_TYPES } from '../constants';
+import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import type { CrmProposal, ProposalDocumentType, ProposalStatus } from '../types';
 import { formatDateOnly, formatMoney } from '../utils/format';
 import { describeCrmError } from '../utils/errors';
 import { labelProposalStatus, labelProposalType } from '../utils/labels';
-import { DataTableFrame } from '@/features/admin/components/data-table';
-import { CrmEmptyState, CrmErrorAlert, CrmLoadingRows, CrmPageHeader } from './crm-feedback';
+import {
+  DataTable,
+  deriveDataTablePhase,
+  isDataTableRefreshing,
+} from '@/features/admin/components/data-table';
+import { CRM_PROPOSALS_TABLE_SKELETON } from '@/features/admin/components/data-table-presets';
+import { TablePagination } from '@/features/admin/components/table-pagination';
+import {
+  CrmErrorAlert,
+  CrmFormField,
+  CrmPageHeader,
+  formGridClass,
+  formGridFullWidthClass,
+} from './crm-feedback';
 import { useAsyncAction } from '../hooks/use-async-action';
 
 type LineItemDraft = {
@@ -69,6 +77,7 @@ type ProposalForm = {
   notes: string;
   terms: string;
   lineItems: LineItemDraft[];
+  sourcePackageId: string;
 };
 
 const todayIsoDate = (): string => new Date().toISOString().slice(0, 10);
@@ -94,27 +103,37 @@ const emptyForm = (): ProposalForm => ({
   notes: '',
   terms: '',
   lineItems: [emptyLineItem()],
+  sourcePackageId: '',
 });
 
 export function ProposalsPage() {
   const { pending, run } = useAsyncAction();
   const [proposals, setProposals] = useState<readonly CrmProposal[] | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'ALL' | ProposalStatus>('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [dialogMode, setDialogMode] = useState<'create' | 'edit' | null>(null);
   const [form, setForm] = useState<ProposalForm>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [statusDialogId, setStatusDialogId] = useState<string | null>(null);
   const [nextStatus, setNextStatus] = useState<ProposalStatus>('SENT');
   const [statusNote, setStatusNote] = useState('');
+  const [servicePackages, setServicePackages] = useState<
+    readonly { id: string; name: string; code: string }[]
+  >([]);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const result = await listProposals();
       setProposals(result.proposals);
       setError(null);
     } catch (failure) {
       setError(describeCrmError(failure));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -122,11 +141,45 @@ export function ProposalsPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    void listServicePackages()
+      .then((result) =>
+        setServicePackages(
+          result.packages.map((pkg) => ({ id: pkg.id, name: pkg.name, code: pkg.code })),
+        ),
+      )
+      .catch(() => setServicePackages([]));
+  }, []);
+
   const filtered = useMemo(() => {
     const items = proposals ?? [];
     if (statusFilter === 'ALL') return items;
     return items.filter((proposal) => proposal.status === statusFilter);
   }, [proposals, statusFilter]);
+
+  const statusFilterActive = statusFilter !== 'ALL';
+  const totalProposals = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalProposals / pageSize));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const pagedProposals = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, pageSize, safePage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const tablePhase = deriveDataTablePhase({
+    loading,
+    error,
+    rowCount: filtered.length,
+  });
+  const tableRefreshing = isDataTableRefreshing({ loading, rowCount: filtered.length });
 
   const openCreate = () => {
     setForm(emptyForm());
@@ -158,6 +211,7 @@ export function ProposalsPage() {
           discount: item.discount,
           taxRate: item.taxRate,
         })),
+        sourcePackageId: proposal.sourcePackageId ?? '',
       });
       setDialogMode('edit');
     } catch (failure) {
@@ -181,16 +235,18 @@ export function ProposalsPage() {
         sortOrder: index,
       }));
 
+    const sourcePackageId = form.sourcePackageId.trim() || null;
     const body = {
       type: form.type,
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       issueDate: form.issueDate,
       expiryDate: form.expiryDate.trim() || null,
-      currency: form.currency.trim() || undefined,
+      currency: sourcePackageId ? 'INR' : form.currency.trim() || undefined,
       notes: form.notes.trim() || undefined,
       terms: form.terms.trim() || undefined,
-      lineItems,
+      sourcePackageId,
+      lineItems: sourcePackageId ? undefined : lineItems,
     };
 
     try {
@@ -243,7 +299,7 @@ export function ProposalsPage() {
         }
       />
 
-      {error ? <CrmErrorAlert message={error} /> : null}
+      {error && (proposals?.length ?? 0) > 0 ? <CrmErrorAlert message={error} /> : null}
 
       <Card>
         <CardContent className="pt-6 sm:max-w-xs">
@@ -253,7 +309,7 @@ export function ProposalsPage() {
             onValueChange={(value) => setStatusFilter(value as 'ALL' | ProposalStatus)}
           >
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.allStatuses} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">All statuses</SelectItem>
@@ -267,79 +323,97 @@ export function ProposalsPage() {
         </CardContent>
       </Card>
 
-      {proposals === null && !error ? <CrmLoadingRows rows={5} /> : null}
-
-      {proposals && filtered.length === 0 ? (
-        <CrmEmptyState title="No proposals yet" description="Create a proposal or quotation." />
-      ) : null}
-
-      {filtered.length > 0 ? (
-        <DataTableFrame>
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Document</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Issue date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((proposal) => (
-                <TableRow key={proposal.id}>
-                    <TableCell>
-                      <div className="grid">
-                        <span className="font-medium">{proposal.title}</span>
-                        <span className="text-muted-foreground text-xs">
-                          {proposal.documentNumber}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{labelProposalType(proposal.type)}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{labelProposalStatus(proposal.status)}</Badge>
-                    </TableCell>
-                    <TableCell>{formatMoney(proposal.grandTotal, proposal.currency)}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDateOnly(proposal.issueDate)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void openEdit(proposal.id)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setStatusDialogId(proposal.id);
-                            setNextStatus(proposal.status === 'DRAFT' ? 'SENT' : proposal.status);
-                          }}
-                        >
-                          Status
-                        </Button>
-                        <Button type="button" variant="ghost" size="sm" asChild>
-                          <Link href={`/admin/proposals/${proposal.id}/print`} target="_blank">
-                            <ExternalLink aria-hidden="true" />
-                            Print
-                          </Link>
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-        </DataTableFrame>
-      ) : null}
+      <DataTable
+        phase={tablePhase}
+        colSpan={6}
+        skeletonColumns={CRM_PROPOSALS_TABLE_SKELETON}
+        header={
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Document</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Total</TableHead>
+            <TableHead>Issue date</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        }
+        empty={{
+          title:
+            statusFilterActive || (proposals?.length ?? 0) > 0
+              ? 'No results match your filters'
+              : 'No proposals yet',
+          description:
+            statusFilterActive || (proposals?.length ?? 0) > 0
+              ? 'Try a different status filter or clear filters to see all documents.'
+              : 'Create a proposal or quotation with line items and status tracking.',
+          action:
+            statusFilterActive || (proposals?.length ?? 0) > 0
+              ? undefined
+              : { label: 'New document', onClick: openCreate },
+          secondaryAction: statusFilterActive
+            ? { label: 'Clear filters', onClick: () => setStatusFilter('ALL') }
+            : undefined,
+        }}
+        errorMessage={error}
+        onRetry={() => void load()}
+        refreshing={tableRefreshing}
+        footer={
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            total={totalProposals}
+            loading={tablePhase === 'initial-loading'}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        {pagedProposals.map((proposal) => (
+          <TableRow key={proposal.id}>
+            <TableCell>
+              <div className="grid">
+                <span className="font-medium">{proposal.title}</span>
+                <span className="text-muted-foreground text-xs">{proposal.documentNumber}</span>
+              </div>
+            </TableCell>
+            <TableCell>{labelProposalType(proposal.type)}</TableCell>
+            <TableCell>
+              <Badge variant="secondary">{labelProposalStatus(proposal.status)}</Badge>
+            </TableCell>
+            <TableCell>{formatMoney(proposal.grandTotal, proposal.currency)}</TableCell>
+            <TableCell className="text-muted-foreground">
+              {formatDateOnly(proposal.issueDate)}
+            </TableCell>
+            <TableCell className="text-right">
+              <div className="flex justify-end gap-1">
+                <Button type="button" variant="ghost" size="sm" onClick={() => void openEdit(proposal.id)}>
+                  Edit
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStatusDialogId(proposal.id);
+                    setNextStatus(proposal.status === 'DRAFT' ? 'SENT' : proposal.status);
+                  }}
+                >
+                  Status
+                </Button>
+                <Button type="button" variant="ghost" size="sm" asChild>
+                  <Link href={`/admin/proposals/${proposal.id}/print`} target="_blank">
+                    <ExternalLink aria-hidden="true" />
+                    Print
+                  </Link>
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </DataTable>
 
       <Dialog open={dialogMode !== null} onOpenChange={() => setDialogMode(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -352,10 +426,9 @@ export function ProposalsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={formGridClass}>
               {dialogMode === 'create' ? (
-                <div className="grid gap-1.5">
-                  <Label>Type</Label>
+                <CrmFormField id="proposal-type" label="Type">
                   <Select
                     value={form.type}
                     onValueChange={(value) =>
@@ -363,7 +436,7 @@ export function ProposalsPage() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectType} />
                     </SelectTrigger>
                     <SelectContent>
                       {PROPOSAL_TYPES.map((type) => (
@@ -373,61 +446,97 @@ export function ProposalsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
+                </CrmFormField>
               ) : null}
-              <div className="grid gap-1.5">
-                <Label htmlFor="proposal-title">Title</Label>
+              {dialogMode === 'create' ? (
+                <CrmFormField
+                  id="proposal-package"
+                  label="Service package"
+                  optional
+                  className={formGridFullWidthClass}
+                >
+                  <Select
+                    value={form.sourcePackageId || 'NONE'}
+                    onValueChange={(value) =>
+                      setForm((item) => ({
+                        ...item,
+                        sourcePackageId: value === 'NONE' ? '' : value,
+                        currency: value === 'NONE' ? item.currency : 'INR',
+                      }))
+                    }
+                  >
+                    <SelectTrigger id="proposal-package">
+                      <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectPackage} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">Manual line items</SelectItem>
+                      {servicePackages.map((pkg) => (
+                        <SelectItem key={pkg.id} value={pkg.id}>
+                          {pkg.name} ({pkg.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CrmFormField>
+              ) : null}
+              {dialogMode === 'create' ? (
+                <p className={cn('text-muted-foreground text-xs', formGridFullWidthClass)}>
+                  Choosing a package snapshots its configuration and pricing on the quotation.
+                </p>
+              ) : null}
+              <CrmFormField id="proposal-title" label="Title">
                 <Input
                   id="proposal-title"
+                  placeholder={CRM_FORM_PLACEHOLDERS.proposalTitle}
                   value={form.title}
                   onChange={(event) => setForm((item) => ({ ...item, title: event.target.value }))}
                 />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="proposal-currency">Currency</Label>
+              </CrmFormField>
+              <CrmFormField id="proposal-currency" label="Currency">
                 <Input
                   id="proposal-currency"
+                  placeholder={CRM_FORM_PLACEHOLDERS.currency}
                   value={form.currency}
                   maxLength={3}
                   onChange={(event) =>
                     setForm((item) => ({ ...item, currency: event.target.value.toUpperCase() }))
                   }
                 />
-              </div>
+              </CrmFormField>
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="proposal-description">Description</Label>
+            <CrmFormField id="proposal-description" label="Description">
               <Textarea
                 id="proposal-description"
+                placeholder={CRM_FORM_PLACEHOLDERS.proposalDescription}
                 value={form.description}
                 onChange={(event) =>
                   setForm((item) => ({ ...item, description: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="proposal-issue">Issue date</Label>
+            </CrmFormField>
+            <div className={formGridClass}>
+              <CrmFormField id="proposal-issue" label="Issue date">
                 <Input
                   id="proposal-issue"
                   type="date"
+                  placeholder={CRM_FORM_PLACEHOLDERS.issueDate}
                   value={form.issueDate}
                   onChange={(event) =>
                     setForm((item) => ({ ...item, issueDate: event.target.value }))
                   }
                 />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="proposal-expiry">Expiry date</Label>
+              </CrmFormField>
+              <CrmFormField id="proposal-expiry" label="Expiry date">
                 <Input
                   id="proposal-expiry"
                   type="date"
+                  placeholder={CRM_FORM_PLACEHOLDERS.expiryDate}
                   value={form.expiryDate}
                   onChange={(event) =>
                     setForm((item) => ({ ...item, expiryDate: event.target.value }))
                   }
                 />
-              </div>
+              </CrmFormField>
             </div>
 
             <div className="grid gap-2">
@@ -470,7 +579,7 @@ export function ProposalsPage() {
                     ) : null}
                   </div>
                   <Input
-                    placeholder="Name"
+                    placeholder={CRM_FORM_PLACEHOLDERS.lineItemName}
                     value={item.name}
                     onChange={(event) =>
                       setForm((value) => ({
@@ -482,7 +591,7 @@ export function ProposalsPage() {
                     }
                   />
                   <Textarea
-                    placeholder="Description"
+                    placeholder={CRM_FORM_PLACEHOLDERS.lineItemDescription}
                     value={item.description}
                     onChange={(event) =>
                       setForm((value) => ({
@@ -495,7 +604,7 @@ export function ProposalsPage() {
                   />
                   <div className="grid gap-2 sm:grid-cols-4">
                     <Input
-                      placeholder="Qty"
+                      placeholder={CRM_FORM_PLACEHOLDERS.quantity}
                       value={item.quantity}
                       onChange={(event) =>
                         setForm((value) => ({
@@ -507,7 +616,7 @@ export function ProposalsPage() {
                       }
                     />
                     <Input
-                      placeholder="Unit"
+                      placeholder={CRM_FORM_PLACEHOLDERS.unit}
                       value={item.unit}
                       onChange={(event) =>
                         setForm((value) => ({
@@ -519,7 +628,7 @@ export function ProposalsPage() {
                       }
                     />
                     <Input
-                      placeholder="Unit price"
+                      placeholder={CRM_FORM_PLACEHOLDERS.unitPrice}
                       value={item.unitPrice}
                       onChange={(event) =>
                         setForm((value) => ({
@@ -531,7 +640,7 @@ export function ProposalsPage() {
                       }
                     />
                     <Input
-                      placeholder="Tax %"
+                      placeholder={CRM_FORM_PLACEHOLDERS.taxPercent}
                       value={item.taxRate}
                       onChange={(event) =>
                         setForm((value) => ({
@@ -551,6 +660,7 @@ export function ProposalsPage() {
               <Label htmlFor="proposal-notes">Notes</Label>
               <Textarea
                 id="proposal-notes"
+                placeholder={CRM_FORM_PLACEHOLDERS.proposalNotes}
                 value={form.notes}
                 onChange={(event) => setForm((item) => ({ ...item, notes: event.target.value }))}
               />
@@ -559,6 +669,7 @@ export function ProposalsPage() {
               <Label htmlFor="proposal-terms">Terms</Label>
               <Textarea
                 id="proposal-terms"
+                placeholder={CRM_FORM_PLACEHOLDERS.proposalTerms}
                 value={form.terms}
                 onChange={(event) => setForm((item) => ({ ...item, terms: event.target.value }))}
               />
@@ -594,7 +705,7 @@ export function ProposalsPage() {
                 onValueChange={(value) => setNextStatus(value as ProposalStatus)}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectStatus} />
                 </SelectTrigger>
                 <SelectContent>
                   {PROPOSAL_STATUSES.map((status) => (
@@ -609,6 +720,7 @@ export function ProposalsPage() {
               <Label htmlFor="status-note">Note (optional)</Label>
               <Textarea
                 id="status-note"
+                placeholder={CRM_FORM_PLACEHOLDERS.statusNote}
                 value={statusNote}
                 onChange={(event) => setStatusNote(event.target.value)}
               />

@@ -7,6 +7,8 @@ import type {
   CrmProposal,
   CrmProposalLineItem,
   CrmProposalPrintResponse,
+  CrmServicePackage,
+  CatalogSelection,
 } from '@techwin/contracts';
 import type {
   ClientRecord,
@@ -15,6 +17,7 @@ import type {
   PipelineRecord,
   PipelineStageRecord,
   ProposalRecord,
+  ServicePackageRecord,
 } from '../../../domain/repositories/crm.repository.js';
 
 const iso = (value: Date): string => value.toISOString();
@@ -144,6 +147,8 @@ export const toCrmProposal = (proposal: ProposalRecord): CrmProposal => ({
   notes: proposal.notes,
   terms: proposal.terms,
   version: proposal.version,
+  sourcePackageId: proposal.sourcePackageId,
+  packageSnapshot: (proposal.packageSnapshot as CrmProposal['packageSnapshot']) ?? null,
   lineItems: (proposal.lineItems ?? []).map(toCrmProposalLineItem),
   createdAt: iso(proposal.createdAt),
   updatedAt: iso(proposal.updatedAt),
@@ -154,4 +159,63 @@ export const toCrmProposalPrint = (
 ): CrmProposalPrintResponse => ({
   ...toCrmProposal(proposal),
   organizationName: proposal.organizationName,
+});
+
+const asSelections = (value: unknown): readonly CatalogSelection[] =>
+  Array.isArray(value) ? (value as CatalogSelection[]) : [];
+
+const asAddOns = (value: unknown): CrmServicePackage['addOns'] =>
+  Array.isArray(value)
+    ? (
+        value as {
+          id?: string;
+          name: string;
+          description?: string;
+          price: string;
+          gstRatePercent?: string | null;
+          taxExempt?: boolean;
+          active?: boolean;
+        }[]
+      ).map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        ...(item.description ? { description: item.description } : {}),
+        ...(item.gstRatePercent !== undefined ? { gstRatePercent: item.gstRatePercent } : {}),
+        ...(item.taxExempt !== undefined ? { taxExempt: item.taxExempt } : {}),
+        ...(item.active !== undefined ? { active: item.active } : {}),
+      }))
+    : [];
+
+export const toCrmServicePackage = (pkg: ServicePackageRecord): CrmServicePackage => ({
+  id: pkg.id,
+  code: pkg.code,
+  name: pkg.name,
+  categories: asSelections(pkg.categories),
+  shortDescription: pkg.shortDescription,
+  detailedDescription: pkg.detailedDescription,
+  status: pkg.status,
+  technologyStack: asSelections(pkg.technologyStack),
+  includedPages: asSelections(pkg.includedPages),
+  integrations: asSelections(pkg.integrations),
+  adminPanelFeatures: asSelections(pkg.adminPanelFeatures),
+  hostingDeployment: asSelections(pkg.hostingDeployment),
+  deliveryServices: asSelections(pkg.deliveryServices),
+  integrationNotes: pkg.integrationNotes,
+  pageCount: pkg.pageCount,
+  basePrice: pkg.basePrice,
+  addOns: asAddOns(pkg.addOns),
+  discountType: pkg.discountType,
+  discountValue: pkg.discountValue,
+  gstRate: pkg.gstRate,
+  taxableAmount: pkg.taxableAmount,
+  gstAmount: pkg.gstAmount,
+  finalPrice: pkg.finalPrice,
+  deliveryDurationValue: pkg.deliveryDurationValue,
+  deliveryDurationUnit: pkg.deliveryDurationUnit,
+  supportPeriod: pkg.supportPeriod,
+  revisionAllowance: pkg.revisionAllowance,
+  termsExclusions: pkg.termsExclusions,
+  createdAt: iso(pkg.createdAt),
+  updatedAt: iso(pkg.updatedAt),
 });

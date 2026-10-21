@@ -1,4 +1,5 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -37,6 +38,8 @@ export function TablePagination({
   onPageChange,
   onPageSizeChange,
   pageSizeOptions = TABLE_PAGE_SIZE_OPTIONS,
+  loading = false,
+  hideWhenEmpty = true,
   className,
 }: {
   page: number;
@@ -45,13 +48,38 @@ export function TablePagination({
   onPageChange: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
   pageSizeOptions?: readonly number[];
+  loading?: boolean;
+  hideWhenEmpty?: boolean;
   className?: string;
 }) {
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const safePage = Math.min(Math.max(1, page), totalPages);
+  if (hideWhenEmpty && total === 0 && !loading) {
+    return null;
+  }
+
+  const totalPages = total === 0 ? 0 : Math.max(1, Math.ceil(total / pageSize));
+  const safePage = totalPages === 0 ? 1 : Math.min(Math.max(1, page), totalPages);
   const start = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const end = total === 0 ? 0 : Math.min(safePage * pageSize, total);
-  const pageList = buildPageList(safePage, totalPages);
+  const pageList = totalPages === 0 ? [] : buildPageList(safePage, totalPages);
+
+  if (loading && total === 0) {
+    return (
+      <div
+        className={cn(
+          'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
+          className,
+        )}
+        aria-busy="true"
+        aria-label="Loading pagination"
+      >
+        <Skeleton className="h-4 w-40" />
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-24" />
+          <Skeleton className="h-8 w-32" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -82,11 +110,22 @@ export function TablePagination({
           </div>
         ) : null}
         <p className="text-muted-foreground text-sm">
-          {total === 0 ? 'No records' : `Showing ${start}–${end} of ${total}`}
+          {`Showing ${start}–${end} of ${total}`}
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="hidden sm:inline-flex"
+          disabled={safePage <= 1 || total === 0}
+          aria-label="First page"
+          onClick={() => onPageChange(1)}
+        >
+          <ChevronFirst className="size-4" aria-hidden="true" />
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -131,6 +170,17 @@ export function TablePagination({
         >
           Next
           <ChevronRight className="size-4" aria-hidden="true" />
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="hidden sm:inline-flex"
+          disabled={safePage >= totalPages || total === 0}
+          aria-label="Last page"
+          onClick={() => onPageChange(totalPages)}
+        >
+          <ChevronLast className="size-4" aria-hidden="true" />
         </Button>
       </div>
     </div>

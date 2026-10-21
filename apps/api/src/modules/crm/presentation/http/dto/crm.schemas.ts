@@ -17,6 +17,10 @@ import {
   updatePipelineRequestSchema,
   updatePipelineStageRequestSchema,
   updateProposalRequestSchema,
+  changeServicePackageStatusRequestSchema,
+  createServicePackageRequestSchema,
+  updateServicePackageRequestSchema,
+  catalogSelectionSchema,
 } from '@techwin/validation';
 import { z } from 'zod';
 
@@ -36,6 +40,13 @@ export const updateClientBodySchema = updateClientRequestSchema;
 export const createProposalBodySchema = createProposalRequestSchema;
 export const updateProposalBodySchema = updateProposalRequestSchema;
 export const changeProposalStatusBodySchema = changeProposalStatusRequestSchema;
+export const createServicePackageBodySchema = createServicePackageRequestSchema;
+export const updateServicePackageBodySchema = updateServicePackageRequestSchema;
+export const changeServicePackageStatusBodySchema = changeServicePackageStatusRequestSchema;
+export const servicePackageCodePreviewResponseSchema = z.object({
+  code: z.string().regex(/^TECH-PKG-\d{4,}$/),
+  isPreview: z.literal(true),
+});
 
 const isoDateTime = z.iso.datetime();
 const isoDate = z.iso.date();
@@ -171,9 +182,60 @@ export const crmProposalResponseSchema = z.object({
   notes: z.string(),
   terms: z.string(),
   version: z.number().int(),
+  sourcePackageId: z.uuid().nullable(),
+  packageSnapshot: z.unknown().nullable(),
   lineItems: z.array(crmProposalLineItemResponseSchema),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
+});
+
+const catalogSelectionResponseSchema = catalogSelectionSchema;
+
+const packageAddOnResponseSchema = z.object({
+  id: z.uuid().optional(),
+  name: z.string(),
+  description: z.string().optional(),
+  price: z.string(),
+  gstRatePercent: z.string().nullable().optional(),
+  taxExempt: z.boolean().optional(),
+  active: z.boolean().optional(),
+});
+
+export const crmServicePackageResponseSchema = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  name: z.string(),
+  categories: z.array(catalogSelectionResponseSchema),
+  shortDescription: z.string(),
+  detailedDescription: z.string(),
+  status: z.enum(['ACTIVE', 'INACTIVE']),
+  technologyStack: z.array(catalogSelectionResponseSchema),
+  includedPages: z.array(catalogSelectionResponseSchema),
+  integrations: z.array(catalogSelectionResponseSchema),
+  adminPanelFeatures: z.array(catalogSelectionResponseSchema),
+  hostingDeployment: z.array(catalogSelectionResponseSchema),
+  deliveryServices: z.array(catalogSelectionResponseSchema),
+  integrationNotes: z.string(),
+  pageCount: z.number().int().nullable(),
+  basePrice: z.string(),
+  addOns: z.array(packageAddOnResponseSchema),
+  discountType: z.enum(['FIXED', 'PERCENT']),
+  discountValue: z.string(),
+  gstRate: z.string(),
+  taxableAmount: z.string(),
+  gstAmount: z.string(),
+  finalPrice: z.string(),
+  deliveryDurationValue: z.number().int().nullable(),
+  deliveryDurationUnit: z.enum(['DAYS', 'WEEKS', 'MONTHS']).nullable(),
+  supportPeriod: z.string(),
+  revisionAllowance: z.string(),
+  termsExclusions: z.string(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+});
+
+export const crmServicePackageListResponseSchema = z.object({
+  packages: z.array(crmServicePackageResponseSchema),
 });
 
 export const apiErrorResponseSchema = z.object({

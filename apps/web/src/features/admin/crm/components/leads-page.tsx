@@ -2,6 +2,7 @@
 
 import { API_ERROR_CODES } from '@techwin/contracts';
 import { createLeadRequestSchema, leadListQuerySchema } from '@techwin/validation';
+import { z } from 'zod';
 import { isApiError } from '@/shared/api/api-error';
 import { Eye, Kanban, LayoutList, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -25,7 +26,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
+import { focusFirstInvalidField } from '@/shared/form/form-control-state';
+import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
+import { clearFormFieldError, mergeFieldErrors, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
+import { formGridClass, formGridFullWidthClass } from '@/shared/form/form-layout';
+import { cn } from '@/shared/lib/utils';
 import {
   Select,
   SelectContent,
@@ -33,19 +40,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { formatDateTime } from '@/shared/lib/format';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
-import { DataTableFrame } from '@/features/admin/components/data-table';
+import {
+  DataTable,
+  deriveDataTablePhase,
+  isDataTableRefreshing,
+} from '@/features/admin/components/data-table';
+import { CRM_LEADS_TABLE_SKELETON } from '@/features/admin/components/data-table-presets';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
 import { StageBadge } from '@/features/admin/components/stage-badge';
@@ -53,6 +58,7 @@ import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { changeLeadStage, createLead, deleteLead, listLeads } from '../api/leads';
 import { listPipelines } from '../api/pipelines';
+import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import { CRM_LEAD_DIALOG_CLASS, DEFAULT_LEAD_CURRENCY, LEAD_PRIORITIES, LEAD_SOURCES } from '../constants';
 import type { CrmLead, CrmPipeline, LeadListQuery, LeadPriority, LeadSource } from '../types';
 import { formatMoney } from '../utils/format';
@@ -61,7 +67,7 @@ import { labelLeadPriority, labelLeadSource } from '../utils/labels';
 import {
   CrmEmptyState,
   CrmErrorAlert,
-  CrmFieldLabel,
+  CrmFormField,
   CrmInlineFieldError,
   CrmLoadingRows,
 } from './crm-feedback';
@@ -182,6 +188,26 @@ export function LeadsPage() {
     [activePipeline?.stages],
   );
 
+  const createLiveFields = useZodFormFields(
+    {
+      fullName: createLeadRequestSchema.shape.fullName,
+      email: createLeadRequestSchema.shape.email,
+      phone: createLeadRequestSchema.shape.phone,
+      stageId: stages.length > 0 ? z.string().min(1, 'Select a stage.') : z.string(),
+      estimatedValue: createLeadRequestSchema.shape.estimatedValue,
+    },
+    {
+      fullName: createForm.fullName,
+      email: createForm.email,
+      phone: createForm.phone,
+      stageId: createForm.stageId,
+      estimatedValue: createForm.estimatedValue,
+    },
+  );
+
+  const createFieldError = (key: keyof CreateFormErrors) =>
+    mergeFieldErrors(createLiveFields.errors, createFieldErrors, key);
+
   const stageById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
 
   const load = useCallback(async () => {
@@ -276,28 +302,13 @@ export function LeadsPage() {
       tags: tags.length > 0 ? tags : undefined,
     };
 
+    createLiveFields.prepareSubmit();
     const parsed = createLeadRequestSchema.safeParse(payload);
     if (!parsed.success) {
-      const fieldErrors: CreateFormErrors = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0];
-        if (
-          key === 'fullName' ||
-          key === 'stageId' ||
-          key === 'email' ||
-          key === 'phone' ||
-          key === 'estimatedValue'
-        ) {
-          fieldErrors[key] ??= issue.message;
-        }
-        if (key === 'pipelineId')
-          fieldErrors.pipelineId = 'Select a pipeline by configuring stages.';
-      }
+      const fieldErrors = zodErrorToFieldMap(parsed.error) as CreateFormErrors;
       if (!pipelineId) fieldErrors.pipelineId = 'No active pipeline is available.';
-      if (!createForm.stageId && stages.length > 0) {
-        fieldErrors.stageId = 'Select a stage.';
-      }
       setCreateFieldErrors(fieldErrors);
+      focusFirstInvalidField();
       return;
     }
     if (!pipelineId) {
@@ -386,6 +397,7 @@ export function LeadsPage() {
       description: '',
     });
     setCreateFieldErrors({});
+    createLiveFields.reset();
     setCreateOpen(true);
   };
 
@@ -394,6 +406,30 @@ export function LeadsPage() {
     { label: 'CRM' },
     { label: 'Leads' },
   ] as const;
+
+  const listFiltersActive = Boolean(
+    search.trim() || stageId || priority || source || pipelineId,
+  );
+  const listTablePhase = deriveDataTablePhase({
+    loading: loading && view === 'list',
+    error,
+    rowCount: leads.length,
+  });
+  const listTableRefreshing = isDataTableRefreshing({
+    loading: loading && view === 'list',
+    rowCount: leads.length,
+  });
+
+  const clearListFilters = () => {
+    setSearchDraft('');
+    updateParams({
+      search: null,
+      stageId: null,
+      priority: null,
+      source: null,
+      page: '1',
+    });
+  };
 
   return (
     <div className="mx-auto grid w-full max-w-6xl gap-3">
@@ -411,19 +447,15 @@ export function LeadsPage() {
                 applySearch(searchDraft);
               }}
             >
-              <div className="relative min-w-0">
-                <Search
-                  className="text-muted-foreground pointer-events-none absolute top-2.5 left-2.5 size-4"
-                  aria-hidden="true"
-                />
+              <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0">
                 <Input
-                  className="h-9 pl-8"
-                  placeholder="Search leads..."
+                  className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
+                  placeholder={CRM_FORM_PLACEHOLDERS.searchLeads}
                   value={searchDraft}
                   onChange={(event) => setSearchDraft(event.target.value)}
                   aria-label="Search leads"
                 />
-              </div>
+              </InputGroup>
             </form>
             <div className="flex shrink-0 items-center gap-2">
               <Tabs
@@ -452,95 +484,102 @@ export function LeadsPage() {
         }
       />
 
-      {error ? <CrmErrorAlert message={error} /> : null}
+      {error && leads.length > 0 ? <CrmErrorAlert message={error} /> : null}
 
-      {loading ? <CrmLoadingRows rows={6} /> : null}
+      {loading && view === 'kanban' ? <CrmLoadingRows rows={6} /> : null}
 
-      {!loading && view === 'list' ? (
-        <>
-          {leads.length === 0 ? (
-            <CrmEmptyState title="No leads match your filters" />
-          ) : (
-            <DataTableFrame
-              footer={
-                <TablePagination
-                  page={page}
-                  pageSize={pageSize}
-                  total={total}
-                  onPageChange={(nextPage) => updateParams({ page: String(nextPage) })}
-                  onPageSizeChange={(nextSize) =>
-                    updateParams({ pageSize: String(nextSize), page: '1' })
-                  }
-                />
+      {view === 'list' ? (
+        <DataTable
+          phase={listTablePhase}
+          colSpan={6}
+          skeletonColumns={CRM_LEADS_TABLE_SKELETON}
+          header={
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Lead</TableHead>
+              <TableHead>Stage</TableHead>
+              <TableHead>Priority</TableHead>
+              <TableHead className="text-right">Value</TableHead>
+              <TableHead>Last activity</TableHead>
+              <TableHead className="w-[7.5rem] text-right">Actions</TableHead>
+            </TableRow>
+          }
+          empty={{
+            title: listFiltersActive ? 'No results match your filters' : 'No leads yet',
+            description: listFiltersActive
+              ? 'Try a different search term or filter, or clear filters to see all leads.'
+              : 'Create a lead to start tracking opportunities in your pipeline.',
+            action: listFiltersActive ? undefined : { label: 'Create lead', onClick: openCreate },
+            secondaryAction: listFiltersActive
+              ? { label: 'Clear filters', onClick: clearListFilters }
+              : undefined,
+          }}
+          errorMessage={error}
+          onRetry={() => void load()}
+          refreshing={listTableRefreshing}
+          footer={
+            <TablePagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              loading={listTablePhase === 'initial-loading'}
+              onPageChange={(nextPage) => updateParams({ page: String(nextPage) })}
+              onPageSizeChange={(nextSize) =>
+                updateParams({ pageSize: String(nextSize), page: '1' })
               }
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="h-9">Lead</TableHead>
-                    <TableHead className="h-9">Stage</TableHead>
-                    <TableHead className="h-9">Priority</TableHead>
-                    <TableHead className="h-9 text-right">Value</TableHead>
-                    <TableHead className="h-9">Last activity</TableHead>
-                    <TableHead className="h-9 w-[7.5rem] text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leads.map((lead) => (
-                    <TableRow key={lead.id}>
-                      <TableCell className="py-2.5">
-                        <div className="grid">
-                          <span className="font-medium">{lead.fullName}</span>
-                          <span className="text-muted-foreground text-xs">
-                            {lead.referenceNumber}
-                            {lead.companyName ? ` · ${lead.companyName}` : ''}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        <StageBadge stage={stageById.get(lead.stageId)} />
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        <PriorityBadge priority={lead.priority} />
-                      </TableCell>
-                      <TableCell className="py-2.5 text-right tabular-nums">
-                        {formatMoney(lead.estimatedValue, lead.currency)}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground py-2.5">
-                        {formatDateTime(lead.lastActivityAt)}
-                      </TableCell>
-                      <TableCell className="py-2.5">
-                        <div className="flex items-center justify-end gap-0.5">
-                          <TableIconButton
-                            label="View lead"
-                            onClick={() => openLeadDetail(lead.id, 'view')}
-                          >
-                            <Eye className="size-4" aria-hidden="true" />
-                          </TableIconButton>
-                          <TableIconButton
-                            label="Edit lead"
-                            tone="primary"
-                            onClick={() => openLeadDetail(lead.id, 'edit')}
-                          >
-                            <Pencil className="size-4" aria-hidden="true" />
-                          </TableIconButton>
-                          <TableIconButton
-                            label="Delete lead"
-                            tone="danger"
-                            disabled={pending}
-                            onClick={() => setDeleteLeadId(lead.id)}
-                          >
-                            <Trash2 className="size-4" aria-hidden="true" />
-                          </TableIconButton>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </DataTableFrame>
-          )}
-        </>
+            />
+          }
+        >
+          {leads.map((lead) => (
+            <TableRow key={lead.id}>
+              <TableCell>
+                <div className="grid">
+                  <span className="font-medium">{lead.fullName}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {lead.referenceNumber}
+                    {lead.companyName ? ` · ${lead.companyName}` : ''}
+                  </span>
+                </div>
+              </TableCell>
+              <TableCell>
+                <StageBadge stage={stageById.get(lead.stageId)} />
+              </TableCell>
+              <TableCell>
+                <PriorityBadge priority={lead.priority} />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatMoney(lead.estimatedValue, lead.currency)}
+              </TableCell>
+              <TableCell className="text-muted-foreground">
+                {formatDateTime(lead.lastActivityAt)}
+              </TableCell>
+              <TableCell>
+                <div className="flex items-center justify-end gap-0.5">
+                  <TableIconButton
+                    label="View lead"
+                    onClick={() => openLeadDetail(lead.id, 'view')}
+                  >
+                    <Eye className="size-4" aria-hidden="true" />
+                  </TableIconButton>
+                  <TableIconButton
+                    label="Edit lead"
+                    tone="primary"
+                    onClick={() => openLeadDetail(lead.id, 'edit')}
+                  >
+                    <Pencil className="size-4" aria-hidden="true" />
+                  </TableIconButton>
+                  <TableIconButton
+                    label="Delete lead"
+                    tone="danger"
+                    disabled={pending}
+                    onClick={() => setDeleteLeadId(lead.id)}
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </TableIconButton>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </DataTable>
       ) : null}
 
       {!loading && view === 'kanban' ? (
@@ -626,105 +665,115 @@ export function LeadsPage() {
               automatically.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid max-h-[min(62vh,520px)] gap-3 overflow-y-auto px-6 py-2 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-full-name" required>
-                Full name
-              </CrmFieldLabel>
+          <div className={cn('max-h-[min(62vh,520px)] overflow-y-auto px-6 py-2', formGridClass)}>
+            <CrmFormField
+              id="create-full-name"
+              label="Full name"
+              required
+              validated
+              error={createFieldError('fullName')}
+            >
               <Input
                 id="create-full-name"
+                placeholder={CRM_FORM_PLACEHOLDERS.fullName}
                 value={createForm.fullName}
+                {...createLiveFields.controlProps('fullName', 'create-full-name')}
                 onChange={(event) => {
                   setCreateForm((value) => ({ ...value, fullName: event.target.value }));
-                  if (createFieldErrors.fullName) {
-                    setCreateFieldErrors((current) => ({ ...current, fullName: undefined }));
-                  }
+                  clearFormFieldError(setCreateFieldErrors, 'fullName');
                 }}
               />
-              <CrmInlineFieldError message={createFieldErrors.fullName} />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-company" optional>
-                Company
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField id="create-company" label="Company" optional>
               <Input
                 id="create-company"
+                placeholder={CRM_FORM_PLACEHOLDERS.company}
                 value={createForm.companyName}
                 onChange={(event) =>
                   setCreateForm((value) => ({ ...value, companyName: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-email" required>
-                Email
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="create-email"
+              label="Email"
+              required
+              validated
+              error={createFieldError('email')}
+            >
               <Input
                 id="create-email"
                 type="email"
+                placeholder={CRM_FORM_PLACEHOLDERS.email}
                 value={createForm.email}
+                {...createLiveFields.controlProps('email', 'create-email')}
                 onChange={(event) => {
                   setCreateForm((value) => ({ ...value, email: event.target.value }));
-                  if (createFieldErrors.email) {
-                    setCreateFieldErrors((current) => ({ ...current, email: undefined }));
-                  }
+                  clearFormFieldError(setCreateFieldErrors, 'email');
                 }}
               />
-              <CrmInlineFieldError message={createFieldErrors.email} />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-phone" required>
-                Phone
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="create-phone"
+              label="Phone"
+              required
+              validated
+              error={createFieldError('phone')}
+            >
               <Input
                 id="create-phone"
                 type="tel"
                 inputMode="numeric"
                 autoComplete="tel"
+                placeholder={CRM_FORM_PLACEHOLDERS.phone}
                 value={createForm.phone}
+                {...createLiveFields.controlProps('phone', 'create-phone')}
                 onChange={(event) => {
                   setCreateForm((value) => ({ ...value, phone: event.target.value }));
-                  if (createFieldErrors.phone) {
-                    setCreateFieldErrors((current) => ({ ...current, phone: undefined }));
-                  }
+                  clearFormFieldError(setCreateFieldErrors, 'phone');
                 }}
               />
-              <CrmInlineFieldError message={createFieldErrors.phone} />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel required>Stage</CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="create-stage"
+              label="Stage"
+              required
+              validated
+              error={createFieldError('stageId')}
+            >
               <Select
                 value={createForm.stageId}
                 onValueChange={(value) => {
                   setCreateForm((form) => ({ ...form, stageId: value }));
-                  if (createFieldErrors.stageId) {
-                    setCreateFieldErrors((current) => ({ ...current, stageId: undefined }));
-                  }
+                  createLiveFields.touch('stageId');
+                  clearFormFieldError(setCreateFieldErrors, 'stageId');
                 }}
               >
-                <SelectTrigger aria-label="Stage">
+                <SelectTrigger
+                  id="create-stage"
+                  aria-label="Stage"
+                  {...createLiveFields.controlProps('stageId', 'create-stage')}
+                >
                   <PipelineStageSelectTrigger
                     stages={stages}
                     stageId={createForm.stageId || undefined}
-                    placeholder="Select stage"
+                    placeholder={CRM_FORM_PLACEHOLDERS.selectStage}
                   />
                 </SelectTrigger>
                 <SelectContent>
                   <PipelineStageSelectItems stages={stages} />
                 </SelectContent>
               </Select>
-              <CrmInlineFieldError message={createFieldErrors.stageId} />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel>Source</CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField id="create-source" label="Source">
               <Select
                 value={createForm.source}
                 onValueChange={(value) =>
                   setCreateForm((form) => ({ ...form, source: value as LeadSource }))
                 }
               >
-                <SelectTrigger aria-label="Source">
-                  <SelectValue />
+                <SelectTrigger id="create-source" aria-label="Source">
+                  <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectSource} />
                 </SelectTrigger>
                 <SelectContent>
                   {LEAD_SOURCES.map((item) => (
@@ -734,17 +783,16 @@ export function LeadsPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel>Priority</CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField id="create-priority" label="Priority">
               <Select
                 value={createForm.priority}
                 onValueChange={(value) =>
                   setCreateForm((form) => ({ ...form, priority: value as LeadPriority }))
                 }
               >
-                <SelectTrigger aria-label="Priority">
-                  <SelectValue />
+                <SelectTrigger id="create-priority" aria-label="Priority">
+                  <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectPriority} />
                 </SelectTrigger>
                 <SelectContent>
                   {LEAD_PRIORITIES.map((item) => (
@@ -754,90 +802,88 @@ export function LeadsPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-value" optional>
-                Estimated value
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="create-value"
+              label="Estimated value"
+              optional
+              validated
+              error={createFieldError('estimatedValue')}
+            >
               <Input
                 id="create-value"
                 inputMode="decimal"
+                placeholder={CRM_FORM_PLACEHOLDERS.estimatedValue}
                 value={createForm.estimatedValue}
+                {...createLiveFields.controlProps('estimatedValue', 'create-value')}
                 onChange={(event) => {
                   setCreateForm((value) => ({ ...value, estimatedValue: event.target.value }));
-                  if (createFieldErrors.estimatedValue) {
-                    setCreateFieldErrors((current) => ({ ...current, estimatedValue: undefined }));
-                  }
+                  clearFormFieldError(setCreateFieldErrors, 'estimatedValue');
                 }}
               />
-              <CrmInlineFieldError message={createFieldErrors.estimatedValue} />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-close" optional>
-                Expected close date
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField id="create-close" label="Expected close date" optional>
               <Input
                 id="create-close"
                 type="date"
+                placeholder={CRM_FORM_PLACEHOLDERS.expectedCloseDate}
                 value={createForm.expectedCloseDate}
                 onChange={(event) =>
                   setCreateForm((value) => ({ ...value, expectedCloseDate: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-follow-up" optional>
-                Next follow-up
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField id="create-follow-up" label="Next follow-up" optional>
               <Input
                 id="create-follow-up"
                 type="datetime-local"
+                placeholder={CRM_FORM_PLACEHOLDERS.nextFollowUp}
                 value={createForm.nextFollowUpDate}
                 onChange={(event) =>
                   setCreateForm((value) => ({ ...value, nextFollowUpDate: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-website" optional>
-                Website
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField id="create-website" label="Website" optional>
               <Input
                 id="create-website"
+                placeholder={CRM_FORM_PLACEHOLDERS.website}
                 value={createForm.website}
                 onChange={(event) =>
                   setCreateForm((value) => ({ ...value, website: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="create-tags" optional>
-                Tags
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField id="create-tags" label="Tags" optional>
               <Input
                 id="create-tags"
-                placeholder="Comma-separated"
+                placeholder={CRM_FORM_PLACEHOLDERS.tags}
                 value={createForm.tags}
                 onChange={(event) =>
                   setCreateForm((value) => ({ ...value, tags: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5 sm:col-span-2">
-              <CrmFieldLabel htmlFor="create-description" optional>
-                Description
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="create-description"
+              label="Description"
+              optional
+              className={formGridFullWidthClass}
+            >
               <Textarea
                 id="create-description"
                 rows={2}
                 className="min-h-[4.5rem] resize-y"
+                placeholder={CRM_FORM_PLACEHOLDERS.description}
                 value={createForm.description}
                 onChange={(event) =>
                   setCreateForm((value) => ({ ...value, description: event.target.value }))
                 }
               />
+            </CrmFormField>
+            <div className={formGridFullWidthClass}>
+              <CrmInlineFieldError message={createFieldErrors.pipelineId} reserveSpace={false} />
             </div>
-            <CrmInlineFieldError message={createFieldErrors.pipelineId} />
           </div>
           <DialogFooter className="border-t px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>

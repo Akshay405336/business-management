@@ -10,6 +10,7 @@ import {
   FolderKanban,
   GitBranch,
   LayoutDashboard,
+  Package,
   Receipt,
   Settings,
   Shield,
@@ -56,6 +57,7 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     items: [
       { kind: 'link', href: '/admin/pipeline', label: 'Pipeline', icon: GitBranch },
       { kind: 'link', href: '/admin/leads', label: 'Leads', icon: Users },
+      { kind: 'link', href: '/admin/packages', label: 'Service Packages', icon: Package },
       { kind: 'link', href: '/admin/proposals', label: 'Proposals & Quotations', icon: FileText },
       { kind: 'link', href: '/admin/clients', label: 'Clients', icon: UserCircle2 },
     ],

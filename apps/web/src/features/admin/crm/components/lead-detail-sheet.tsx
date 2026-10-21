@@ -1,6 +1,15 @@
 'use client';
 
-import { updateLeadRequestSchema } from '@techwin/validation';
+import {
+  createLeadRequestSchema,
+  leadEmailSchema,
+  leadFullNameFieldSchema,
+  leadPhoneSchema,
+  updateLeadRequestSchema,
+} from '@techwin/validation';
+import { focusFirstInvalidField } from '@/shared/form/form-control-state';
+import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
+import { clearFormFieldError, mergeFieldErrors, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
 import { Loader2, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -9,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -32,6 +40,7 @@ import {
 } from './pipeline-stage-select';
 import { createLeadActivity, getLead, listLeadActivities, updateLead } from '../api/leads';
 import { convertClientFromLead } from '../api/clients';
+import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import { ACTIVITY_TYPES, CRM_LEAD_DIALOG_CLASS, LEAD_PRIORITIES, LEAD_SOURCES } from '../constants';
 import type {
   CrmLead,
@@ -54,9 +63,11 @@ import { formatDateTime } from '@/shared/lib/format';
 import {
   CrmEmptyState,
   CrmErrorAlert,
-  CrmFieldLabel,
-  CrmInlineFieldError,
+  CrmFormField,
   CrmLoadingRows,
+  CrmReadOnlyField,
+  formGridClass,
+  formGridFullWidthClass,
 } from './crm-feedback';
 import { useAsyncAction } from '../hooks/use-async-action';
 
@@ -179,6 +190,24 @@ export function LeadDetailDialog({
 
   const stageName = (stageId: string) => stages.find((stage) => stage.id === stageId)?.name ?? '—';
 
+  const draftLiveFields = useZodFormFields(
+    {
+      fullName: leadFullNameFieldSchema,
+      email: leadEmailSchema,
+      phone: leadPhoneSchema,
+      estimatedValue: createLeadRequestSchema.shape.estimatedValue,
+    },
+    {
+      fullName: draft?.fullName ?? '',
+      email: draft?.email ?? '',
+      phone: draft?.phone ?? '',
+      estimatedValue: draft?.estimatedValue ?? '0',
+    },
+  );
+
+  const draftFieldError = (key: keyof LeadDraftErrors) =>
+    mergeFieldErrors(draftLiveFields.errors, draftErrors, key);
+
   useEffect(() => {
     if (!open) {
       setLead(null);
@@ -214,26 +243,12 @@ export function LeadDetailDialog({
   const submitUpdate = async () => {
     if (!lead || !draft) return;
     const body = draftToUpdateBody(draft);
+    draftLiveFields.prepareSubmit();
     const parsed = updateLeadRequestSchema.safeParse(body);
     if (!parsed.success) {
-      const fieldErrors: LeadDraftErrors = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path[0];
-        if (
-          key === 'fullName' ||
-          key === 'email' ||
-          key === 'phone' ||
-          key === 'estimatedValue'
-        ) {
-          fieldErrors[key] ??= issue.message;
-        }
-      }
-      setDraftErrors(fieldErrors);
+      setDraftErrors(zodErrorToFieldMap(parsed.error));
       toast.error('Fix the highlighted fields before updating.');
-      if (fieldErrors.fullName) fullNameRef.current?.focus();
-      else if (fieldErrors.email) emailRef.current?.focus();
-      else if (fieldErrors.phone) phoneRef.current?.focus();
-      else if (fieldErrors.estimatedValue) estimatedValueRef.current?.focus();
+      focusFirstInvalidField();
       return;
     }
     setDraftErrors({});
@@ -319,39 +334,39 @@ export function LeadDetailDialog({
                 {lead.convertedClientId ? <Badge variant="success">Converted</Badge> : null}
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-full-name" required={isEdit}>
-                    Full name
-                  </CrmFieldLabel>
-                  {isEdit ? (
-                    <>
-                      <Input
-                        ref={fullNameRef}
-                        id="lead-full-name"
-                        value={draft.fullName}
-                        onChange={(event) => {
-                          setDraft((current) =>
-                            current ? { ...current, fullName: event.target.value } : current,
-                          );
-                          if (draftErrors.fullName) {
-                            setDraftErrors((current) => ({ ...current, fullName: undefined }));
-                          }
-                        }}
-                      />
-                      <CrmInlineFieldError message={draftErrors.fullName} />
-                    </>
-                  ) : (
+              <div className={formGridClass}>
+                {isEdit ? (
+                  <CrmFormField
+                    id="lead-full-name"
+                    label="Full name"
+                    required
+                    validated
+                    error={draftFieldError('fullName')}
+                  >
+                    <Input
+                      ref={fullNameRef}
+                      id="lead-full-name"
+                      placeholder={CRM_FORM_PLACEHOLDERS.fullName}
+                      value={draft.fullName}
+                      {...draftLiveFields.controlProps('fullName', 'lead-full-name')}
+                      onChange={(event) => {
+                        setDraft((current) =>
+                          current ? { ...current, fullName: event.target.value } : current,
+                        );
+                        clearFormFieldError(setDraftErrors, 'fullName');
+                      }}
+                    />
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Full name" required>
                     <ReadOnlyValue value={lead.fullName} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-company" optional>
-                    Company
-                  </CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-company" label="Company" optional>
                     <Input
                       id="lead-company"
+                      placeholder={CRM_FORM_PLACEHOLDERS.company}
                       value={draft.companyName}
                       onChange={(event) =>
                         setDraft((current) =>
@@ -359,87 +374,97 @@ export function LeadDetailDialog({
                         )
                       }
                     />
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Company" optional>
                     <ReadOnlyValue value={lead.companyName} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-email" required={isEdit}>
-                    Email
-                  </CrmFieldLabel>
-                  {isEdit ? (
-                    <>
-                      <Input
-                        ref={emailRef}
-                        id="lead-email"
-                        type="email"
-                        value={draft.email}
-                        onChange={(event) => {
-                          setDraft((current) =>
-                            current ? { ...current, email: event.target.value } : current,
-                          );
-                          if (draftErrors.email) {
-                            setDraftErrors((current) => ({ ...current, email: undefined }));
-                          }
-                        }}
-                      />
-                      <CrmInlineFieldError message={draftErrors.email} />
-                    </>
-                  ) : (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField
+                    id="lead-email"
+                    label="Email"
+                    required
+                    validated
+                    error={draftFieldError('email')}
+                  >
+                    <Input
+                      ref={emailRef}
+                      id="lead-email"
+                      type="email"
+                      placeholder={CRM_FORM_PLACEHOLDERS.email}
+                      value={draft.email}
+                      {...draftLiveFields.controlProps('email', 'lead-email')}
+                      onChange={(event) => {
+                        setDraft((current) =>
+                          current ? { ...current, email: event.target.value } : current,
+                        );
+                        clearFormFieldError(setDraftErrors, 'email');
+                      }}
+                    />
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Email" required>
                     <ReadOnlyValue value={lead.email ?? ''} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-phone" required={isEdit}>
-                    Phone
-                  </CrmFieldLabel>
-                  {isEdit ? (
-                    <>
-                      <Input
-                        ref={phoneRef}
-                        id="lead-phone"
-                        type="tel"
-                        inputMode="numeric"
-                        autoComplete="tel"
-                        value={draft.phone}
-                        onChange={(event) => {
-                          setDraft((current) =>
-                            current ? { ...current, phone: event.target.value } : current,
-                          );
-                          if (draftErrors.phone) {
-                            setDraftErrors((current) => ({ ...current, phone: undefined }));
-                          }
-                        }}
-                      />
-                      <CrmInlineFieldError message={draftErrors.phone} />
-                    </>
-                  ) : (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField
+                    id="lead-phone"
+                    label="Phone"
+                    required
+                    validated
+                    error={draftFieldError('phone')}
+                  >
+                    <Input
+                      ref={phoneRef}
+                      id="lead-phone"
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="tel"
+                      placeholder={CRM_FORM_PLACEHOLDERS.phone}
+                      value={draft.phone}
+                      {...draftLiveFields.controlProps('phone', 'lead-phone')}
+                      onChange={(event) => {
+                        setDraft((current) =>
+                          current ? { ...current, phone: event.target.value } : current,
+                        );
+                        clearFormFieldError(setDraftErrors, 'phone');
+                      }}
+                    />
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Phone" required>
                     <ReadOnlyValue value={lead.phone ?? ''} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel>Stage</CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-stage" label="Stage">
                     <Select
                       value={draft.stageId}
                       onValueChange={(value) =>
                         setDraft((current) => (current ? { ...current, stageId: value } : current))
                       }
                     >
-                      <SelectTrigger aria-label="Stage">
-                        <PipelineStageSelectTrigger stages={stages} stageId={draft.stageId} />
+                      <SelectTrigger id="lead-stage" aria-label="Stage">
+                        <PipelineStageSelectTrigger
+                          stages={stages}
+                          stageId={draft.stageId}
+                          placeholder={CRM_FORM_PLACEHOLDERS.selectStage}
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         <PipelineStageSelectItems stages={stages} />
                       </SelectContent>
                     </Select>
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Stage">
                     <ReadOnlyValue value={stageName(lead.stageId)} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel>Source</CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-source" label="Source">
                     <Select
                       value={draft.source}
                       onValueChange={(value) =>
@@ -448,8 +473,8 @@ export function LeadDetailDialog({
                         )
                       }
                     >
-                      <SelectTrigger aria-label="Source">
-                        <SelectValue />
+                      <SelectTrigger id="lead-source" aria-label="Source">
+                        <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectSource} />
                       </SelectTrigger>
                       <SelectContent>
                         {LEAD_SOURCES.map((source) => (
@@ -459,13 +484,14 @@ export function LeadDetailDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Source">
                     <ReadOnlyValue value={labelLeadSource(lead.source)} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel>Priority</CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-priority" label="Priority">
                     <Select
                       value={draft.priority}
                       onValueChange={(value) =>
@@ -474,8 +500,8 @@ export function LeadDetailDialog({
                         )
                       }
                     >
-                      <SelectTrigger aria-label="Priority">
-                        <SelectValue />
+                      <SelectTrigger id="lead-priority" aria-label="Priority">
+                        <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectPriority} />
                       </SelectTrigger>
                       <SelectContent>
                         {LEAD_PRIORITIES.map((priority) => (
@@ -485,47 +511,46 @@ export function LeadDetailDialog({
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Priority">
                     <ReadOnlyValue value={labelLeadPriority(lead.priority)} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-value" optional>
-                    Estimated value
-                  </CrmFieldLabel>
-                  {isEdit ? (
-                    <>
-                      <Input
-                        ref={estimatedValueRef}
-                        id="lead-value"
-                        inputMode="decimal"
-                        value={draft.estimatedValue}
-                        onChange={(event) => {
-                          setDraft((current) =>
-                            current ? { ...current, estimatedValue: event.target.value } : current,
-                          );
-                          if (draftErrors.estimatedValue) {
-                            setDraftErrors((current) => ({
-                              ...current,
-                              estimatedValue: undefined,
-                            }));
-                          }
-                        }}
-                      />
-                      <CrmInlineFieldError message={draftErrors.estimatedValue} />
-                    </>
-                  ) : (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField
+                    id="lead-value"
+                    label="Estimated value"
+                    optional
+                    validated
+                    error={draftFieldError('estimatedValue')}
+                  >
+                    <Input
+                      ref={estimatedValueRef}
+                      id="lead-value"
+                      inputMode="decimal"
+                      placeholder={CRM_FORM_PLACEHOLDERS.estimatedValue}
+                      value={draft.estimatedValue}
+                      {...draftLiveFields.controlProps('estimatedValue', 'lead-value')}
+                      onChange={(event) => {
+                        setDraft((current) =>
+                          current ? { ...current, estimatedValue: event.target.value } : current,
+                        );
+                        clearFormFieldError(setDraftErrors, 'estimatedValue');
+                      }}
+                    />
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Estimated value" optional>
                     <ReadOnlyValue value={formatMoney(lead.estimatedValue, lead.currency)} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-close" optional>
-                    Expected close date
-                  </CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-close" label="Expected close date" optional>
                     <Input
                       id="lead-close"
                       type="date"
+                      placeholder={CRM_FORM_PLACEHOLDERS.expectedCloseDate}
                       value={draft.expectedCloseDate}
                       onChange={(event) =>
                         setDraft((current) =>
@@ -535,18 +560,18 @@ export function LeadDetailDialog({
                         )
                       }
                     />
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Expected close date" optional>
                     <ReadOnlyValue value={toDateInputValue(lead.expectedCloseDate) || ''} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-follow-up" optional>
-                    Next follow-up
-                  </CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-follow-up" label="Next follow-up" optional>
                     <Input
                       id="lead-follow-up"
                       type="datetime-local"
+                      placeholder={CRM_FORM_PLACEHOLDERS.nextFollowUp}
                       value={draft.nextFollowUpDate}
                       onChange={(event) =>
                         setDraft((current) =>
@@ -556,21 +581,19 @@ export function LeadDetailDialog({
                         )
                       }
                     />
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Next follow-up" optional>
                     <ReadOnlyValue
-                      value={
-                        lead.nextFollowUpDate ? formatDateTime(lead.nextFollowUpDate) : ''
-                      }
+                      value={lead.nextFollowUpDate ? formatDateTime(lead.nextFollowUpDate) : ''}
                     />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-website" optional>
-                    Website
-                  </CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-website" label="Website" optional>
                     <Input
                       id="lead-website"
+                      placeholder={CRM_FORM_PLACEHOLDERS.website}
                       value={draft.website}
                       onChange={(event) =>
                         setDraft((current) =>
@@ -578,38 +601,42 @@ export function LeadDetailDialog({
                         )
                       }
                     />
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Website" optional>
                     <ReadOnlyValue value={lead.website ?? ''} />
-                  )}
-                </div>
-                <div className="grid gap-1.5">
-                  <CrmFieldLabel htmlFor="lead-tags" optional>
-                    Tags
-                  </CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField id="lead-tags" label="Tags" optional>
                     <Input
                       id="lead-tags"
                       value={draft.tags}
-                      placeholder="Comma-separated"
+                      placeholder={CRM_FORM_PLACEHOLDERS.tags}
                       onChange={(event) =>
                         setDraft((current) =>
                           current ? { ...current, tags: event.target.value } : current,
                         )
                       }
                     />
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Tags" optional>
                     <ReadOnlyValue value={lead.tags.join(', ')} />
-                  )}
-                </div>
-                <div className="grid gap-1.5 sm:col-span-2">
-                  <CrmFieldLabel htmlFor="lead-description" optional>
-                    Description
-                  </CrmFieldLabel>
-                  {isEdit ? (
+                  </CrmReadOnlyField>
+                )}
+                {isEdit ? (
+                  <CrmFormField
+                    id="lead-description"
+                    label="Description"
+                    optional
+                    className={formGridFullWidthClass}
+                  >
                     <Textarea
                       id="lead-description"
                       rows={2}
                       className="min-h-[4.5rem] resize-y"
+                      placeholder={CRM_FORM_PLACEHOLDERS.description}
                       value={draft.description}
                       onChange={(event) =>
                         setDraft((current) =>
@@ -617,10 +644,12 @@ export function LeadDetailDialog({
                         )
                       }
                     />
-                  ) : (
+                  </CrmFormField>
+                ) : (
+                  <CrmReadOnlyField label="Description" optional className={formGridFullWidthClass}>
                     <ReadOnlyValue value={lead.description} />
-                  )}
-                </div>
+                  </CrmReadOnlyField>
+                )}
                 <p className="text-muted-foreground text-xs sm:col-span-2">
                   Pipeline: {pipeline?.name ?? '—'} · Value{' '}
                   {formatMoney(lead.estimatedValue, lead.currency)} · Last activity{' '}
@@ -631,15 +660,14 @@ export function LeadDetailDialog({
               <section className="grid gap-3">
                 <h2 className="text-sm font-semibold">Activity</h2>
                 <div className="grid gap-2 rounded-md border p-3">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
-                      <Label>Type</Label>
+                  <div className={formGridClass}>
+                    <CrmFormField id="activity-type" label="Type">
                       <Select
                         value={activityType}
                         onValueChange={(value) => setActivityType(value as LeadActivityType)}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
+                        <SelectTrigger id="activity-type">
+                          <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectType} />
                         </SelectTrigger>
                         <SelectContent>
                           {ACTIVITY_TYPES.map((type) => (
@@ -649,33 +677,33 @@ export function LeadDetailDialog({
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="activity-when">When</Label>
+                    </CrmFormField>
+                    <CrmFormField id="activity-when" label="When">
                       <Input
                         id="activity-when"
                         type="datetime-local"
+                        placeholder={CRM_FORM_PLACEHOLDERS.activityWhen}
                         value={activityOccurredAt}
                         onChange={(event) => setActivityOccurredAt(event.target.value)}
                       />
-                    </div>
+                    </CrmFormField>
                   </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="activity-title">Title</Label>
+                  <CrmFormField id="activity-title" label="Title">
                     <Input
                       id="activity-title"
+                      placeholder={CRM_FORM_PLACEHOLDERS.activityTitle}
                       value={activityTitle}
                       onChange={(event) => setActivityTitle(event.target.value)}
                     />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="activity-description">Notes</Label>
+                  </CrmFormField>
+                  <CrmFormField id="activity-description" label="Notes">
                     <Textarea
                       id="activity-description"
+                      placeholder={CRM_FORM_PLACEHOLDERS.activityDescription}
                       value={activityDescription}
                       onChange={(event) => setActivityDescription(event.target.value)}
                     />
-                  </div>
+                  </CrmFormField>
                   <Button
                     type="button"
                     size="sm"

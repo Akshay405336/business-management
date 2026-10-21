@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/client';
-import type { Prisma } from '../../../../../generated/prisma/client.js';
+import { Prisma } from '../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../infrastructure/database/prisma.service.js';
 import type { ProposalStatus } from '../../../domain/crm-types.js';
 import {
@@ -27,6 +27,8 @@ import type {
   CreateLeadInput,
   CreatePipelineInput,
   CreateProposalInput,
+  ChangeServicePackageStatusInput,
+  CreateServicePackageInput,
   CreateStageInput,
   CrmAuditInput,
   CrmRepository,
@@ -38,12 +40,26 @@ import type {
   PipelineStageRecord,
   ProposalLineItemWriteInput,
   ProposalRecord,
+  ServicePackageRecord,
   UpdateClientInput,
+  UpdateServicePackageInput,
   UpdateLeadInput,
   UpdatePipelineInput,
   UpdateProposalInput,
   UpdateStageInput,
 } from '../../../domain/repositories/crm.repository.js';
+import {
+  buildPackageSnapshot,
+  buildProposalLinesFromPackage,
+  changeServicePackageStatus as changeServicePackageStatusRow,
+  createServicePackage as createServicePackageRow,
+  deleteServicePackage as deleteServicePackageRow,
+  getServicePackage as getServicePackageRow,
+  listServicePackages as listServicePackagesRows,
+  nextServicePackageCode,
+  previewServicePackageCode as previewServicePackageCodeRow,
+  updateServicePackage as updateServicePackageRow,
+} from './service-packages.persistence.js';
 import {
   DEFAULT_ORGANIZATION_NAME,
   ORGANIZATION_SLUG_TECHWIN,
@@ -1034,7 +1050,16 @@ export class PrismaCrmRepository implements CrmRepository {
     audit: CrmAuditInput,
   ): Promise<ProposalRecord> {
     const proposalId = crypto.randomUUID();
-    const lineItems = input.lineItems ?? [];
+    let lineItems = input.lineItems ?? [];
+    let packageSnapshot: unknown = null;
+    const sourcePackageId = input.sourcePackageId ?? null;
+    if (sourcePackageId) {
+      const pkg = await getServicePackageRow(this.prisma, organizationId, sourcePackageId);
+      if (!pkg) throw new CrmNotFoundError('Service package');
+      packageSnapshot = buildPackageSnapshot(pkg);
+      const built = buildProposalLinesFromPackage(pkg);
+      lineItems = built.lineItems;
+    }
     const { rows, totals } = this.buildLineItemRows(proposalId, lineItems);
 
     const row = await this.prisma.$transaction(async (tx) => {
@@ -1055,13 +1080,16 @@ export class PrismaCrmRepository implements CrmRepository {
           clientId: input.clientId ?? null,
           issueDate: input.issueDate,
           expiryDate: input.expiryDate ?? null,
-          currency: input.currency ?? 'USD',
+          currency: input.currency ?? (sourcePackageId ? 'INR' : 'USD'),
           subtotal: totals.subtotal,
           discountTotal: totals.discountTotal,
           taxTotal: totals.taxTotal,
           grandTotal: totals.grandTotal,
           notes: input.notes ?? '',
           terms: input.terms ?? '',
+          sourcePackageId,
+          packageSnapshot:
+            packageSnapshot === null ? Prisma.DbNull : (packageSnapshot as Prisma.InputJsonValue),
           createdByAdminId: input.createdByAdminId,
         },
       });
@@ -1078,7 +1106,7 @@ export class PrismaCrmRepository implements CrmRepository {
             title: `Proposal ${documentNumber} created`,
             description: input.title,
             occurredAt: new Date(),
-            metadata: { proposalId: proposal.id },
+            metadata: { proposalId: proposal.id, sourcePackageId },
             createdByAdminId: input.createdByAdminId,
           },
         });
@@ -1090,6 +1118,79 @@ export class PrismaCrmRepository implements CrmRepository {
       });
     });
     return this.toProposal(row);
+  }
+
+  async listServicePackages(organizationId: string): Promise<readonly ServicePackageRecord[]> {
+    return listServicePackagesRows(this.prisma, organizationId);
+  }
+
+  async getServicePackage(
+    organizationId: string,
+    packageId: string,
+  ): Promise<ServicePackageRecord | null> {
+    return getServicePackageRow(this.prisma, organizationId, packageId);
+  }
+
+  previewServicePackageCode(organizationId: string): Promise<string> {
+    return previewServicePackageCodeRow(this.prisma, organizationId);
+  }
+
+  async createServicePackage(
+    organizationId: string,
+    input: CreateServicePackageInput,
+    audit: CrmAuditInput,
+  ): Promise<ServicePackageRecord> {
+    const row = await this.prisma.$transaction(async (tx) => {
+      const code = await nextServicePackageCode(tx, organizationId);
+      const created = await createServicePackageRow(tx, organizationId, input, code);
+      await this.writeAudit(tx, organizationId, { ...audit, entityId: created.id });
+      return created;
+    });
+    return row;
+  }
+
+  async changeServicePackageStatus(
+    organizationId: string,
+    packageId: string,
+    input: ChangeServicePackageStatusInput,
+    audit: CrmAuditInput,
+  ): Promise<ServicePackageRecord> {
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await changeServicePackageStatusRow(
+        tx,
+        organizationId,
+        packageId,
+        input.status,
+      );
+      await this.writeAudit(tx, organizationId, { ...audit, entityId: updated.id });
+      return updated;
+    });
+    return row;
+  }
+
+  async updateServicePackage(
+    organizationId: string,
+    packageId: string,
+    input: UpdateServicePackageInput,
+    audit: CrmAuditInput,
+  ): Promise<ServicePackageRecord> {
+    const row = await this.prisma.$transaction(async (tx) => {
+      const updated = await updateServicePackageRow(tx, organizationId, packageId, input);
+      await this.writeAudit(tx, organizationId, { ...audit, entityId: updated.id });
+      return updated;
+    });
+    return row;
+  }
+
+  async deleteServicePackage(
+    organizationId: string,
+    packageId: string,
+    audit: CrmAuditInput,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await deleteServicePackageRow(tx, organizationId, packageId);
+      await this.writeAudit(tx, organizationId, audit);
+    });
   }
 
   async updateProposal(
@@ -1406,6 +1507,8 @@ export class PrismaCrmRepository implements CrmRepository {
     notes: string;
     terms: string;
     version: number;
+    sourcePackageId: string | null;
+    packageSnapshot: unknown;
     createdByAdminId: string;
     createdAt: Date;
     updatedAt: Date;
@@ -1427,6 +1530,8 @@ export class PrismaCrmRepository implements CrmRepository {
   }): ProposalRecord {
     return {
       ...row,
+      sourcePackageId: row.sourcePackageId ?? null,
+      packageSnapshot: row.packageSnapshot ?? null,
       subtotal: decimalToString(row.subtotal),
       discountTotal: decimalToString(row.discountTotal),
       taxTotal: decimalToString(row.taxTotal),

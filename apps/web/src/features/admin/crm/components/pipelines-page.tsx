@@ -32,7 +32,11 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
-import { DataTableFrame } from '@/features/admin/components/data-table';
+import {
+  DataTable,
+  deriveDataTablePhase,
+} from '@/features/admin/components/data-table';
+import { CRM_PIPELINE_STAGES_TABLE_SKELETON } from '@/features/admin/components/data-table-presets';
 import { StageColorSelect } from '@/features/admin/components/stage-color-select';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
@@ -45,7 +49,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/shared/lib/utils';
+import { focusFirstInvalidField } from '@/shared/form/form-control-state';
+import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
+import {
+  pipelineStageColorFieldSchema,
+  pipelineStageNameFieldSchema,
+} from '@techwin/validation';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -54,14 +66,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import {
   activatePipelineStage,
@@ -78,14 +83,14 @@ import { describeCrmError } from '../utils/errors';
 import { normalizeStageColor } from '../utils/stage-color';
 import { labelStageOutcome } from '../utils/labels';
 import {
-  CrmEmptyState,
   CrmErrorAlert,
-  CrmFieldLabel,
-  CrmInlineFieldError,
-  CrmLoadingRows,
+  CrmFormField,
+  formGridClass,
+  formGridFullWidthClass,
 } from './crm-feedback';
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from './crm-toolbar-header';
 import { PipelineStageSelectItems, PipelineStageSelectTrigger } from './pipeline-stage-select';
+import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import { useAsyncAction } from '../hooks/use-async-action';
 
 type StageForm = {
@@ -312,7 +317,13 @@ export function PipelinesPage() {
   const [deactivateTargetId, setDeactivateTargetId] = useState('');
 
   const [optimisticActive, setOptimisticActive] = useState<CrmPipelineStage[] | null>(null);
-  const [stageFieldErrors, setStageFieldErrors] = useState<{ name?: string; color?: string }>({});
+  const stageLiveFields = useZodFormFields(
+    {
+      name: pipelineStageNameFieldSchema,
+      color: pipelineStageColorFieldSchema,
+    },
+    { name: stageForm.name, color: stageForm.color },
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -360,7 +371,7 @@ export function PipelinesPage() {
   const openCreateStage = () => {
     setStageForm(emptyStageForm());
     setEditingStageId(null);
-    setStageFieldErrors({});
+    stageLiveFields.reset();
     setStageDialog('create');
   };
 
@@ -372,22 +383,18 @@ export function PipelinesPage() {
       outcome: stage.outcome,
     });
     setEditingStageId(stage.id);
-    setStageFieldErrors({});
+    stageLiveFields.reset();
     setStageDialog('edit');
   };
 
   const submitStage = async () => {
     if (!pipeline) return;
-    const name = stageForm.name.trim();
-    const colorValid = /^#[0-9a-fA-F]{6}$/.test(stageForm.color);
-    const errors: { name?: string; color?: string } = {};
-    if (!name) errors.name = 'Stage name is required.';
-    if (!colorValid) errors.color = 'Select a valid color.';
-    if (Object.keys(errors).length > 0) {
-      setStageFieldErrors(errors);
+    stageLiveFields.prepareSubmit();
+    if (!stageLiveFields.isValid) {
+      focusFirstInvalidField();
       return;
     }
-    setStageFieldErrors({});
+    const name = stageForm.name.trim();
     try {
       await run(async () => {
         const body = {
@@ -550,6 +557,32 @@ export function PipelinesPage() {
 
   const loading = pipeline === null && !error;
 
+  const tablePhase = deriveDataTablePhase({
+    loading,
+    error,
+    rowCount: hasAnyStages ? tableRows.length : 0,
+  });
+
+  const clearStageFilters = () => {
+    setSearchDraft('');
+    setSearchQuery('');
+    setStatusFilter('ALL');
+    setPage(1);
+  };
+
+  const stageTableHeader = (
+    <TableRow className="hover:bg-transparent">
+      <TableHead className="w-10" />
+      <TableHead className="w-12">#</TableHead>
+      <TableHead>Stage Name</TableHead>
+      <TableHead>Description</TableHead>
+      <TableHead>Color</TableHead>
+      <TableHead>Leads</TableHead>
+      <TableHead>Status</TableHead>
+      <TableHead className="w-[7.5rem]">Actions</TableHead>
+    </TableRow>
+  );
+
   const breadcrumbs = [
     { label: 'Dashboard', href: '/admin/dashboard' },
     { label: 'CRM' },
@@ -576,19 +609,15 @@ export function PipelinesPage() {
                     setPage(1);
                   }}
                 >
-                  <div className="relative min-w-0">
-                    <Search
-                      className="text-muted-foreground pointer-events-none absolute top-2.5 left-2.5 size-4"
-                      aria-hidden="true"
-                    />
+                  <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0">
                     <Input
-                      className="h-9 pl-8"
-                      placeholder="Search stages..."
+                      className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
+                      placeholder={CRM_FORM_PLACEHOLDERS.searchStages}
                       value={searchDraft}
                       onChange={(event) => setSearchDraft(event.target.value)}
                       aria-label="Search stages by name or description"
                     />
-                  </div>
+                  </InputGroup>
                 </form>
                 <Select
                   value={statusFilter}
@@ -598,7 +627,7 @@ export function PipelinesPage() {
                     className="h-9 w-full shrink-0 sm:w-[11rem]"
                     aria-label="Filter by status"
                   >
-                    <SelectValue placeholder="All statuses" />
+                    <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.allStatuses} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">All statuses</SelectItem>
@@ -623,16 +652,7 @@ export function PipelinesPage() {
         }
       />
 
-      {error ? <CrmErrorAlert message={error} /> : null}
-
-      {loading ? <CrmLoadingRows rows={5} /> : null}
-
-      {pipeline && !hasAnyStages ? (
-        <CrmEmptyState
-          title="No stages yet"
-          description="Add your first stage to define how leads progress through the pipeline."
-        />
-      ) : null}
+      {error && pipeline ? <CrmErrorAlert message={error} /> : null}
 
       {pipeline && hasAnyStages && filtersActive ? (
         <p className="text-muted-foreground text-sm" role="status">
@@ -641,101 +661,90 @@ export function PipelinesPage() {
         </p>
       ) : null}
 
-      {pipeline && hasAnyStages ? (
-        <DataTableFrame
-          footer={
-            tableRows.length > 0 ? (
-              <TablePagination
-                page={safePage}
-                pageSize={pageSize}
-                total={totalStages}
-                onPageChange={setPage}
-                onPageSizeChange={(nextSize) => {
-                  setPageSize(nextSize);
-                  setPage(1);
-                }}
-              />
-            ) : null
-          }
-        >
-          {tableRows.length === 0 ? (
-            <div className="text-muted-foreground px-4 py-10 text-center text-sm">
-              <p className="text-foreground font-medium">No stages match your search</p>
-              <p className="mt-1">
-                Try a different search term or status filter, or clear filters to see all stages.
-              </p>
-            </div>
-          ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <Table>
-                <TableHeader variant="gradient">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="w-10" />
-                    <TableHead className="w-12">#</TableHead>
-                    <TableHead>Stage Name</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Color</TableHead>
-                    <TableHead>Leads</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-[7.5rem]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <SortableContext
-                    items={paginatedActiveIds}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    {(() => {
-                      let inactiveHeaderShown = false;
-                      return paginatedRows.flatMap((row) => {
-                        const elements: ReactNode[] = [];
-                        if (row.kind === 'inactive' && !inactiveHeaderShown) {
-                          inactiveHeaderShown = true;
-                          elements.push(
-                            <TableRow key="inactive-header" className="hover:bg-transparent">
-                              <TableCell
-                                colSpan={8}
-                                className="bg-muted/40 text-muted-foreground py-2 text-xs font-semibold tracking-wide uppercase"
-                              >
-                                Inactive stages
-                              </TableCell>
-                            </TableRow>,
-                          );
-                        }
-                        if (row.kind === 'active') {
-                          elements.push(
-                            <SortableStageRow
-                              key={row.stage.id}
-                              stage={row.stage}
-                              pending={pending}
-                              dragEnabled={!filtersActive}
-                              onEdit={openEditStage}
-                              onDeactivate={setDeactivateStage}
-                              onDelete={setDeleteStage}
-                            />,
-                          );
-                        } else {
-                          elements.push(
-                            <InactiveStageRow
-                              key={row.stage.id}
-                              stage={row.stage}
-                              pending={pending}
-                              onEdit={openEditStage}
-                              onActivate={handleActivateStage}
-                              onDelete={setDeleteStage}
-                            />,
-                          );
-                        }
-                        return elements;
-                      });
-                    })()}
-                  </SortableContext>
-                </TableBody>
-              </Table>
-            </DndContext>
-          )}
-        </DataTableFrame>
-      ) : null}
+      <DataTable
+        phase={tablePhase}
+        colSpan={8}
+        skeletonColumns={CRM_PIPELINE_STAGES_TABLE_SKELETON}
+        header={stageTableHeader}
+        empty={{
+          title: hasAnyStages
+            ? 'No stages match your search'
+            : 'No pipeline stages yet',
+          description: hasAnyStages
+            ? 'Try a different search term or status filter, or clear filters to see all stages.'
+            : 'Add your first stage to define how leads progress through the pipeline.',
+          action: hasAnyStages ? undefined : { label: 'Add stage', onClick: openCreateStage },
+          secondaryAction: hasAnyStages && filtersActive
+            ? { label: 'Clear filters', onClick: clearStageFilters }
+            : undefined,
+        }}
+        errorMessage={error}
+        onRetry={() => setReloadKey((key) => key + 1)}
+        footer={
+          <TablePagination
+            page={safePage}
+            pageSize={pageSize}
+            total={totalStages}
+            loading={tablePhase === 'initial-loading'}
+            onPageChange={setPage}
+            onPageSizeChange={(nextSize) => {
+              setPageSize(nextSize);
+              setPage(1);
+            }}
+          />
+        }
+      >
+        {tableRows.length > 0 ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={paginatedActiveIds} strategy={verticalListSortingStrategy}>
+              {(() => {
+                let inactiveHeaderShown = false;
+                return paginatedRows.flatMap((row) => {
+                  const elements: ReactNode[] = [];
+                  if (row.kind === 'inactive' && !inactiveHeaderShown) {
+                    inactiveHeaderShown = true;
+                    elements.push(
+                      <TableRow key="inactive-header" className="hover:bg-transparent">
+                        <TableCell
+                          colSpan={8}
+                          className="bg-muted/40 text-muted-foreground py-2 text-xs font-semibold tracking-wide uppercase"
+                        >
+                          Inactive stages
+                        </TableCell>
+                      </TableRow>,
+                    );
+                  }
+                  if (row.kind === 'active') {
+                    elements.push(
+                      <SortableStageRow
+                        key={row.stage.id}
+                        stage={row.stage}
+                        pending={pending}
+                        dragEnabled={!filtersActive}
+                        onEdit={openEditStage}
+                        onDeactivate={setDeactivateStage}
+                        onDelete={setDeleteStage}
+                      />,
+                    );
+                  } else {
+                    elements.push(
+                      <InactiveStageRow
+                        key={row.stage.id}
+                        stage={row.stage}
+                        pending={pending}
+                        onEdit={openEditStage}
+                        onActivate={handleActivateStage}
+                        onDelete={setDeleteStage}
+                      />,
+                    );
+                  }
+                  return elements;
+                });
+              })()}
+            </SortableContext>
+          </DndContext>
+        ) : null}
+      </DataTable>
 
       <Dialog open={stageDialog !== null} onOpenChange={(open) => !open && setStageDialog(null)}>
         <DialogContent className="flex max-h-[min(90vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
@@ -749,47 +758,50 @@ export function PipelinesPage() {
           </DialogHeader>
           <div
             key={stageDialogKey}
-            className="grid max-h-[min(60vh,420px)] gap-3 overflow-y-auto px-6 py-2 sm:grid-cols-2"
+            className={cn('max-h-[min(60vh,420px)] overflow-y-auto px-6 py-2', formGridClass)}
           >
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="stage-name" required>
-                Stage name
-              </CrmFieldLabel>
+            <CrmFormField
+              id="stage-name"
+              label="Stage name"
+              required
+              validated
+              error={stageLiveFields.errors.name}
+            >
               <Input
                 id="stage-name"
+                placeholder={CRM_FORM_PLACEHOLDERS.stageName}
                 value={stageForm.name}
                 maxLength={120}
-                onChange={(event) => {
-                  setStageForm((f) => ({ ...f, name: event.target.value }));
-                  if (stageFieldErrors.name) {
-                    setStageFieldErrors((current) => ({ ...current, name: undefined }));
-                  }
-                }}
+                {...stageLiveFields.controlProps('name', 'stage-name')}
+                onChange={(event) =>
+                  setStageForm((f) => ({ ...f, name: event.target.value }))
+                }
               />
-              <CrmInlineFieldError message={stageFieldErrors.name} />
-            </div>
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="stage-color" required>
-                Color
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="stage-color"
+              label="Color"
+              required
+              validated
+              error={stageLiveFields.errors.color}
+            >
               <StageColorSelect
                 id="stage-color"
                 value={stageForm.color}
-                onValueChange={(value) => {
-                  setStageForm((f) => ({ ...f, color: value }));
-                  if (stageFieldErrors.color) {
-                    setStageFieldErrors((current) => ({ ...current, color: undefined }));
-                  }
-                }}
+                controlState={stageLiveFields.controlState('color')}
+                onBlur={() => stageLiveFields.touch('color')}
+                onValueChange={(value) => setStageForm((f) => ({ ...f, color: value }))}
               />
-              <CrmInlineFieldError message={stageFieldErrors.color} />
-            </div>
-            <div className="grid gap-1.5 sm:col-span-2">
-              <CrmFieldLabel htmlFor="stage-description" optional>
-                Description
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="stage-description"
+              label="Description"
+              optional
+              className={formGridFullWidthClass}
+            >
               <Textarea
                 id="stage-description"
+                placeholder={CRM_FORM_PLACEHOLDERS.stageDescription}
                 value={stageForm.description}
                 maxLength={2000}
                 rows={2}
@@ -798,11 +810,13 @@ export function PipelinesPage() {
                   setStageForm((f) => ({ ...f, description: event.target.value }))
                 }
               />
-            </div>
-            <div className="grid gap-1.5 sm:col-span-2 sm:col-start-1 sm:max-w-sm">
-              <CrmFieldLabel htmlFor="stage-outcome" optional>
-                Outcome type
-              </CrmFieldLabel>
+            </CrmFormField>
+            <CrmFormField
+              id="stage-outcome"
+              label="Outcome type"
+              optional
+              className={cn(formGridFullWidthClass, 'sm:col-start-1 sm:max-w-sm')}
+            >
               <Select
                 value={stageForm.outcome}
                 onValueChange={(value) =>
@@ -810,7 +824,7 @@ export function PipelinesPage() {
                 }
               >
                 <SelectTrigger id="stage-outcome">
-                  <SelectValue />
+                  <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectOutcome} />
                 </SelectTrigger>
                 <SelectContent>
                   {(['NONE', 'WON', 'LOST'] as const).map((outcome) => (
@@ -820,7 +834,7 @@ export function PipelinesPage() {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </CrmFormField>
           </div>
           <DialogFooter className="border-t px-6 py-4">
             <Button type="button" variant="outline" onClick={() => setStageDialog(null)}>
@@ -861,7 +875,7 @@ export function PipelinesPage() {
                   <PipelineStageSelectTrigger
                     stages={reassignmentTargets(deleteStage.id)}
                     stageId={deleteTargetId || undefined}
-                    placeholder="Select stage"
+                    placeholder={CRM_FORM_PLACEHOLDERS.selectStage}
                   />
                 </SelectTrigger>
                 <SelectContent>
@@ -907,7 +921,7 @@ export function PipelinesPage() {
                   <PipelineStageSelectTrigger
                     stages={reassignmentTargets(deactivateStage.id)}
                     stageId={deactivateTargetId || undefined}
-                    placeholder="Select stage"
+                    placeholder={CRM_FORM_PLACEHOLDERS.selectStage}
                   />
                 </SelectTrigger>
                 <SelectContent>

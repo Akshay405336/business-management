@@ -67,8 +67,9 @@ model PlatformAdmin {
   assignedLeads    Lead[]             @relation("LeadAssignee")
   createdLeads     Lead[]             @relation("LeadCreator")
   leadActivities   LeadActivity[]
-  createdProposals ProposalDocument[]
-  createdClients   Client[]
+  createdProposals      ProposalDocument[]
+  createdServicePackages ServicePackage[]
+  createdClients        Client[]
   convertedLeads   Lead[]             @relation("LeadConvertedBy")
   crmAuditEvents   CrmAuditEvent[]
 
@@ -162,9 +163,10 @@ model Organization {
   leads       Lead[]
   activities  LeadActivity[]
   clients     Client[]
-  proposals   ProposalDocument[]
-  sequences   OrganizationSequence[]
-  auditEvents CrmAuditEvent[]
+  proposals       ProposalDocument[]
+  servicePackages ServicePackage[]
+  sequences       OrganizationSequence[]
+  auditEvents     CrmAuditEvent[]
 
   @@map("organizations")
 }
@@ -413,6 +415,8 @@ model ProposalDocument {
   notes            String               @default("") @db.VarChar(4000)
   terms            String               @default("") @db.VarChar(4000)
   version          Int                  @default(1)
+  sourcePackageId  String?              @map("source_package_id") @db.Uuid
+  packageSnapshot  Json?                @map("package_snapshot")
   createdByAdminId String               @map("created_by_admin_id") @db.Uuid
   createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -420,6 +424,7 @@ model ProposalDocument {
   organization  Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   lead          Lead?                   @relation(fields: [leadId], references: [id], onDelete: SetNull)
   client        Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  sourcePackage ServicePackage?         @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
   createdBy     PlatformAdmin           @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
   lineItems     ProposalLineItem[]
   statusHistory ProposalStatusHistory[]
@@ -427,6 +432,66 @@ model ProposalDocument {
   @@unique([organizationId, documentNumber])
   @@index([organizationId, status, createdAt])
   @@map("proposal_documents")
+}
+
+enum ServicePackageStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ServicePackageDeliveryUnit {
+  DAYS
+  WEEKS
+  MONTHS
+}
+
+enum PackageDiscountType {
+  FIXED
+  PERCENT
+}
+
+model ServicePackage {
+  id                      String                 @id @db.Uuid
+  organizationId          String                 @map("organization_id") @db.Uuid
+  code                    String                 @db.VarChar(32)
+  name                    String                 @db.VarChar(160)
+  categories              Json                   @default("[]")
+  shortDescription        String                 @default("") @map("short_description") @db.VarChar(500)
+  detailedDescription     String                 @default("") @map("detailed_description") @db.VarChar(8000)
+  status                  ServicePackageStatus   @default(ACTIVE)
+  technologyStack         Json                   @default("[]") @map("technology_stack")
+  includedPages           Json                   @default("[]") @map("included_pages")
+  integrations            Json                   @default("[]")
+  adminPanelFeatures      Json                   @default("[]") @map("admin_panel_features")
+  hostingDeployment       Json                   @default("[]") @map("hosting_deployment")
+  deliveryServices        Json                   @default("[]") @map("delivery_services")
+  integrationNotes        String                 @default("") @map("integration_notes") @db.VarChar(4000)
+  pageCount               Int?                   @map("page_count")
+  basePrice               Decimal                @default(0) @map("base_price") @db.Decimal(18, 2)
+  addOns                  Json                   @default("[]") @map("add_ons")
+  discountType            PackageDiscountType?   @map("discount_type")
+  discountValue           Decimal                @default(0) @map("discount_value") @db.Decimal(18, 2)
+  gstRate                 Decimal                @default(18) @map("gst_rate") @db.Decimal(8, 4)
+  taxableAmount           Decimal                @default(0) @map("taxable_amount") @db.Decimal(18, 2)
+  gstAmount               Decimal                @default(0) @map("gst_amount") @db.Decimal(18, 2)
+  finalPrice              Decimal                @default(0) @map("final_price") @db.Decimal(18, 2)
+  estimatedDeliveryDuration String               @default("") @map("estimated_delivery_duration") @db.VarChar(120)
+  deliveryDurationValue   Int?                   @map("delivery_duration_value")
+  deliveryDurationUnit    ServicePackageDeliveryUnit? @map("delivery_duration_unit")
+  supportPeriod           String                 @default("") @map("support_period") @db.VarChar(120)
+  revisionAllowance       String                 @default("") @map("revision_allowance") @db.VarChar(120)
+  termsExclusions         String                 @default("") @map("terms_exclusions") @db.VarChar(4000)
+  createdByAdminId        String                 @map("created_by_admin_id") @db.Uuid
+  createdAt               DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    PlatformAdmin      @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  proposals    ProposalDocument[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId, status])
+  @@map("service_packages")
 }
 
 model ProposalLineItem {
@@ -485,6 +550,8 @@ enum CrmAuditEventType {
   PROPOSAL_CREATED
   PROPOSAL_UPDATED
   PROPOSAL_STATUS_CHANGED
+  SERVICE_PACKAGE_CREATED
+  SERVICE_PACKAGE_UPDATED
 }
 
 model CrmAuditEvent {

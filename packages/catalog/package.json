@@ -1,0 +1,26 @@
+{
+  "name": "@techwin/catalog",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Predefined Techwin service package option catalogs (technologies, pages, integrations).",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@techwin/eslint-config": "workspace:*",
+    "@techwin/tsconfig": "workspace:*",
+    "eslint": "9.39.5",
+    "typescript": "6.0.3"
+  }
+}

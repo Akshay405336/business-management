@@ -76,7 +76,7 @@ const dateTime = z.iso.datetime({ offset: true });
 
 export const createPipelineRequestSchema = z
   .object({
-    name: z.string().trim().min(1).max(120),
+    name: z.string().trim().min(1, 'Enter a pipeline name.').max(120),
     description: z.string().max(2000).optional(),
     status: pipelineStatusSchema.optional(),
   })
@@ -89,7 +89,7 @@ export const updatePipelineRequestSchema = createPipelineRequestSchema
 
 export const createPipelineStageRequestSchema = z
   .object({
-    name: z.string().trim().min(1).max(120),
+    name: z.string().trim().min(1, 'Enter a stage name.').max(120),
     description: z.string().max(2000).optional(),
     color: z
       .string()
@@ -144,7 +144,7 @@ export function parseLeadListQuery(input: unknown): z.infer<typeof leadListQuery
 
 export const createLeadRequestSchema = z
   .object({
-    fullName: z.string().trim().min(1).max(160),
+    fullName: z.string().trim().min(1, 'Enter a name.').max(160),
     companyName: z.string().max(160).optional(),
     email: leadEmailSchema,
     phone: leadPhoneSchema,
@@ -190,7 +190,7 @@ export const createLeadActivityRequestSchema = z
 export const createClientRequestSchema = z
   .object({
     type: clientTypeSchema,
-    name: z.string().trim().min(1).max(160),
+    name: z.string().trim().min(1, 'Enter a name.').max(160),
     primaryContact: z.string().max(160).optional(),
     email: z.email().max(254).nullable().optional(),
     phone: z.string().max(32).nullable().optional(),
@@ -229,6 +229,7 @@ export const createProposalRequestSchema = z
     description: z.string().max(4000).optional(),
     leadId: uuid.nullable().optional(),
     clientId: uuid.nullable().optional(),
+    sourcePackageId: uuid.nullable().optional(),
     issueDate: dateOnly,
     expiryDate: dateOnly.nullable().optional(),
     currency: z.string().length(3).optional(),

@@ -8,6 +8,7 @@ import type { CrmProposalPrintResponse } from '../types';
 import { formatDateOnly, formatMoney } from '../utils/format';
 import { describeCrmError } from '../utils/errors';
 import { labelProposalStatus, labelProposalType } from '../utils/labels';
+import { packageSnapshotSections } from '../utils/package-snapshot-labels';
 import { CrmErrorAlert, CrmLoadingRows } from './crm-feedback';
 
 export function ProposalPrintPage({ proposalId }: { proposalId: string }) {
@@ -72,6 +73,37 @@ export function ProposalPrintPage({ proposalId }: { proposalId: string }) {
             <section>
               <h2 className="mb-2 text-sm font-semibold tracking-wide uppercase">Summary</h2>
               <p className="text-sm whitespace-pre-wrap">{proposal.description}</p>
+            </section>
+          ) : null}
+
+          {proposal.packageSnapshot ? (
+            <section>
+              <h2 className="mb-2 text-sm font-semibold tracking-wide uppercase">
+                Package scope (snapshot)
+              </h2>
+              <p className="text-muted-foreground mb-3 text-xs">
+                {proposal.packageSnapshot.name} ({proposal.packageSnapshot.code}) · captured{' '}
+                {formatDateOnly(proposal.packageSnapshot.snapshotAt.slice(0, 10))}
+              </p>
+              <dl className="grid gap-2 text-sm">
+                {packageSnapshotSections(proposal.packageSnapshot).map((section) => (
+                  <div key={section.title}>
+                    <dt className="text-muted-foreground text-xs font-medium uppercase">
+                      {section.title}
+                    </dt>
+                    <dd className="whitespace-pre-wrap">{section.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {proposal.packageSnapshot.integrationNotes ? (
+                <p className="text-muted-foreground mt-3 text-xs whitespace-pre-wrap">
+                  Integration notes: {proposal.packageSnapshot.integrationNotes}
+                </p>
+              ) : null}
+              <p className="text-muted-foreground mt-2 text-xs">
+                Catalog selections document intended scope only; third-party accounts and credentials
+                are not included unless stated in notes or terms.
+              </p>
             </section>
           ) : null}
 

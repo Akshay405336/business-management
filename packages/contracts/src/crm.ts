@@ -1,4 +1,5 @@
 import { API_PREFIX } from './http.js';
+import type { ServicePackageSnapshot } from './service-packages.js';
 
 export const CRM_ROUTES = {
   pipelines: `${API_PREFIX}/crm/pipelines`,
@@ -22,6 +23,10 @@ export const CRM_ROUTES = {
   client: (id: string) => `${API_PREFIX}/crm/clients/${id}`,
   clientFromLead: (leadId: string) => `${API_PREFIX}/crm/clients/from-lead/${leadId}`,
   proposals: `${API_PREFIX}/crm/proposals`,
+  servicePackages: `${API_PREFIX}/crm/service-packages`,
+  servicePackage: (id: string) => `${API_PREFIX}/crm/service-packages/${id}`,
+  servicePackageStatus: (id: string) => `${API_PREFIX}/crm/service-packages/${id}/status`,
+  servicePackageCodePreview: `${API_PREFIX}/crm/service-packages/code-preview`,
   proposal: (id: string) => `${API_PREFIX}/crm/proposals/${id}`,
   proposalStatus: (id: string) => `${API_PREFIX}/crm/proposals/${id}/status`,
   proposalPrint: (id: string) => `${API_PREFIX}/crm/proposals/${id}/print`,
@@ -192,10 +197,13 @@ export interface CrmProposal {
   readonly notes: string;
   readonly terms: string;
   readonly version: number;
+  readonly sourcePackageId: string | null;
+  readonly packageSnapshot: ServicePackageSnapshot | null;
   readonly lineItems: readonly CrmProposalLineItem[];
   readonly createdAt: string;
   readonly updatedAt: string;
 }
+
 
 export interface CrmProposalListResponse {
   readonly proposals: readonly CrmProposal[];

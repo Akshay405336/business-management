@@ -65,6 +65,12 @@
   html {
     -webkit-text-size-adjust: 100%;
   }
+  @keyframes data-table-shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
   body {
     @apply bg-background text-foreground min-h-dvh font-sans antialiased;
     font-feature-settings:
@@ -72,5 +78,30 @@
       'cv03' 1,
       'cv04' 1,
       'cv11' 1;
+  }
+
+  /** Horizontal chip row in SearchableMultiSelect — thin track, no arrow buttons. */
+  .multi-select-chip-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--muted-foreground) 35%, transparent) transparent;
+  }
+
+  .multi-select-chip-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .multi-select-chip-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .multi-select-chip-scroll::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: color-mix(in oklch, var(--muted-foreground) 35%, transparent);
+  }
+
+  .multi-select-chip-scroll::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
   }
 }
