@@ -9,7 +9,9 @@ const standaloneRoot = path.join(webRoot, '.next', 'standalone');
 const serverEntry = path.join(standaloneRoot, 'apps', 'web', 'server.js');
 
 if (!existsSync(serverEntry)) {
-  console.error('Missing standalone build. Run `pnpm build` (or `pnpm --filter @techwin/web build`) first.');
+  console.error(
+    'Missing standalone build. Run `pnpm build` (or `pnpm --filter @techwin/web build`) first.',
+  );
   process.exit(1);
 }
 

@@ -3,4 +3,5 @@ export { CurrentPlatformAuth } from './presentation/http/guards/current-platform
 export {
   PlatformAdminGuard,
   type PlatformAuthContext,
+  type PlatformAuthenticatedRequest,
 } from './presentation/http/guards/platform-admin.guard.js';

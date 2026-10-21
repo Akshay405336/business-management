@@ -1,0 +1,480 @@
+import type {
+  ClientStatus,
+  ClientType,
+  CrmAuditEventType,
+  LeadActivityType,
+  LeadPriority,
+  LeadSource,
+  PipelineStageOutcome,
+  PipelineStatus,
+  ProposalDocumentType,
+  ProposalStatus,
+} from '../crm-types.js';
+
+export const CRM_REPOSITORY = Symbol('CRM_REPOSITORY');
+
+export const ORGANIZATION_SLUG_TECHWIN = 'techwin';
+export const DEFAULT_ORGANIZATION_NAME = 'Techwin Organization';
+
+export const SEQUENCE_KEYS = {
+  lead: 'lead',
+  client: 'client',
+  proposal: 'proposal',
+  quotation: 'quotation',
+} as const;
+
+export interface CrmAuditInput {
+  readonly type: CrmAuditEventType;
+  readonly adminId: string | null;
+  readonly entityType: string;
+  readonly entityId: string;
+  readonly metadata?: Readonly<Record<string, string | number | boolean | null>>;
+}
+
+export interface PipelineRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly name: string;
+  readonly description: string;
+  readonly status: PipelineStatus;
+  readonly isDefault: boolean;
+  readonly sortOrder: number;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly stages?: readonly PipelineStageRecord[];
+}
+
+export interface PipelineStageRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly pipelineId: string;
+  readonly name: string;
+  readonly description: string;
+  readonly color: string;
+  readonly status: PipelineStatus;
+  readonly sortOrder: number;
+  readonly outcome: PipelineStageOutcome;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly leadCount?: number;
+}
+
+export interface LeadRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly referenceNumber: string;
+  readonly fullName: string;
+  readonly companyName: string;
+  readonly email: string | null;
+  readonly phone: string | null;
+  readonly website: string | null;
+  readonly source: LeadSource;
+  readonly pipelineId: string;
+  readonly stageId: string;
+  readonly assignedAdminId: string | null;
+  readonly priority: LeadPriority;
+  readonly estimatedValue: string;
+  readonly currency: string;
+  readonly expectedCloseDate: Date | null;
+  readonly nextFollowUpDate: Date | null;
+  readonly description: string;
+  readonly tags: readonly string[];
+  readonly createdByAdminId: string;
+  readonly convertedClientId: string | null;
+  readonly convertedAt: Date | null;
+  readonly convertedByAdminId: string | null;
+  readonly archivedAt: Date | null;
+  readonly kanbanSortOrder: number;
+  readonly lastActivityAt: Date;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface LeadActivityRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly leadId: string;
+  readonly type: LeadActivityType;
+  readonly title: string;
+  readonly description: string;
+  readonly occurredAt: Date;
+  readonly dueAt: Date | null;
+  readonly completedAt: Date | null;
+  readonly metadata: unknown;
+  readonly createdByAdminId: string;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface ClientRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly referenceNumber: string;
+  readonly type: ClientType;
+  readonly name: string;
+  readonly primaryContact: string;
+  readonly email: string | null;
+  readonly phone: string | null;
+  readonly website: string | null;
+  readonly billingAddress: string;
+  readonly taxRegistration: string;
+  readonly status: ClientStatus;
+  readonly notes: string;
+  readonly sourceLeadId: string | null;
+  readonly createdByAdminId: string;
+  readonly archivedAt: Date | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface ProposalLineItemRecord {
+  readonly id: string;
+  readonly proposalId: string;
+  readonly name: string;
+  readonly description: string;
+  readonly quantity: string;
+  readonly unit: string;
+  readonly unitPrice: string;
+  readonly discount: string;
+  readonly taxRate: string;
+  readonly lineTotal: string;
+  readonly sortOrder: number;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface ProposalRecord {
+  readonly id: string;
+  readonly organizationId: string;
+  readonly documentNumber: string;
+  readonly type: ProposalDocumentType;
+  readonly status: ProposalStatus;
+  readonly title: string;
+  readonly description: string;
+  readonly leadId: string | null;
+  readonly clientId: string | null;
+  readonly issueDate: Date;
+  readonly expiryDate: Date | null;
+  readonly currency: string;
+  readonly subtotal: string;
+  readonly discountTotal: string;
+  readonly taxTotal: string;
+  readonly grandTotal: string;
+  readonly notes: string;
+  readonly terms: string;
+  readonly version: number;
+  readonly createdByAdminId: string;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+  readonly lineItems?: readonly ProposalLineItemRecord[];
+}
+
+export interface PaginatedLeads {
+  readonly items: readonly LeadRecord[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface LeadListFilters {
+  readonly pipelineId?: string;
+  readonly stageId?: string;
+  readonly assignedAdminId?: string;
+  readonly priority?: LeadPriority;
+  readonly source?: LeadSource;
+  readonly search?: string;
+  readonly includeArchived?: boolean;
+  readonly kanbanOrder?: boolean;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface CreatePipelineInput {
+  readonly name: string;
+  readonly description?: string;
+  readonly status?: PipelineStatus;
+}
+
+export interface UpdatePipelineInput {
+  readonly name?: string;
+  readonly description?: string;
+  readonly status?: PipelineStatus;
+  readonly sortOrder?: number;
+}
+
+export interface CreateStageInput {
+  readonly name: string;
+  readonly description?: string;
+  readonly color?: string;
+  readonly status?: PipelineStatus;
+  readonly outcome?: PipelineStageOutcome;
+}
+
+export interface UpdateStageInput {
+  readonly name?: string;
+  readonly description?: string;
+  readonly color?: string;
+  readonly status?: PipelineStatus;
+  readonly outcome?: PipelineStageOutcome;
+}
+
+export interface CreateLeadInput {
+  readonly fullName: string;
+  readonly companyName?: string;
+  readonly email?: string | null;
+  readonly phone?: string | null;
+  readonly website?: string | null;
+  readonly source?: LeadSource;
+  readonly pipelineId: string;
+  readonly stageId?: string;
+  readonly assignedAdminId?: string | null;
+  readonly priority?: LeadPriority;
+  readonly estimatedValue?: string | number;
+  readonly currency?: string;
+  readonly expectedCloseDate?: Date | null;
+  readonly nextFollowUpDate?: Date | null;
+  readonly description?: string;
+  readonly tags?: readonly string[];
+  readonly createdByAdminId: string;
+}
+
+export interface UpdateLeadInput {
+  readonly fullName?: string;
+  readonly companyName?: string;
+  readonly email?: string | null;
+  readonly phone?: string | null;
+  readonly website?: string | null;
+  readonly source?: LeadSource;
+  readonly pipelineId?: string;
+  readonly stageId?: string;
+  readonly assignedAdminId?: string | null;
+  readonly priority?: LeadPriority;
+  readonly estimatedValue?: string | number;
+  readonly currency?: string;
+  readonly expectedCloseDate?: Date | null;
+  readonly nextFollowUpDate?: Date | null;
+  readonly description?: string;
+  readonly tags?: readonly string[];
+  readonly archivedAt?: Date | null;
+}
+
+export interface CreateLeadActivityInput {
+  readonly type: LeadActivityType;
+  readonly title: string;
+  readonly description?: string;
+  readonly occurredAt: Date;
+  readonly dueAt?: Date | null;
+  readonly completedAt?: Date | null;
+  readonly metadata?: unknown;
+  readonly createdByAdminId: string;
+}
+
+export interface CreateClientInput {
+  readonly type: ClientType;
+  readonly name: string;
+  readonly primaryContact?: string;
+  readonly email?: string | null;
+  readonly phone?: string | null;
+  readonly website?: string | null;
+  readonly billingAddress?: string;
+  readonly taxRegistration?: string;
+  readonly status?: ClientStatus;
+  readonly notes?: string;
+  readonly sourceLeadId?: string | null;
+  readonly createdByAdminId: string;
+}
+
+export interface UpdateClientInput {
+  readonly type?: ClientType;
+  readonly name?: string;
+  readonly primaryContact?: string;
+  readonly email?: string | null;
+  readonly phone?: string | null;
+  readonly website?: string | null;
+  readonly billingAddress?: string;
+  readonly taxRegistration?: string;
+  readonly status?: ClientStatus;
+  readonly notes?: string;
+  readonly archivedAt?: Date | null;
+}
+
+export interface ProposalLineItemWriteInput {
+  readonly id?: string;
+  readonly name: string;
+  readonly description?: string;
+  readonly quantity: string | number;
+  readonly unit?: string;
+  readonly unitPrice: string | number;
+  readonly discount?: string | number;
+  readonly taxRate?: string | number;
+  readonly sortOrder?: number;
+}
+
+export interface CreateProposalInput {
+  readonly type: ProposalDocumentType;
+  readonly title: string;
+  readonly description?: string;
+  readonly leadId?: string | null;
+  readonly clientId?: string | null;
+  readonly issueDate: Date;
+  readonly expiryDate?: Date | null;
+  readonly currency?: string;
+  readonly notes?: string;
+  readonly terms?: string;
+  readonly lineItems?: readonly ProposalLineItemWriteInput[];
+  readonly createdByAdminId: string;
+}
+
+export interface UpdateProposalInput {
+  readonly title?: string;
+  readonly description?: string;
+  readonly leadId?: string | null;
+  readonly clientId?: string | null;
+  readonly issueDate?: Date;
+  readonly expiryDate?: Date | null;
+  readonly currency?: string;
+  readonly notes?: string;
+  readonly terms?: string;
+  readonly lineItems?: readonly ProposalLineItemWriteInput[];
+}
+
+export interface CrmRepository {
+  ensureOrganizationForAdmin(adminId: string): Promise<{ readonly organizationId: string }>;
+
+  ensureDefaultPipeline(organizationId: string): Promise<PipelineRecord>;
+  listPipelines(organizationId: string): Promise<readonly PipelineRecord[]>;
+  getPipeline(organizationId: string, pipelineId: string): Promise<PipelineRecord | null>;
+  getDefaultPipeline(organizationId: string): Promise<PipelineRecord>;
+  createPipeline(
+    organizationId: string,
+    input: CreatePipelineInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineRecord>;
+  updatePipeline(
+    organizationId: string,
+    pipelineId: string,
+    input: UpdatePipelineInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineRecord>;
+  deletePipeline(organizationId: string, pipelineId: string, audit: CrmAuditInput): Promise<void>;
+
+  createStage(
+    organizationId: string,
+    pipelineId: string,
+    input: CreateStageInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord>;
+  updateStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    input: UpdateStageInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord>;
+  deleteStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    targetStageId: string | undefined,
+    audit: CrmAuditInput,
+  ): Promise<void>;
+  reorderStages(
+    organizationId: string,
+    pipelineId: string,
+    orderedStageIds: readonly string[],
+    audit: CrmAuditInput,
+  ): Promise<readonly PipelineStageRecord[]>;
+  activateStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord>;
+  deactivateStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    targetStageId: string | undefined,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord>;
+
+  listLeads(organizationId: string, filters: LeadListFilters): Promise<PaginatedLeads>;
+  getLead(organizationId: string, leadId: string): Promise<LeadRecord | null>;
+  createLead(
+    organizationId: string,
+    input: CreateLeadInput,
+    audit: CrmAuditInput,
+  ): Promise<LeadRecord>;
+  updateLead(
+    organizationId: string,
+    leadId: string,
+    input: UpdateLeadInput,
+    audit: CrmAuditInput,
+  ): Promise<LeadRecord>;
+  deleteLead(organizationId: string, leadId: string, audit: CrmAuditInput): Promise<void>;
+  changeLeadStage(
+    organizationId: string,
+    leadId: string,
+    stageId: string,
+    beforeLeadId: string | null | undefined,
+    adminId: string,
+    audit: CrmAuditInput,
+  ): Promise<LeadRecord>;
+
+  listLeadActivities(
+    organizationId: string,
+    leadId: string,
+  ): Promise<readonly LeadActivityRecord[]>;
+  createLeadActivity(
+    organizationId: string,
+    leadId: string,
+    input: CreateLeadActivityInput,
+  ): Promise<LeadActivityRecord>;
+
+  convertLeadToClient(
+    organizationId: string,
+    leadId: string,
+    adminId: string,
+    audit: CrmAuditInput,
+  ): Promise<{ readonly lead: LeadRecord; readonly client: ClientRecord }>;
+
+  listClients(organizationId: string): Promise<readonly ClientRecord[]>;
+  getClient(organizationId: string, clientId: string): Promise<ClientRecord | null>;
+  createClient(
+    organizationId: string,
+    input: CreateClientInput,
+    audit: CrmAuditInput,
+  ): Promise<ClientRecord>;
+  updateClient(
+    organizationId: string,
+    clientId: string,
+    input: UpdateClientInput,
+    audit: CrmAuditInput,
+  ): Promise<ClientRecord>;
+
+  listProposals(organizationId: string): Promise<readonly ProposalRecord[]>;
+  getProposal(organizationId: string, proposalId: string): Promise<ProposalRecord | null>;
+  createProposal(
+    organizationId: string,
+    input: CreateProposalInput,
+    audit: CrmAuditInput,
+  ): Promise<ProposalRecord>;
+  updateProposal(
+    organizationId: string,
+    proposalId: string,
+    input: UpdateProposalInput,
+    audit: CrmAuditInput,
+  ): Promise<ProposalRecord>;
+  changeProposalStatus(
+    organizationId: string,
+    proposalId: string,
+    toStatus: ProposalStatus,
+    note: string,
+    adminId: string,
+    audit: CrmAuditInput,
+  ): Promise<ProposalRecord>;
+  getProposalPrintData(
+    organizationId: string,
+    proposalId: string,
+  ): Promise<ProposalRecord & { readonly organizationName: string }>;
+}

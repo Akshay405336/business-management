@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { API_ERROR_CODES, type ApiErrorCode } from '@techwin/contracts';
 import type { Request, Response } from 'express';
+import { ZodError } from 'zod';
 import { ApiException, sendApiError } from './api-error.response.js';
 
 const CODE_BY_STATUS: Partial<Record<number, ApiErrorCode>> = {
@@ -71,6 +72,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message: exception.message,
         details: exception.details,
         retryAfterSeconds: exception.retryAfterSeconds,
+      });
+      return;
+    }
+
+    if (exception instanceof ZodError) {
+      sendApiError(request, response, {
+        status: HttpStatus.BAD_REQUEST,
+        code: API_ERROR_CODES.VALIDATION_FAILED,
+        message: 'The request is invalid.',
+        details: exception.issues.map((issue) => ({
+          path: issue.path.map(String).join('.'),
+          message: issue.message,
+        })),
       });
       return;
     }

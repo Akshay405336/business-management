@@ -44,6 +44,7 @@ enum PlatformAuditEventType {
 /// Platform-level administrator. `email` is stored normalized (trimmed, lower-case).
 model PlatformAdmin {
   id                   String              @id @db.Uuid
+  organizationId       String?             @map("organization_id") @db.Uuid
   email                String              @unique @db.VarChar(254)
   displayName          String              @map("display_name") @db.VarChar(120)
   role                 PlatformAdminRole   @default(SUPER_ADMIN)
@@ -58,10 +59,20 @@ model PlatformAdmin {
   createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  challenges  PlatformAuthChallenge[]
-  sessions    PlatformSession[]
-  auditEvents PlatformAuditEvent[]
+  organization Organization?           @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  challenges   PlatformAuthChallenge[]
+  sessions     PlatformSession[]
+  auditEvents  PlatformAuditEvent[]
 
+  assignedLeads    Lead[]             @relation("LeadAssignee")
+  createdLeads     Lead[]             @relation("LeadCreator")
+  leadActivities   LeadActivity[]
+  createdProposals ProposalDocument[]
+  createdClients   Client[]
+  convertedLeads   Lead[]             @relation("LeadConvertedBy")
+  crmAuditEvents   CrmAuditEvent[]
+
+  @@index([organizationId])
   @@map("platform_admins")
 }
 
@@ -134,4 +145,361 @@ model PlatformAuditEvent {
   @@index([adminId, createdAt])
   @@index([type, createdAt])
   @@map("platform_audit_events")
+}
+
+// --- CRM (tenant-scoped business data) ---
+
+model Organization {
+  id        String   @id @db.Uuid
+  name      String   @db.VarChar(120)
+  slug      String   @unique @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  admins      PlatformAdmin[]
+  pipelines   Pipeline[]
+  stages      PipelineStage[]
+  leads       Lead[]
+  activities  LeadActivity[]
+  clients     Client[]
+  proposals   ProposalDocument[]
+  sequences   OrganizationSequence[]
+  auditEvents CrmAuditEvent[]
+
+  @@map("organizations")
+}
+
+model OrganizationSequence {
+  organizationId String @map("organization_id") @db.Uuid
+  key            String @db.VarChar(32)
+  lastValue      Int    @default(0) @map("last_value")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@id([organizationId, key])
+  @@map("organization_sequences")
+}
+
+enum PipelineStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Pipeline {
+  id             String         @id @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  name           String         @db.VarChar(120)
+  description    String         @default("") @db.VarChar(2000)
+  status         PipelineStatus @default(ACTIVE)
+  isDefault      Boolean        @default(false) @map("is_default")
+  sortOrder      Int            @default(0) @map("sort_order")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages       PipelineStage[]
+  leads        Lead[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isDefault])
+  @@index([organizationId, status, sortOrder])
+  @@map("pipelines")
+}
+
+enum PipelineStageOutcome {
+  NONE
+  WON
+  LOST
+}
+
+model PipelineStage {
+  id             String               @id @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  pipelineId     String               @map("pipeline_id") @db.Uuid
+  name           String               @db.VarChar(120)
+  description    String               @default("") @db.VarChar(2000)
+  color          String               @default("#64748b") @db.VarChar(7)
+  status         PipelineStatus       @default(ACTIVE)
+  sortOrder      Int                  @default(0) @map("sort_order")
+  outcome        PipelineStageOutcome @default(NONE)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline     Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@unique([pipelineId, name])
+  @@index([organizationId, pipelineId, sortOrder])
+  @@map("pipeline_stages")
+}
+
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum LeadSource {
+  WEBSITE
+  REFERRAL
+  COLD_CALL
+  EMAIL
+  SOCIAL
+  EVENT
+  PARTNER
+  OTHER
+}
+
+model Lead {
+  id                 String       @id @db.Uuid
+  organizationId     String       @map("organization_id") @db.Uuid
+  referenceNumber    String       @map("reference_number") @db.VarChar(32)
+  fullName           String       @map("full_name") @db.VarChar(160)
+  companyName        String       @default("") @map("company_name") @db.VarChar(160)
+  email              String?      @db.VarChar(254)
+  phone              String?      @db.VarChar(32)
+  website            String?      @db.VarChar(512)
+  source             LeadSource   @default(OTHER)
+  pipelineId         String       @map("pipeline_id") @db.Uuid
+  stageId            String       @map("stage_id") @db.Uuid
+  assignedAdminId    String?      @map("assigned_admin_id") @db.Uuid
+  priority           LeadPriority @default(MEDIUM)
+  estimatedValue     Decimal      @default(0) @map("estimated_value") @db.Decimal(18, 2)
+  currency           String       @default("INR") @db.Char(3)
+  expectedCloseDate  DateTime?    @map("expected_close_date") @db.Date
+  nextFollowUpDate   DateTime?    @map("next_follow_up_date") @db.Timestamptz(3)
+  description        String       @default("") @db.VarChar(4000)
+  tags               String[]     @default([])
+  createdByAdminId   String       @map("created_by_admin_id") @db.Uuid
+  convertedClientId  String?      @unique @map("converted_client_id") @db.Uuid
+  convertedAt        DateTime?    @map("converted_at") @db.Timestamptz(3)
+  convertedByAdminId String?      @map("converted_by_admin_id") @db.Uuid
+  archivedAt         DateTime?    @map("archived_at") @db.Timestamptz(3)
+  kanbanSortOrder    Int          @default(0) @map("kanban_sort_order")
+  lastActivityAt     DateTime     @default(now()) @map("last_activity_at") @db.Timestamptz(3)
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline         Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage            PipelineStage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  assignedAdmin    PlatformAdmin?     @relation("LeadAssignee", fields: [assignedAdminId], references: [id], onDelete: SetNull)
+  createdBy        PlatformAdmin      @relation("LeadCreator", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  convertedClient  Client?            @relation("LeadConvertedClient", fields: [convertedClientId], references: [id], onDelete: SetNull)
+  clientFromSource Client?            @relation("ClientSourceLead")
+  convertedBy      PlatformAdmin?     @relation("LeadConvertedBy", fields: [convertedByAdminId], references: [id], onDelete: SetNull)
+  activities       LeadActivity[]
+  proposals        ProposalDocument[]
+
+  @@unique([organizationId, referenceNumber])
+  @@index([organizationId, archivedAt, createdAt])
+  @@index([organizationId, pipelineId, stageId])
+  @@index([organizationId, stageId, kanbanSortOrder])
+  @@index([organizationId, nextFollowUpDate])
+  @@index([organizationId, assignedAdminId])
+  @@map("leads")
+}
+
+enum LeadActivityType {
+  FIRST_CALL
+  FOLLOW_UP_CALL
+  MEETING
+  EMAIL
+  NOTE
+  TASK
+  STAGE_CHANGE
+  PROPOSAL_CREATED
+  PROPOSAL_STATUS_CHANGE
+  LEAD_CONVERTED
+}
+
+model LeadActivity {
+  id               String           @id @db.Uuid
+  organizationId   String           @map("organization_id") @db.Uuid
+  leadId           String           @map("lead_id") @db.Uuid
+  type             LeadActivityType
+  title            String           @db.VarChar(200)
+  description      String           @default("") @db.VarChar(4000)
+  occurredAt       DateTime         @map("occurred_at") @db.Timestamptz(3)
+  dueAt            DateTime?        @map("due_at") @db.Timestamptz(3)
+  completedAt      DateTime?        @map("completed_at") @db.Timestamptz(3)
+  metadata         Json?
+  createdByAdminId String           @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy    PlatformAdmin @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, leadId, occurredAt])
+  @@map("lead_activities")
+}
+
+enum ClientType {
+  INDIVIDUAL
+  COMPANY
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Client {
+  id               String       @id @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  referenceNumber  String       @map("reference_number") @db.VarChar(32)
+  type             ClientType
+  name             String       @db.VarChar(160)
+  primaryContact   String       @default("") @map("primary_contact") @db.VarChar(160)
+  email            String?      @db.VarChar(254)
+  phone            String?      @db.VarChar(32)
+  website          String?      @db.VarChar(512)
+  billingAddress   String       @default("") @map("billing_address") @db.VarChar(1000)
+  taxRegistration  String       @default("") @map("tax_registration") @db.VarChar(120)
+  status           ClientStatus @default(ACTIVE)
+  notes            String       @default("") @db.VarChar(4000)
+  sourceLeadId     String?      @unique @map("source_lead_id") @db.Uuid
+  createdByAdminId String       @map("created_by_admin_id") @db.Uuid
+  archivedAt       DateTime?    @map("archived_at") @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy         PlatformAdmin      @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  sourceLead        Lead?              @relation("ClientSourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
+  convertedFromLead Lead?              @relation("LeadConvertedClient")
+  proposals         ProposalDocument[]
+
+  @@unique([organizationId, referenceNumber])
+  @@index([organizationId, status, createdAt])
+  @@map("clients")
+}
+
+enum ProposalDocumentType {
+  PROPOSAL
+  QUOTATION
+}
+
+enum ProposalStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+model ProposalDocument {
+  id               String               @id @db.Uuid
+  organizationId   String               @map("organization_id") @db.Uuid
+  documentNumber   String               @map("document_number") @db.VarChar(32)
+  type             ProposalDocumentType
+  status           ProposalStatus       @default(DRAFT)
+  title            String               @db.VarChar(200)
+  description      String               @default("") @db.VarChar(4000)
+  leadId           String?              @map("lead_id") @db.Uuid
+  clientId         String?              @map("client_id") @db.Uuid
+  issueDate        DateTime             @map("issue_date") @db.Date
+  expiryDate       DateTime?            @map("expiry_date") @db.Date
+  currency         String               @default("USD") @db.Char(3)
+  subtotal         Decimal              @default(0) @db.Decimal(18, 2)
+  discountTotal    Decimal              @default(0) @map("discount_total") @db.Decimal(18, 2)
+  taxTotal         Decimal              @default(0) @map("tax_total") @db.Decimal(18, 2)
+  grandTotal       Decimal              @default(0) @map("grand_total") @db.Decimal(18, 2)
+  notes            String               @default("") @db.VarChar(4000)
+  terms            String               @default("") @db.VarChar(4000)
+  version          Int                  @default(1)
+  createdByAdminId String               @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization  Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead          Lead?                   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  client        Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy     PlatformAdmin           @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  lineItems     ProposalLineItem[]
+  statusHistory ProposalStatusHistory[]
+
+  @@unique([organizationId, documentNumber])
+  @@index([organizationId, status, createdAt])
+  @@map("proposal_documents")
+}
+
+model ProposalLineItem {
+  id          String   @id @db.Uuid
+  proposalId  String   @map("proposal_id") @db.Uuid
+  name        String   @db.VarChar(200)
+  description String   @default("") @db.VarChar(2000)
+  quantity    Decimal  @default(1) @db.Decimal(18, 4)
+  unit        String   @default("item") @db.VarChar(32)
+  unitPrice   Decimal  @default(0) @map("unit_price") @db.Decimal(18, 2)
+  discount    Decimal  @default(0) @db.Decimal(18, 2)
+  taxRate     Decimal  @default(0) @map("tax_rate") @db.Decimal(8, 4)
+  lineTotal   Decimal  @default(0) @map("line_total") @db.Decimal(18, 2)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  proposal ProposalDocument @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, sortOrder])
+  @@map("proposal_line_items")
+}
+
+model ProposalStatusHistory {
+  id               String          @id @default(uuid()) @db.Uuid
+  proposalId       String          @map("proposal_id") @db.Uuid
+  fromStatus       ProposalStatus? @map("from_status")
+  toStatus         ProposalStatus  @map("to_status")
+  note             String          @default("") @db.VarChar(1000)
+  changedByAdminId String          @map("changed_by_admin_id") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  proposal ProposalDocument @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, createdAt])
+  @@map("proposal_status_history")
+}
+
+enum CrmAuditEventType {
+  PIPELINE_CREATED
+  PIPELINE_UPDATED
+  PIPELINE_DELETED
+  STAGE_CREATED
+  STAGE_UPDATED
+  STAGE_DELETED
+  STAGE_REORDERED
+  LEAD_CREATED
+  LEAD_UPDATED
+  LEAD_ARCHIVED
+  LEAD_RESTORED
+  LEAD_DELETED
+  LEAD_STAGE_CHANGED
+  LEAD_CONVERTED
+  CLIENT_CREATED
+  CLIENT_UPDATED
+  PROPOSAL_CREATED
+  PROPOSAL_UPDATED
+  PROPOSAL_STATUS_CHANGED
+}
+
+model CrmAuditEvent {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  adminId        String?           @map("admin_id") @db.Uuid
+  type           CrmAuditEventType
+  entityType     String            @map("entity_type") @db.VarChar(32)
+  entityId       String            @map("entity_id") @db.Uuid
+  metadata       Json?
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  admin        PlatformAdmin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@map("crm_audit_events")
 }

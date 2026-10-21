@@ -19,7 +19,7 @@ type SessionRefresher = () => Promise<RefreshOutcome>;
 type SessionEndedListener = () => void;
 
 export interface ApiRequestOptions {
-  readonly method?: 'GET' | 'POST' | 'DELETE';
+  readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   /** Attach the in-memory access token and refresh it when it has expired. */
   readonly auth?: boolean;
