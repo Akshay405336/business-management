@@ -334,9 +334,17 @@ export function buildProposalLinesFromPackage(pkg: ServicePackageRecord): {
     .reduce((sum, item) => sum.add(new Decimal(item.price ?? 0)), new Decimal(0));
   const unitPrice = new Decimal(pkg.basePrice).add(addOnTotal);
   const taxRateFraction = new Decimal(normalizeGstRatePercent(pkg.gstRate)).div(100);
+  const categories = Array.isArray(pkg.categories) ? (pkg.categories as { label?: string }[]) : [];
+  const categoryLabel = categories
+    .slice(0, 2)
+    .map((item) => item.label)
+    .filter(Boolean)
+    .join(', ');
   const lines = [
     {
       name: pkg.name,
+      category: categoryLabel,
+      sourcePackageId: pkg.id,
       description: pkg.shortDescription || pkg.detailedDescription,
       quantity: '1',
       unit: 'package',

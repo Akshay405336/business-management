@@ -1,4 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
+import {
+  formatProposalDocumentNumber,
+  normalizeProposalTaxRateFraction,
+} from '@techwin/validation';
 import { Decimal } from '@prisma/client/runtime/client';
 import { Prisma } from '../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../infrastructure/database/prisma.service.js';
@@ -23,6 +27,8 @@ import {
 import type {
   ClientRecord,
   CreateClientInput,
+  PaginatedProposals,
+  ProposalListFilters,
   CreateLeadActivityInput,
   CreateLeadInput,
   CreatePipelineInput,
@@ -983,13 +989,100 @@ export class PrismaCrmRepository implements CrmRepository {
     return this.toClient(row);
   }
 
-  async listProposals(organizationId: string): Promise<readonly ProposalRecord[]> {
-    const rows = await this.prisma.proposalDocument.findMany({
-      where: { organizationId },
-      orderBy: { createdAt: 'desc' },
-      include: { lineItems: { orderBy: { sortOrder: 'asc' } } },
+  previewClientReference(organizationId: string): Promise<string> {
+    return this.prisma.organizationSequence
+      .findUnique({
+        where: { organizationId_key: { organizationId, key: SEQUENCE_KEYS.client } },
+        select: { lastValue: true },
+      })
+      .then((row) => formatReference('CL', (row?.lastValue ?? 0) + 1));
+  }
+
+  async deleteClient(
+    organizationId: string,
+    clientId: string,
+    audit: CrmAuditInput,
+  ): Promise<void> {
+    const existing = await this.getClient(organizationId, clientId);
+    if (!existing) throw new CrmNotFoundError('Client');
+    await this.prisma.$transaction(async (tx) => {
+      await tx.lead.updateMany({
+        where: { organizationId, convertedClientId: clientId },
+        data: { convertedClientId: null, convertedAt: null },
+      });
+      await tx.client.delete({ where: { id: clientId } });
+      await this.writeAudit(tx, organizationId, { ...audit, entityId: clientId });
     });
-    return rows.map((row) => this.toProposal(row));
+  }
+
+  async listProposals(
+    organizationId: string,
+    filters: ProposalListFilters,
+  ): Promise<PaginatedProposals> {
+    const where: Prisma.ProposalDocumentWhereInput = { organizationId };
+    if (filters.type) where.type = filters.type;
+    if (filters.status) where.status = filters.status;
+    if (filters.search?.trim()) {
+      const q = filters.search.trim();
+      where.OR = [
+        { documentNumber: { contains: q, mode: 'insensitive' } },
+        { title: { contains: q, mode: 'insensitive' } },
+        { clientName: { contains: q, mode: 'insensitive' } },
+        { companyName: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    if (filters.issueFrom || filters.issueTo) {
+      where.issueDate = {
+        ...(filters.issueFrom ? { gte: new Date(`${filters.issueFrom}T00:00:00.000Z`) } : {}),
+        ...(filters.issueTo ? { lte: new Date(`${filters.issueTo}T00:00:00.000Z`) } : {}),
+      };
+    }
+    const page = filters.page;
+    const pageSize = filters.pageSize;
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.proposalDocument.count({ where }),
+      this.prisma.proposalDocument.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { lineItems: { orderBy: { sortOrder: 'asc' } } },
+      }),
+    ]);
+    return {
+      items: rows.map((row) => this.toProposal(row)),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  async previewProposalDocumentNumber(
+    organizationId: string,
+    type: ProposalRecord['type'],
+  ): Promise<string> {
+    const seqKey = type === 'QUOTATION' ? SEQUENCE_KEYS.quotation : SEQUENCE_KEYS.proposal;
+    const row = await this.prisma.organizationSequence.findUnique({
+      where: { organizationId_key: { organizationId, key: seqKey } },
+    });
+    const next = (row?.lastValue ?? 0) + 1;
+    return formatProposalDocumentNumber(type, next);
+  }
+
+  async deleteProposal(
+    organizationId: string,
+    proposalId: string,
+    audit: CrmAuditInput,
+  ): Promise<void> {
+    const existing = await this.getProposal(organizationId, proposalId);
+    if (!existing) throw new CrmNotFoundError('Proposal');
+    if (existing.status !== 'DRAFT') {
+      throw new CrmValidationError('Only draft documents can be deleted.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.proposalDocument.delete({ where: { id: proposalId } });
+      await this.writeAudit(tx, organizationId, audit);
+    });
   }
 
   async getProposal(organizationId: string, proposalId: string): Promise<ProposalRecord | null> {
@@ -1000,6 +1093,19 @@ export class PrismaCrmRepository implements CrmRepository {
     return row ? this.toProposal(row) : null;
   }
 
+  private async assertProposalLinePackages(
+    organizationId: string,
+    items: readonly ProposalLineItemWriteInput[],
+  ): Promise<void> {
+    for (const item of items) {
+      const packageId = item.sourcePackageId;
+      if (!packageId) continue;
+      const pkg = await getServicePackageRow(this.prisma, organizationId, packageId);
+      if (!pkg) throw new CrmNotFoundError('Service package');
+      if (pkg.status !== 'ACTIVE') throw new CrmValidationError('Service package is not active.');
+    }
+  }
+
   private buildLineItemRows(
     proposalId: string,
     items: readonly ProposalLineItemWriteInput[],
@@ -1008,6 +1114,8 @@ export class PrismaCrmRepository implements CrmRepository {
       id: string;
       proposalId: string;
       name: string;
+      category: string;
+      sourcePackageId: string | null;
       description: string;
       quantity: Decimal;
       unit: string;
@@ -1020,16 +1128,19 @@ export class PrismaCrmRepository implements CrmRepository {
     totals: ReturnType<typeof computeProposalTotals>;
   } {
     const computed = items.map((item, index) => {
+      const taxFraction = normalizeProposalTaxRateFraction(item.taxRate ?? 0);
       const totals = computeLineItemTotals({
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discount: item.discount ?? 0,
-        taxRate: item.taxRate ?? 0,
+        taxRate: taxFraction,
       });
       return {
         id: item.id ?? crypto.randomUUID(),
         proposalId,
         name: item.name,
+        category: item.category ?? '',
+        sourcePackageId: item.sourcePackageId ?? null,
         description: item.description ?? '',
         quantity: totals.quantity,
         unit: item.unit ?? 'item',
@@ -1053,20 +1164,25 @@ export class PrismaCrmRepository implements CrmRepository {
     let lineItems = input.lineItems ?? [];
     let packageSnapshot: unknown = null;
     const sourcePackageId = input.sourcePackageId ?? null;
-    if (sourcePackageId) {
+    if (sourcePackageId && lineItems.length === 0) {
       const pkg = await getServicePackageRow(this.prisma, organizationId, sourcePackageId);
       if (!pkg) throw new CrmNotFoundError('Service package');
+      if (pkg.status !== 'ACTIVE') throw new CrmValidationError('Service package is not active.');
       packageSnapshot = buildPackageSnapshot(pkg);
       const built = buildProposalLinesFromPackage(pkg);
       lineItems = built.lineItems;
     }
+    if (input.clientId) {
+      const client = await this.getClient(organizationId, input.clientId);
+      if (!client) throw new CrmNotFoundError('Client');
+    }
+    await this.assertProposalLinePackages(organizationId, lineItems);
     const { rows, totals } = this.buildLineItemRows(proposalId, lineItems);
 
     const row = await this.prisma.$transaction(async (tx) => {
       const seqKey = input.type === 'QUOTATION' ? SEQUENCE_KEYS.quotation : SEQUENCE_KEYS.proposal;
-      const prefix = input.type === 'QUOTATION' ? 'QT' : 'PR';
       const seq = await this.nextSequence(tx, organizationId, seqKey);
-      const documentNumber = formatReference(prefix, seq);
+      const documentNumber = formatProposalDocumentNumber(input.type, seq);
 
       const proposal = await tx.proposalDocument.create({
         data: {
@@ -1080,13 +1196,22 @@ export class PrismaCrmRepository implements CrmRepository {
           clientId: input.clientId ?? null,
           issueDate: input.issueDate,
           expiryDate: input.expiryDate ?? null,
-          currency: input.currency ?? (sourcePackageId ? 'INR' : 'USD'),
+          currency: input.currency ?? 'INR',
           subtotal: totals.subtotal,
           discountTotal: totals.discountTotal,
           taxTotal: totals.taxTotal,
           grandTotal: totals.grandTotal,
           notes: input.notes ?? '',
           terms: input.terms ?? '',
+          scopeOfWork: input.scopeOfWork ?? '',
+          paymentTerms: input.paymentTerms ?? '',
+          deliveryTimeline: input.deliveryTimeline ?? '',
+          clientName: input.clientName,
+          companyName: input.companyName ?? '',
+          clientPhone: input.clientPhone,
+          clientEmail: input.clientEmail.toLowerCase(),
+          billingAddress: input.billingAddress,
+          clientGstin: (input.clientGstin ?? '').toUpperCase(),
           sourcePackageId,
           packageSnapshot:
             packageSnapshot === null ? Prisma.DbNull : (packageSnapshot as Prisma.InputJsonValue),
@@ -1215,6 +1340,7 @@ export class PrismaCrmRepository implements CrmRepository {
     let rows: ReturnType<typeof this.buildLineItemRows>['rows'] | undefined;
 
     if (lineItems) {
+      await this.assertProposalLinePackages(organizationId, lineItems);
       const built = this.buildLineItemRows(proposalId, lineItems);
       rows = built.rows;
       totals = built.totals;
@@ -1226,13 +1352,22 @@ export class PrismaCrmRepository implements CrmRepository {
         data: {
           title: input.title,
           description: input.description,
+          scopeOfWork: input.scopeOfWork,
           leadId: input.leadId,
           clientId: input.clientId,
+          clientName: input.clientName,
+          companyName: input.companyName,
+          clientPhone: input.clientPhone,
+          clientEmail: input.clientEmail?.toLowerCase(),
+          billingAddress: input.billingAddress,
+          clientGstin: input.clientGstin?.toUpperCase(),
           issueDate: input.issueDate,
           expiryDate: input.expiryDate,
           currency: input.currency,
           notes: input.notes,
           terms: input.terms,
+          paymentTerms: input.paymentTerms,
+          deliveryTimeline: input.deliveryTimeline,
           subtotal: totals.subtotal,
           discountTotal: totals.discountTotal,
           taxTotal: totals.taxTotal,
@@ -1506,6 +1641,15 @@ export class PrismaCrmRepository implements CrmRepository {
     grandTotal: Decimal;
     notes: string;
     terms: string;
+    scopeOfWork: string;
+    paymentTerms: string;
+    deliveryTimeline: string;
+    clientName: string;
+    companyName: string;
+    clientPhone: string;
+    clientEmail: string;
+    billingAddress: string;
+    clientGstin: string;
     version: number;
     sourcePackageId: string | null;
     packageSnapshot: unknown;
@@ -1516,6 +1660,8 @@ export class PrismaCrmRepository implements CrmRepository {
       id: string;
       proposalId: string;
       name: string;
+      category: string;
+      sourcePackageId: string | null;
       description: string;
       quantity: Decimal;
       unit: string;
@@ -1538,6 +1684,8 @@ export class PrismaCrmRepository implements CrmRepository {
       grandTotal: decimalToString(row.grandTotal),
       lineItems: row.lineItems?.map((item) => ({
         ...item,
+        category: item.category ?? '',
+        sourcePackageId: item.sourcePackageId ?? null,
         quantity: item.quantity.toFixed(4),
         unitPrice: decimalToString(item.unitPrice),
         discount: decimalToString(item.discount),

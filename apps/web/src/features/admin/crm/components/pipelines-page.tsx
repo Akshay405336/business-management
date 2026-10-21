@@ -171,20 +171,17 @@ function SortableStageRow({
           </span>
         )}
       </TableCell>
-      <TableCell className="text-muted-foreground w-12 tabular-nums">{stage.sortOrder}</TableCell>
       <TableCell className="min-w-[8rem] font-medium">{stage.name}</TableCell>
       <TableCell className="text-muted-foreground max-w-xs truncate text-sm">
         {stage.description || '—'}
       </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <span
-            className="size-3 shrink-0 rounded-full border border-black/10"
-            style={{ backgroundColor: stage.color }}
-            aria-hidden="true"
-          />
-          <span className="text-muted-foreground font-mono text-xs">{stage.color}</span>
-        </div>
+      <TableCell className="w-12">
+        <span
+          className="mx-auto block size-3 rounded-full border border-black/10"
+          style={{ backgroundColor: stage.color }}
+          title={stage.color}
+          aria-label={`Stage color ${stage.color}`}
+        />
       </TableCell>
       <TableCell className="tabular-nums">{stage.leadCount}</TableCell>
       <TableCell>
@@ -240,20 +237,17 @@ function InactiveStageRow({
   return (
     <TableRow className="bg-muted/20">
       <TableCell />
-      <TableCell className="text-muted-foreground">—</TableCell>
       <TableCell className="font-medium">{stage.name}</TableCell>
       <TableCell className="text-muted-foreground max-w-xs truncate text-sm">
         {stage.description || '—'}
       </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          <span
-            className="size-3 shrink-0 rounded-full border border-black/10 opacity-70"
-            style={{ backgroundColor: stage.color }}
-            aria-hidden="true"
-          />
-          <span className="text-muted-foreground font-mono text-xs">{stage.color}</span>
-        </div>
+      <TableCell className="w-12">
+        <span
+          className="mx-auto block size-3 rounded-full border border-black/10 opacity-70"
+          style={{ backgroundColor: stage.color }}
+          title={stage.color}
+          aria-label={`Stage color ${stage.color}`}
+        />
       </TableCell>
       <TableCell className="tabular-nums">{stage.leadCount}</TableCell>
       <TableCell>
@@ -573,15 +567,68 @@ export function PipelinesPage() {
   const stageTableHeader = (
     <TableRow className="hover:bg-transparent">
       <TableHead className="w-10" />
-      <TableHead className="w-12">#</TableHead>
-      <TableHead>Stage Name</TableHead>
+      <TableHead className="min-w-[8rem]">Stage Name</TableHead>
       <TableHead>Description</TableHead>
-      <TableHead>Color</TableHead>
-      <TableHead>Leads</TableHead>
-      <TableHead>Status</TableHead>
-      <TableHead className="w-[7.5rem]">Actions</TableHead>
+      <TableHead className="w-12 text-center">Color</TableHead>
+      <TableHead className="w-16">Leads</TableHead>
+      <TableHead className="w-24">Status</TableHead>
+      <TableHead className="w-[7.5rem] text-right">Actions</TableHead>
     </TableRow>
   );
+
+  const paginatedStageTableRows = useMemo(() => {
+    if (paginatedRows.length === 0) return null;
+    let inactiveHeaderShown = false;
+    return paginatedRows.flatMap((row) => {
+      const elements: ReactNode[] = [];
+      if (row.kind === 'inactive' && !inactiveHeaderShown) {
+        inactiveHeaderShown = true;
+        elements.push(
+          <TableRow key="inactive-header" className="hover:bg-transparent">
+            <TableCell
+              colSpan={7}
+              className="bg-muted/40 text-muted-foreground py-2 text-xs font-semibold tracking-wide uppercase"
+            >
+              Inactive stages
+            </TableCell>
+          </TableRow>,
+        );
+      }
+      if (row.kind === 'active') {
+        elements.push(
+          <SortableStageRow
+            key={row.stage.id}
+            stage={row.stage}
+            pending={pending}
+            dragEnabled={!filtersActive}
+            onEdit={openEditStage}
+            onDeactivate={setDeactivateStage}
+            onDelete={setDeleteStage}
+          />,
+        );
+      } else {
+        elements.push(
+          <InactiveStageRow
+            key={row.stage.id}
+            stage={row.stage}
+            pending={pending}
+            onEdit={openEditStage}
+            onActivate={handleActivateStage}
+            onDelete={setDeleteStage}
+          />,
+        );
+      }
+      return elements;
+    });
+  }, [
+    filtersActive,
+    handleActivateStage,
+    openEditStage,
+    paginatedRows,
+    pending,
+    setDeactivateStage,
+    setDeleteStage,
+  ]);
 
   const breadcrumbs = [
     { label: 'Dashboard', href: '/admin/dashboard' },
@@ -661,90 +708,47 @@ export function PipelinesPage() {
         </p>
       ) : null}
 
-      <DataTable
-        phase={tablePhase}
-        colSpan={8}
-        skeletonColumns={CRM_PIPELINE_STAGES_TABLE_SKELETON}
-        header={stageTableHeader}
-        empty={{
-          title: hasAnyStages
-            ? 'No stages match your search'
-            : 'No pipeline stages yet',
-          description: hasAnyStages
-            ? 'Try a different search term or status filter, or clear filters to see all stages.'
-            : 'Add your first stage to define how leads progress through the pipeline.',
-          action: hasAnyStages ? undefined : { label: 'Add stage', onClick: openCreateStage },
-          secondaryAction: hasAnyStages && filtersActive
-            ? { label: 'Clear filters', onClick: clearStageFilters }
-            : undefined,
-        }}
-        errorMessage={error}
-        onRetry={() => setReloadKey((key) => key + 1)}
-        footer={
-          <TablePagination
-            page={safePage}
-            pageSize={pageSize}
-            total={totalStages}
-            loading={tablePhase === 'initial-loading'}
-            onPageChange={setPage}
-            onPageSizeChange={(nextSize) => {
-              setPageSize(nextSize);
-              setPage(1);
-            }}
-          />
-        }
-      >
-        {tableRows.length > 0 ? (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <DataTable
+          phase={tablePhase}
+          colSpan={7}
+          skeletonColumns={CRM_PIPELINE_STAGES_TABLE_SKELETON}
+          header={stageTableHeader}
+          empty={{
+            title: hasAnyStages
+              ? 'No stages match your search'
+              : 'No pipeline stages yet',
+            description: hasAnyStages
+              ? 'Try a different search term or status filter, or clear filters to see all stages.'
+              : 'Add your first stage to define how leads progress through the pipeline.',
+            action: hasAnyStages ? undefined : { label: 'Add stage', onClick: openCreateStage },
+            secondaryAction: hasAnyStages && filtersActive
+              ? { label: 'Clear filters', onClick: clearStageFilters }
+              : undefined,
+          }}
+          errorMessage={error}
+          onRetry={() => setReloadKey((key) => key + 1)}
+          footer={
+            <TablePagination
+              page={safePage}
+              pageSize={pageSize}
+              total={totalStages}
+              loading={tablePhase === 'initial-loading'}
+              onPageChange={setPage}
+              onPageSizeChange={(nextSize) => {
+                setPageSize(nextSize);
+                setPage(1);
+              }}
+            />
+          }
+        >
+          {tablePhase === 'success' && paginatedStageTableRows ? (
             <SortableContext items={paginatedActiveIds} strategy={verticalListSortingStrategy}>
-              {(() => {
-                let inactiveHeaderShown = false;
-                return paginatedRows.flatMap((row) => {
-                  const elements: ReactNode[] = [];
-                  if (row.kind === 'inactive' && !inactiveHeaderShown) {
-                    inactiveHeaderShown = true;
-                    elements.push(
-                      <TableRow key="inactive-header" className="hover:bg-transparent">
-                        <TableCell
-                          colSpan={8}
-                          className="bg-muted/40 text-muted-foreground py-2 text-xs font-semibold tracking-wide uppercase"
-                        >
-                          Inactive stages
-                        </TableCell>
-                      </TableRow>,
-                    );
-                  }
-                  if (row.kind === 'active') {
-                    elements.push(
-                      <SortableStageRow
-                        key={row.stage.id}
-                        stage={row.stage}
-                        pending={pending}
-                        dragEnabled={!filtersActive}
-                        onEdit={openEditStage}
-                        onDeactivate={setDeactivateStage}
-                        onDelete={setDeleteStage}
-                      />,
-                    );
-                  } else {
-                    elements.push(
-                      <InactiveStageRow
-                        key={row.stage.id}
-                        stage={row.stage}
-                        pending={pending}
-                        onEdit={openEditStage}
-                        onActivate={handleActivateStage}
-                        onDelete={setDeleteStage}
-                      />,
-                    );
-                  }
-                  return elements;
-                });
-              })()}
+              {paginatedStageTableRows}
             </SortableContext>
-          </DndContext>
-        ) : null}
-      </DataTable>
+          ) : null}
+        </DataTable>
+      </DndContext>
 
       <Dialog open={stageDialog !== null} onOpenChange={(open) => !open && setStageDialog(null)}>
         <DialogContent className="flex max-h-[min(90vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">

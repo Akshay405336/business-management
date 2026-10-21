@@ -131,6 +131,8 @@ export interface ProposalLineItemRecord {
   readonly id: string;
   readonly proposalId: string;
   readonly name: string;
+  readonly category: string;
+  readonly sourcePackageId: string | null;
   readonly description: string;
   readonly quantity: string;
   readonly unit: string;
@@ -162,6 +164,15 @@ export interface ProposalRecord {
   readonly grandTotal: string;
   readonly notes: string;
   readonly terms: string;
+  readonly scopeOfWork: string;
+  readonly paymentTerms: string;
+  readonly deliveryTimeline: string;
+  readonly clientName: string;
+  readonly companyName: string;
+  readonly clientPhone: string;
+  readonly clientEmail: string;
+  readonly billingAddress: string;
+  readonly clientGstin: string;
   readonly version: number;
   readonly sourcePackageId: string | null;
   readonly packageSnapshot: unknown;
@@ -304,6 +315,8 @@ export interface ProposalLineItemWriteInput {
   readonly id?: string;
   readonly name: string;
   readonly description?: string;
+  readonly category?: string;
+  readonly sourcePackageId?: string | null;
   readonly quantity: string | number;
   readonly unit?: string;
   readonly unitPrice: string | number;
@@ -312,17 +325,43 @@ export interface ProposalLineItemWriteInput {
   readonly sortOrder?: number;
 }
 
+export interface ProposalListFilters {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly search?: string;
+  readonly type?: ProposalDocumentType;
+  readonly status?: ProposalStatus;
+  readonly issueFrom?: string;
+  readonly issueTo?: string;
+}
+
+export interface PaginatedProposals {
+  readonly items: readonly ProposalRecord[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
 export interface CreateProposalInput {
   readonly type: ProposalDocumentType;
   readonly title: string;
   readonly description?: string;
+  readonly scopeOfWork?: string;
   readonly leadId?: string | null;
   readonly clientId?: string | null;
+  readonly clientName: string;
+  readonly companyName?: string;
+  readonly clientPhone: string;
+  readonly clientEmail: string;
+  readonly billingAddress: string;
+  readonly clientGstin?: string;
   readonly issueDate: Date;
   readonly expiryDate?: Date | null;
   readonly currency?: string;
   readonly notes?: string;
   readonly terms?: string;
+  readonly paymentTerms?: string;
+  readonly deliveryTimeline?: string;
   readonly lineItems?: readonly ProposalLineItemWriteInput[];
   readonly sourcePackageId?: string | null;
   readonly createdByAdminId: string;
@@ -331,13 +370,22 @@ export interface CreateProposalInput {
 export interface UpdateProposalInput {
   readonly title?: string;
   readonly description?: string;
+  readonly scopeOfWork?: string;
   readonly leadId?: string | null;
   readonly clientId?: string | null;
+  readonly clientName?: string;
+  readonly companyName?: string;
+  readonly clientPhone?: string;
+  readonly clientEmail?: string;
+  readonly billingAddress?: string;
+  readonly clientGstin?: string;
   readonly issueDate?: Date;
   readonly expiryDate?: Date | null;
   readonly currency?: string;
   readonly notes?: string;
   readonly terms?: string;
+  readonly paymentTerms?: string;
+  readonly deliveryTimeline?: string;
   readonly lineItems?: readonly ProposalLineItemWriteInput[];
 }
 
@@ -454,9 +502,16 @@ export interface CrmRepository {
     input: UpdateClientInput,
     audit: CrmAuditInput,
   ): Promise<ClientRecord>;
+  previewClientReference(organizationId: string): Promise<string>;
+  deleteClient(organizationId: string, clientId: string, audit: CrmAuditInput): Promise<void>;
 
-  listProposals(organizationId: string): Promise<readonly ProposalRecord[]>;
+  listProposals(organizationId: string, filters: ProposalListFilters): Promise<PaginatedProposals>;
+  previewProposalDocumentNumber(
+    organizationId: string,
+    type: ProposalDocumentType,
+  ): Promise<string>;
   getProposal(organizationId: string, proposalId: string): Promise<ProposalRecord | null>;
+  deleteProposal(organizationId: string, proposalId: string, audit: CrmAuditInput): Promise<void>;
   createProposal(
     organizationId: string,
     input: CreateProposalInput,

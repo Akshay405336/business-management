@@ -1,24 +1,33 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
   Patch,
   Post,
+  Query,
+  Req,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   CrmProposal,
   CrmProposalListResponse,
   CrmProposalPrintResponse,
+  ProposalDocumentCodePreviewResponse,
 } from '@techwin/contracts';
-import type {
-  ChangeProposalStatusRequest,
-  CreateProposalRequest,
-  UpdateProposalRequest,
+import {
+  parseProposalListQuery,
+  proposalDocumentTypeSchema,
+  type ChangeProposalStatusRequest,
+  type CreateProposalRequest,
+  type UpdateProposalRequest,
 } from '@techwin/validation';
 import { z } from 'zod';
 import { CrmUseCases } from '../../../application/crm-use-cases.js';
@@ -35,12 +44,17 @@ import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
 import { toCrmProposal, toCrmProposalPrint } from '../mappers/crm-response.mapper.js';
+import {
+  toCreateProposalInput,
+  toUpdateProposalInput,
+} from '../mappers/proposal-request.mapper.js';
 
-const parseDateOnly = (value: string | null | undefined): Date | null | undefined => {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  return new Date(`${value}T00:00:00.000Z`);
-};
+const crmProposalListResponseSchema = z.object({
+  items: z.array(crmProposalResponseSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
+});
 
 @ApiTags('CRM proposals')
 @ApiBearerAuth()
@@ -52,12 +66,39 @@ export class ProposalsController {
 
   @Get()
   @ApiOperation({ summary: 'List proposals and quotations' })
+  @ApiOkResponse({ schema: toOpenApiSchema(crmProposalListResponseSchema) })
+  async list(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: Request,
+  ): Promise<CrmProposalListResponse> {
+    const query = parseProposalListQuery(request.query);
+    const result = await this.crm.listProposals(ctx, query);
+    return {
+      items: result.items.map(toCrmProposal),
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+    };
+  }
+
+  @Get('code-preview')
+  @ApiOperation({ summary: 'Preview next document number (not reserved until create)' })
   @ApiOkResponse({
-    schema: toOpenApiSchema(z.object({ proposals: z.array(crmProposalResponseSchema) })),
+    schema: toOpenApiSchema(
+      z.object({
+        documentNumber: z.string(),
+        type: proposalDocumentTypeSchema,
+        isPreview: z.literal(true),
+      }),
+    ),
   })
-  async list(@CrmContext() ctx: CrmRequestContext): Promise<CrmProposalListResponse> {
-    const proposals = await this.crm.listProposals(ctx);
-    return { proposals: proposals.map(toCrmProposal) };
+  async previewCode(
+    @CrmContext() ctx: CrmRequestContext,
+    @Query('type') typeRaw?: string,
+  ): Promise<ProposalDocumentCodePreviewResponse> {
+    const type = proposalDocumentTypeSchema.parse(typeRaw ?? 'QUOTATION');
+    const documentNumber = await this.crm.previewProposalDocumentNumber(ctx, type);
+    return { documentNumber, type, isPreview: true };
   }
 
   @Get(':proposalId')
@@ -78,11 +119,10 @@ export class ProposalsController {
     @CrmContext() ctx: CrmRequestContext,
     @Body({ schema: createProposalBodySchema }) body: CreateProposalRequest,
   ): Promise<CrmProposal> {
-    const proposal = await this.crm.createProposal(ctx, {
-      ...body,
-      issueDate: new Date(`${body.issueDate}T00:00:00.000Z`),
-      expiryDate: parseDateOnly(body.expiryDate),
-    });
+    const proposal = await this.crm.createProposal(
+      ctx,
+      toCreateProposalInput(body, ctx.adminId),
+    );
     return toCrmProposal(proposal);
   }
 
@@ -94,12 +134,22 @@ export class ProposalsController {
     @Param('proposalId') proposalId: string,
     @Body({ schema: updateProposalBodySchema }) body: UpdateProposalRequest,
   ): Promise<CrmProposal> {
-    const proposal = await this.crm.updateProposal(ctx, proposalId, {
-      ...body,
-      issueDate: body.issueDate ? new Date(`${body.issueDate}T00:00:00.000Z`) : undefined,
-      expiryDate: parseDateOnly(body.expiryDate),
-    });
+    const proposal = await this.crm.updateProposal(
+      ctx,
+      proposalId,
+      toUpdateProposalInput(body),
+    );
     return toCrmProposal(proposal);
+  }
+
+  @Delete(':proposalId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Permanently delete a draft proposal' })
+  async delete(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('proposalId') proposalId: string,
+  ): Promise<void> {
+    await this.crm.deleteProposal(ctx, proposalId);
   }
 
   @Post(':proposalId/status')

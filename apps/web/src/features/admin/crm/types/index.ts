@@ -3,6 +3,7 @@ export type {
   ClientType,
   CrmClient,
   CrmClientListResponse,
+  ClientReferencePreviewResponse,
   CrmLead,
   CrmLeadActivity,
   CrmLeadActivityListResponse,
@@ -15,6 +16,7 @@ export type {
   CrmProposalLineItem,
   CrmProposalListResponse,
   CrmProposalPrintResponse,
+  ProposalDocumentCodePreviewResponse,
   CrmServicePackage,
   CrmServicePackageListResponse,
   ServicePackageCodePreviewResponse,
@@ -51,4 +53,5 @@ export type {
   UpdatePipelineRequest,
   UpdatePipelineStageRequest,
   UpdateProposalRequest,
+  ProposalListQuery,
 } from '@techwin/validation';

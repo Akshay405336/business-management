@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { leadEmailSchema, leadPhoneSchema } from './lead-contact.js';
 import { MONEY_PARSE_ERROR, normalizeMoneyInput } from './money.js';
+import { normalizeProposalTaxRateFraction } from './proposal-pricing.js';
 
 const uuid = z.uuid({ error: 'Invalid identifier.' });
 
@@ -66,10 +67,32 @@ const quantityString = z
   .regex(/^-?\d+(\.\d{1,4})?$/, 'Enter a valid quantity.')
   .or(z.number());
 
-const taxRateString = z
-  .string()
-  .regex(/^-?\d+(\.\d{1,4})?$/, 'Enter a valid tax rate.')
-  .or(z.number());
+/** GST/tax input: percent (18) or decimal fraction (0.18). Stored server-side as fraction. */
+export const proposalTaxRateInputSchema = z.union([
+  z.number(),
+  z.string().trim().min(1, 'Enter a valid tax rate.'),
+]).transform((raw, ctx) => {
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > 100) {
+    ctx.addIssue({ code: 'custom', message: 'Enter a tax rate between 0 and 100.' });
+    return z.NEVER;
+  }
+  return String(normalizeProposalTaxRateFraction(raw));
+});
+
+const optionalGstinSchema = z.preprocess(
+  (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+  z
+    .string()
+    .trim()
+    .max(15)
+    .optional()
+    .refine(
+      (value) =>
+        !value || /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(value.toUpperCase()),
+      { message: 'Enter a valid 15-character GSTIN.' },
+    ),
+);
 
 const dateOnly = z.iso.date({ error: 'Enter a valid date.' });
 const dateTime = z.iso.datetime({ offset: true });
@@ -213,31 +236,72 @@ export const proposalLineItemSchema = z
     id: uuid.optional(),
     name: z.string().trim().min(1).max(200),
     description: z.string().max(2000).optional(),
+    category: z.string().max(120).optional(),
+    sourcePackageId: uuid.nullable().optional(),
     quantity: quantityString,
     unit: z.string().max(32).optional(),
     unitPrice: moneyString,
     discount: moneyString.optional(),
-    taxRate: taxRateString.optional(),
+    taxRate: proposalTaxRateInputSchema.optional(),
     sortOrder: z.number().int().optional(),
   })
   .strict();
 
-export const createProposalRequestSchema = z
-  .object({
+const proposalClientFieldsSchema = z.object({
+  clientId: uuid.nullable().optional(),
+  clientName: z.string().trim().min(1, 'Enter the client name.').max(160),
+  companyName: z.string().max(160).optional(),
+  clientPhone: leadPhoneSchema,
+  clientEmail: leadEmailSchema,
+  billingAddress: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().trim().max(1000).optional(),
+  ),
+  clientGstin: optionalGstinSchema,
+});
+
+export const createProposalRequestSchema = proposalClientFieldsSchema
+  .extend({
     type: proposalDocumentTypeSchema,
     title: z.string().trim().min(1).max(200),
     description: z.string().max(4000).optional(),
+    scopeOfWork: z.string().max(8000).optional(),
     leadId: uuid.nullable().optional(),
-    clientId: uuid.nullable().optional(),
     sourcePackageId: uuid.nullable().optional(),
     issueDate: dateOnly,
     expiryDate: dateOnly.nullable().optional(),
     currency: z.string().length(3).optional(),
     notes: z.string().max(4000).optional(),
     terms: z.string().max(4000).optional(),
-    lineItems: z.array(proposalLineItemSchema).optional(),
+    paymentTerms: z.string().max(4000).optional(),
+    deliveryTimeline: z.string().max(500).optional(),
+    lineItems: z.array(proposalLineItemSchema).min(1, 'Add at least one line item.'),
   })
   .strict();
+
+const proposalListQueryShape = {
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(10),
+  search: z.string().trim().max(120).optional(),
+  type: proposalDocumentTypeSchema.optional(),
+  status: proposalStatusSchema.optional(),
+  issueFrom: dateOnly.optional(),
+  issueTo: dateOnly.optional(),
+} as const;
+
+export const proposalListQuerySchema = z.object(proposalListQueryShape).strict();
+
+const proposalListQueryKeys = Object.keys(proposalListQueryShape) as (keyof typeof proposalListQueryShape)[];
+
+export function parseProposalListQuery(input: unknown): z.infer<typeof proposalListQuerySchema> {
+  const record =
+    input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const picked: Record<string, unknown> = {};
+  for (const key of proposalListQueryKeys) {
+    if (key in record) picked[key] = record[key];
+  }
+  return proposalListQuerySchema.parse(picked);
+}
 
 export const updateProposalRequestSchema = createProposalRequestSchema
   .omit({ type: true })
@@ -266,3 +330,4 @@ export type UpdateClientRequest = z.infer<typeof updateClientRequestSchema>;
 export type CreateProposalRequest = z.infer<typeof createProposalRequestSchema>;
 export type UpdateProposalRequest = z.infer<typeof updateProposalRequestSchema>;
 export type ChangeProposalStatusRequest = z.infer<typeof changeProposalStatusRequestSchema>;
+export type ProposalListQuery = z.infer<typeof proposalListQuerySchema>;

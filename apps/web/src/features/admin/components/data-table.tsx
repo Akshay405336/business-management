@@ -21,8 +21,10 @@ export function DataTableFrame({
   className?: string;
 }) {
   return (
-    <div className={cn('grid gap-3', className)}>
-      <div className="bg-card min-h-[8rem] overflow-hidden rounded-xl shadow-md">{children}</div>
+    <div className={cn('grid min-w-0 max-w-full gap-3', className)}>
+      <div className="bg-card max-w-full min-h-[8rem] min-w-0 overflow-hidden rounded-xl shadow-md">
+        {children}
+      </div>
       {footer ? <div>{footer}</div> : null}
     </div>
   );

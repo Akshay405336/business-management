@@ -14,10 +14,11 @@ import { CrmNotFoundError } from '../domain/errors/crm.errors.js';
 import {
   CRM_REPOSITORY,
   type ChangeServicePackageStatusInput,
+  type CreateProposalInput,
   type CreateServicePackageInput,
   type CrmRepository,
   type LeadListFilters,
-  type ProposalLineItemWriteInput,
+  type UpdateProposalInput,
   type UpdateServicePackageInput,
 } from '../domain/repositories/crm.repository.js';
 
@@ -387,31 +388,42 @@ export class CrmUseCases {
     return this.convertLead(actor, leadId);
   }
 
-  listProposals(actor: CrmActor) {
-    return this.crm.listProposals(actor.organizationId);
+  previewClientReference(actor: CrmActor) {
+    return this.crm.previewClientReference(actor.organizationId);
+  }
+
+  deleteClient(actor: CrmActor, clientId: string) {
+    return this.crm.deleteClient(actor.organizationId, clientId, {
+      type: 'CLIENT_UPDATED',
+      adminId: actor.adminId,
+      entityType: 'client',
+      entityId: clientId,
+      metadata: { deleted: true },
+    });
+  }
+
+  listProposals(actor: CrmActor, filters: import('../domain/repositories/crm.repository.js').ProposalListFilters) {
+    return this.crm.listProposals(actor.organizationId, filters);
+  }
+
+  previewProposalDocumentNumber(actor: CrmActor, type: ProposalDocumentType) {
+    return this.crm.previewProposalDocumentNumber(actor.organizationId, type);
+  }
+
+  deleteProposal(actor: CrmActor, proposalId: string) {
+    return this.crm.deleteProposal(actor.organizationId, proposalId, {
+      type: 'PROPOSAL_UPDATED',
+      adminId: actor.adminId,
+      entityType: 'proposal',
+      entityId: proposalId,
+    });
   }
 
   getProposal(actor: CrmActor, proposalId: string) {
     return this.require(this.crm.getProposal(actor.organizationId, proposalId), 'Proposal');
   }
 
-  createProposal(
-    actor: CrmActor,
-    input: {
-      type: ProposalDocumentType;
-      title: string;
-      description?: string;
-      leadId?: string | null;
-      clientId?: string | null;
-      issueDate: Date;
-      expiryDate?: Date | null;
-      currency?: string;
-      notes?: string;
-      terms?: string;
-      lineItems?: readonly ProposalLineItemWriteInput[];
-      sourcePackageId?: string | null;
-    },
-  ) {
+  createProposal(actor: CrmActor, input: CreateProposalInput) {
     const proposalId = crypto.randomUUID();
     return this.crm.createProposal(
       actor.organizationId,
@@ -425,22 +437,7 @@ export class CrmUseCases {
     );
   }
 
-  updateProposal(
-    actor: CrmActor,
-    proposalId: string,
-    input: {
-      title?: string;
-      description?: string;
-      leadId?: string | null;
-      clientId?: string | null;
-      issueDate?: Date;
-      expiryDate?: Date | null;
-      currency?: string;
-      notes?: string;
-      terms?: string;
-      lineItems?: readonly ProposalLineItemWriteInput[];
-    },
-  ) {
+  updateProposal(actor: CrmActor, proposalId: string, input: UpdateProposalInput) {
     return this.crm.updateProposal(actor.organizationId, proposalId, input, {
       type: 'PROPOSAL_UPDATED',
       adminId: actor.adminId,

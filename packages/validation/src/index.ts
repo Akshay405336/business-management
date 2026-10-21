@@ -5,4 +5,6 @@ export * from './field-schemas.js';
 export * from './money.js';
 export * from './service-package-pricing.js';
 export * from './service-package-code.js';
+export * from './proposal-document-code.js';
+export * from './proposal-pricing.js';
 export * from './platform-auth.schemas.js';

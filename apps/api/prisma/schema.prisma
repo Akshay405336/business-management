@@ -414,6 +414,15 @@ model ProposalDocument {
   grandTotal       Decimal              @default(0) @map("grand_total") @db.Decimal(18, 2)
   notes            String               @default("") @db.VarChar(4000)
   terms            String               @default("") @db.VarChar(4000)
+  scopeOfWork      String               @default("") @map("scope_of_work") @db.VarChar(8000)
+  paymentTerms     String               @default("") @map("payment_terms") @db.VarChar(4000)
+  deliveryTimeline String               @default("") @map("delivery_timeline") @db.VarChar(500)
+  clientName       String               @default("") @map("client_name") @db.VarChar(160)
+  companyName      String               @default("") @map("company_name") @db.VarChar(160)
+  clientPhone      String               @default("") @map("client_phone") @db.VarChar(32)
+  clientEmail      String               @default("") @map("client_email") @db.VarChar(254)
+  billingAddress   String               @default("") @map("billing_address") @db.VarChar(1000)
+  clientGstin      String               @default("") @map("client_gstin") @db.VarChar(15)
   version          Int                  @default(1)
   sourcePackageId  String?              @map("source_package_id") @db.Uuid
   packageSnapshot  Json?                @map("package_snapshot")
@@ -498,6 +507,8 @@ model ProposalLineItem {
   id          String   @id @db.Uuid
   proposalId  String   @map("proposal_id") @db.Uuid
   name        String   @db.VarChar(200)
+  category    String   @default("") @db.VarChar(120)
+  sourcePackageId String? @map("source_package_id") @db.Uuid
   description String   @default("") @db.VarChar(2000)
   quantity    Decimal  @default(1) @db.Decimal(18, 4)
   unit        String   @default("item") @db.VarChar(32)

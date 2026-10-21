@@ -3,37 +3,51 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/shared/lib/utils';
 
-/** Desktop search width ~304–360px; shrinks on smaller breakpoints. */
+/** Search field ~220–280px on desktop; shrinks with available space. */
 export const CRM_HEADER_SEARCH_FORM_CLASS =
-  'w-full min-w-0 sm:min-w-[10rem] sm:max-w-[min(100%,360px)] lg:w-[19rem] lg:max-w-[360px] lg:shrink-0';
+  'min-w-0 w-full max-w-full flex-[1_1_14rem] sm:w-[min(280px,100%)] sm:max-w-[280px]';
 
 export const CRM_HEADER_TOOLBAR_CONTROLS_CLASS =
-  'flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:flex-nowrap lg:justify-end lg:gap-2';
+  'flex min-w-0 max-w-full flex-[1_1_auto] flex-wrap items-center gap-2 sm:justify-end';
 
 export function CrmToolbarHeader({
   title,
   description,
   toolbar,
   className,
+  titleSectionClassName,
+  descriptionClassName,
 }: {
   title: string;
   description: string;
   toolbar: ReactNode;
   className?: string;
+  titleSectionClassName?: string;
+  descriptionClassName?: string;
 }) {
   return (
     <header
       className={cn(
-        'border-border/60 bg-card/40 rounded-lg border px-4 py-3 sm:px-5',
+        'border-border/60 bg-card/40 max-w-full min-w-0 rounded-lg border px-4 py-3 sm:px-5',
         className,
       )}
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
-        <div className="min-w-0 shrink-0">
-          <h1 className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl">
+      <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-4 gap-y-3">
+        <div
+          className={cn(
+            'min-w-0 flex-[1_1_12rem] basis-full sm:basis-auto sm:max-w-[min(100%,22rem)] lg:max-w-[min(100%,26rem)]',
+            titleSectionClassName,
+          )}
+        >
+          <h1 className="text-foreground text-lg font-semibold tracking-tight sm:text-xl">
             {title}
           </h1>
-          <p className="text-muted-foreground mt-0.5 text-sm leading-snug max-lg:max-w-md lg:whitespace-nowrap">
+          <p
+            className={cn(
+              'text-muted-foreground mt-0.5 text-sm leading-snug',
+              descriptionClassName,
+            )}
+          >
             {description}
           </p>
         </div>

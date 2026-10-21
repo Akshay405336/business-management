@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -61,6 +62,18 @@ export class ClientsController {
     return { lead: toCrmLead(result.lead), client: toCrmClient(result.client) };
   }
 
+  @Get('reference-preview')
+  @ApiOperation({ summary: 'Preview the next client reference number (not reserved until create)' })
+  @ApiOkResponse({
+    schema: toOpenApiSchema(
+      z.object({ referenceNumber: z.string(), isPreview: z.literal(true) }),
+    ),
+  })
+  async previewReference(@CrmContext() ctx: CrmRequestContext) {
+    const referenceNumber = await this.crm.previewClientReference(ctx);
+    return { referenceNumber, isPreview: true as const };
+  }
+
   @Get(':clientId')
   @ApiOperation({ summary: 'Get a client' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmClientResponseSchema) })
@@ -93,5 +106,14 @@ export class ClientsController {
   ): Promise<CrmClient> {
     const client = await this.crm.updateClient(ctx, clientId, body);
     return toCrmClient(client);
+  }
+
+  @Delete(':clientId')
+  @ApiOperation({ summary: 'Permanently delete a client' })
+  async delete(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('clientId') clientId: string,
+  ): Promise<void> {
+    await this.crm.deleteClient(ctx, clientId);
   }
 }

@@ -22,6 +22,7 @@ export const CRM_ROUTES = {
   clients: `${API_PREFIX}/crm/clients`,
   client: (id: string) => `${API_PREFIX}/crm/clients/${id}`,
   clientFromLead: (leadId: string) => `${API_PREFIX}/crm/clients/from-lead/${leadId}`,
+  clientReferencePreview: `${API_PREFIX}/crm/clients/reference-preview`,
   proposals: `${API_PREFIX}/crm/proposals`,
   servicePackages: `${API_PREFIX}/crm/service-packages`,
   servicePackage: (id: string) => `${API_PREFIX}/crm/service-packages/${id}`,
@@ -30,6 +31,7 @@ export const CRM_ROUTES = {
   proposal: (id: string) => `${API_PREFIX}/crm/proposals/${id}`,
   proposalStatus: (id: string) => `${API_PREFIX}/crm/proposals/${id}/status`,
   proposalPrint: (id: string) => `${API_PREFIX}/crm/proposals/${id}/print`,
+  proposalCodePreview: `${API_PREFIX}/crm/proposals/code-preview`,
 } as const;
 
 export type PipelineStatus = 'ACTIVE' | 'INACTIVE';
@@ -165,9 +167,16 @@ export interface CrmClientListResponse {
   readonly clients: readonly CrmClient[];
 }
 
+export interface ClientReferencePreviewResponse {
+  readonly referenceNumber: string;
+  readonly isPreview: true;
+}
+
 export interface CrmProposalLineItem {
   readonly id: string;
   readonly name: string;
+  readonly category: string;
+  readonly sourcePackageId: string | null;
   readonly description: string;
   readonly quantity: string;
   readonly unit: string;
@@ -196,6 +205,15 @@ export interface CrmProposal {
   readonly grandTotal: string;
   readonly notes: string;
   readonly terms: string;
+  readonly scopeOfWork: string;
+  readonly paymentTerms: string;
+  readonly deliveryTimeline: string;
+  readonly clientName: string;
+  readonly companyName: string;
+  readonly clientPhone: string;
+  readonly clientEmail: string;
+  readonly billingAddress: string;
+  readonly clientGstin: string;
   readonly version: number;
   readonly sourcePackageId: string | null;
   readonly packageSnapshot: ServicePackageSnapshot | null;
@@ -206,7 +224,16 @@ export interface CrmProposal {
 
 
 export interface CrmProposalListResponse {
-  readonly proposals: readonly CrmProposal[];
+  readonly items: readonly CrmProposal[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface ProposalDocumentCodePreviewResponse {
+  readonly documentNumber: string;
+  readonly type: ProposalDocumentType;
+  readonly isPreview: true;
 }
 
 export interface CrmProposalPrintResponse extends CrmProposal {

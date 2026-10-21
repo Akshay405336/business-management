@@ -24,7 +24,7 @@ import {
 } from '@/shared/form/zod-field-error';
 import { formFieldClass, formFieldControlShellClass } from '@/shared/form/form-layout';
 import { cn } from '@/shared/lib/utils';
-import { Loader2, Package, Pencil, Plus, Power, Trash2 } from 'lucide-react';
+import { Loader2, Package, Pencil, Plus, Power, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -93,7 +94,7 @@ import {
   formGridFullWidthClass,
 } from './crm-feedback';
 import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
-import { CrmToolbarHeader } from './crm-toolbar-header';
+import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from './crm-toolbar-header';
 import { useAsyncAction } from '../hooks/use-async-action';
 import { describeCrmError } from '../utils/errors';
 import { formatMoney } from '../utils/format';
@@ -133,6 +134,10 @@ type PackageForm = {
   termsExclusions: string;
   addOns: AddOnFormRow[];
 };
+
+const SEARCH_DEBOUNCE_MS = 400;
+
+type PackageStatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 const DELIVERY_UNITS: { value: ServicePackageDeliveryUnit; label: string }[] = [
   { value: 'DAYS', label: 'Days' },
@@ -254,6 +259,10 @@ export function ServicePackagesPage() {
   const [codePreview, setCodePreview] = useState('');
   const [codePreviewHint, setCodePreviewHint] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<CrmServicePackage | null>(null);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<PackageStatusFilter>('ALL');
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -272,13 +281,48 @@ export function ServicePackagesPage() {
     void load();
   }, [load]);
 
-  const totalPackages = packages.length;
+  useEffect(() => {
+    setSearchDraft(search);
+  }, [search]);
+
+  useEffect(() => {
+    if (searchDraft === search) return;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setSearch(searchDraft.trim());
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchDraft, search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter]);
+
+  const filtersActive = search.trim().length > 0 || statusFilter !== 'ALL';
+
+  const filteredPackages = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return packages.filter((pkg) => {
+      if (statusFilter !== 'ALL' && pkg.status !== statusFilter) return false;
+      if (!q) return true;
+      return (
+        pkg.name.toLowerCase().includes(q) ||
+        pkg.code.toLowerCase().includes(q) ||
+        pkg.categories.some((item) => item.label.toLowerCase().includes(q))
+      );
+    });
+  }, [packages, search, statusFilter]);
+
+  const totalPackages = filteredPackages.length;
   const totalPages = Math.max(1, Math.ceil(totalPackages / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pagedPackages = useMemo(() => {
     const start = (safePage - 1) * pageSize;
-    return packages.slice(start, start + pageSize);
-  }, [packages, pageSize, safePage]);
+    return filteredPackages.slice(start, start + pageSize);
+  }, [filteredPackages, pageSize, safePage]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -287,9 +331,12 @@ export function ServicePackagesPage() {
   const tablePhase = deriveDataTablePhase({
     loading,
     error,
-    rowCount: packages.length,
+    rowCount: filteredPackages.length,
   });
-  const tableRefreshing = isDataTableRefreshing({ loading, rowCount: packages.length });
+  const tableRefreshing = isDataTableRefreshing({
+    loading,
+    rowCount: filteredPackages.length,
+  });
 
   useEffect(() => {
     if (!dialogOpen || editingId) return;
@@ -445,6 +492,13 @@ export function ServicePackagesPage() {
     }
   };
 
+  const clearFilters = () => {
+    setSearchDraft('');
+    setSearch('');
+    setStatusFilter('ALL');
+    setPage(1);
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const target = deleteTarget;
@@ -465,23 +519,64 @@ export function ServicePackagesPage() {
   ] as const;
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-3">
+    <div className="grid w-full min-w-0 max-w-full gap-3">
       <AdminBreadcrumb breadcrumbs={breadcrumbs} className="mb-0.5" />
       <CrmToolbarHeader
         title="Service Packages"
-        description="Configure reusable packages with catalog-backed scope, pricing, and delivery terms."
+        description="Manage reusable service packages."
         className="shadow-xs"
+        titleSectionClassName="xl:max-w-none xl:min-w-0 xl:flex-[1_1_auto]"
+        descriptionClassName="xl:whitespace-nowrap"
         toolbar={
-          <Button type="button" size="sm" className="h-9 shrink-0" onClick={openCreate}>
-            <Plus aria-hidden="true" />
-            New package
-          </Button>
+          <>
+            <form
+              className={CRM_HEADER_SEARCH_FORM_CLASS}
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                setSearch(searchDraft.trim());
+                setPage(1);
+              }}
+            >
+              <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 max-w-full">
+                <Input
+                  className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
+                  placeholder={CRM_FORM_PLACEHOLDERS.searchPackages}
+                  value={searchDraft}
+                  onChange={(event) => setSearchDraft(event.target.value)}
+                  aria-label="Search packages"
+                />
+              </InputGroup>
+            </form>
+            <Select
+              value={statusFilter}
+              onValueChange={(value) => setStatusFilter(value as PackageStatusFilter)}
+            >
+              <SelectTrigger
+                className="h-9 w-full min-w-0 sm:w-[9.375rem] sm:max-w-[10rem]"
+                aria-label="Filter by status"
+              >
+                <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.filterStatus} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All statuses</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="INACTIVE">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button type="button" size="sm" className="h-9 shrink-0" onClick={openCreate}>
+              <Plus aria-hidden="true" />
+              New package
+            </Button>
+          </>
         }
       />
 
       {error && packages.length > 0 ? <CrmErrorAlert message={error} /> : null}
 
       <DataTable
+        className="min-w-0 max-w-full"
+        tableClassName="table-fixed"
         phase={tablePhase}
         colSpan={5}
         skeletonColumns={CRM_PACKAGES_TABLE_SKELETON}
@@ -495,9 +590,13 @@ export function ServicePackagesPage() {
           </TableRow>
         }
         empty={{
-          title: 'No service packages yet',
-          description:
-            'Create a package to reuse technology, scope, integrations, and pricing in quotations.',
+          title: filtersActive ? 'No results match your filters' : 'No service packages yet',
+          description: filtersActive
+            ? 'Try different search terms or clear filters to see all packages.'
+            : 'Create a package to reuse technology, scope, integrations, and pricing in quotations.',
+          secondaryAction: filtersActive
+            ? { label: 'Clear filters', onClick: clearFilters }
+            : undefined,
         }}
         errorMessage={error}
         onRetry={() => void load()}

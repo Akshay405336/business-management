@@ -4,6 +4,10 @@ export const DEFAULT_LEAD_CURRENCY = 'INR' as const;
 export const CRM_LEAD_DIALOG_CLASS =
   'flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-[900px] flex-col gap-0 overflow-hidden p-0 sm:w-[min(900px,calc(100vw-2rem))] sm:min-w-[760px]';
 
+/** Wide quotation create/edit dialog — overrides DialogContent default max-w-lg / sm:max-w-lg */
+export const CRM_PROPOSAL_FORM_DIALOG_CLASS =
+  'flex max-h-[92vh] w-[calc(100vw-24px)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[min(1000px,calc(100vw-64px))] sm:max-w-none';
+
 export const STAGE_COLOR_PRESETS = [
   '#2563eb',
   '#7c3aed',
