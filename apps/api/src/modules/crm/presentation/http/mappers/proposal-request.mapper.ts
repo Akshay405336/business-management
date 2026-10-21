@@ -32,7 +32,7 @@ export const toCreateProposalInput = (
   companyName: body.companyName,
   clientPhone: body.clientPhone,
   clientEmail: body.clientEmail,
-  billingAddress: body.billingAddress,
+  billingAddress: body.billingAddress ?? '',
   clientGstin: body.clientGstin,
   issueDate: new Date(`${body.issueDate}T00:00:00.000Z`),
   expiryDate: body.expiryDate ? new Date(`${body.expiryDate}T00:00:00.000Z`) : null,
