@@ -1,10 +1,27 @@
 import { isApiError } from '@/shared/api/api-error';
 
+function pickBestApiDetail(
+  details: readonly { path: string; message: string }[],
+): { path: string; message: string } | undefined {
+  if (details.length === 0) return undefined;
+  const meaningful = details.find(
+    (detail) => detail.message && detail.message !== 'Invalid input',
+  );
+  return meaningful ?? details[0];
+}
+
 export function describeCrmError(error: unknown): string {
   if (isApiError(error)) {
-    const detail = error.details[0];
-    if (detail?.path && detail.message) {
-      return `${error.message} (${detail.path}: ${detail.message})`;
+    const detail = pickBestApiDetail(error.details);
+    if (detail?.message) {
+      const label = detail.path ? `${detail.path}: ` : '';
+      if (error.message === detail.message) {
+        return `${label}${detail.message}`.trim();
+      }
+      if (detail.message !== 'Invalid input') {
+        return `${detail.message}${detail.path ? ` (${detail.path})` : ''}`;
+      }
+      return `${error.message}${detail.path ? ` (${detail.path})` : ''}`;
     }
     return error.message;
   }

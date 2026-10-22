@@ -72,6 +72,9 @@ model PlatformAdmin {
   createdClients        Client[]
   convertedLeads   Lead[]             @relation("LeadConvertedBy")
   crmAuditEvents   CrmAuditEvent[]
+  managedProjects  Project[]          @relation("ProjectManager")
+  createdProjects  Project[]          @relation("ProjectCreator")
+  ownedProjectPhases ProjectPhase[]   @relation("PhaseOwner")
 
   @@index([organizationId])
   @@map("platform_admins")
@@ -165,6 +168,8 @@ model Organization {
   clients     Client[]
   proposals       ProposalDocument[]
   servicePackages ServicePackage[]
+  projects        Project[]
+  projectPhases   ProjectPhase[]
   sequences       OrganizationSequence[]
   auditEvents     CrmAuditEvent[]
 
@@ -375,6 +380,7 @@ model Client {
   sourceLead        Lead?              @relation("ClientSourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
   convertedFromLead Lead?              @relation("LeadConvertedClient")
   proposals         ProposalDocument[]
+  projects          Project[]
 
   @@unique([organizationId, referenceNumber])
   @@index([organizationId, status, createdAt])
@@ -437,6 +443,7 @@ model ProposalDocument {
   createdBy     PlatformAdmin           @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
   lineItems     ProposalLineItem[]
   statusHistory ProposalStatusHistory[]
+  projects      Project[]
 
   @@unique([organizationId, documentNumber])
   @@index([organizationId, status, createdAt])
@@ -541,6 +548,103 @@ model ProposalStatusHistory {
   @@map("proposal_status_history")
 }
 
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ProjectLifecyclePhase {
+  PLANNING
+  PRODUCTION
+  QA
+  DEPLOYMENT
+  HANDOVER
+  COMPLETED
+}
+
+enum ProjectPhaseStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+model Project {
+  id                      String                @id @db.Uuid
+  organizationId          String                @map("organization_id") @db.Uuid
+  projectNumber           String                @map("project_number") @db.VarChar(32)
+  name                    String                @db.VarChar(200)
+  description             String                @default("") @db.VarChar(4000)
+  priority                ProjectPriority
+  status                  ProjectStatus         @default(ACTIVE)
+  currentPhase            ProjectLifecyclePhase @default(PLANNING) @map("current_phase")
+  clientId                String                @map("client_id") @db.Uuid
+  proposalId              String?               @map("proposal_id") @db.Uuid
+  projectManagerAdminId   String?               @map("project_manager_admin_id") @db.Uuid
+  startDate               DateTime              @map("start_date") @db.Date
+  expectedEndDate         DateTime              @map("expected_end_date") @db.Date
+  clientName              String                @map("client_name") @db.VarChar(160)
+  companyName             String                @default("") @map("company_name") @db.VarChar(160)
+  clientPhone             String                @default("") @map("client_phone") @db.VarChar(32)
+  clientEmail             String                @default("") @map("client_email") @db.VarChar(254)
+  quotationNumberSnapshot String                @default("") @map("quotation_number_snapshot") @db.VarChar(32)
+  quotationTitleSnapshot  String                @default("") @map("quotation_title_snapshot") @db.VarChar(200)
+  acceptedCommercialValue Decimal?              @map("accepted_commercial_value") @db.Decimal(18, 2)
+  currency                String                @default("INR") @db.Char(3)
+  scopeAndRequirements    String                @default("") @map("scope_and_requirements") @db.VarChar(8000)
+  mainDeliverables        String                @default("") @map("main_deliverables") @db.VarChar(4000)
+  acceptanceCriteria      String                @default("") @map("acceptance_criteria") @db.VarChar(4000)
+  internalNotes           String                @default("") @map("internal_notes") @db.VarChar(4000)
+  createdByAdminId        String                @map("created_by_admin_id") @db.Uuid
+  createdAt               DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client          Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  proposal        ProposalDocument? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  projectManager  PlatformAdmin?    @relation("ProjectManager", fields: [projectManagerAdminId], references: [id], onDelete: SetNull)
+  createdBy       PlatformAdmin     @relation("ProjectCreator", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  phases          ProjectPhase[]
+
+  @@unique([organizationId, projectNumber])
+  @@index([organizationId, status, currentPhase])
+  @@index([organizationId, clientId])
+  @@map("projects")
+}
+
+model ProjectPhase {
+  id               String                @id @db.Uuid
+  organizationId   String                @map("organization_id") @db.Uuid
+  projectId        String                @map("project_id") @db.Uuid
+  phase            ProjectLifecyclePhase   @default(PLANNING)
+  name             String                @db.VarChar(200)
+  description      String                @default("") @db.VarChar(4000)
+  status           ProjectPhaseStatus    @default(NOT_STARTED)
+  startDate        DateTime              @map("start_date") @db.Date
+  expectedEndDate  DateTime              @map("expected_end_date") @db.Date
+  ownerAdminId     String?               @map("owner_admin_id") @db.Uuid
+  sortOrder        Int                   @map("sort_order")
+  createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner        PlatformAdmin? @relation("PhaseOwner", fields: [ownerAdminId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, projectId])
+  @@map("project_phases")
+}
+
 enum CrmAuditEventType {
   PIPELINE_CREATED
   PIPELINE_UPDATED
@@ -563,6 +667,9 @@ enum CrmAuditEventType {
   PROPOSAL_STATUS_CHANGED
   SERVICE_PACKAGE_CREATED
   SERVICE_PACKAGE_UPDATED
+  PROJECT_CREATED
+  PROJECT_UPDATED
+  PROJECT_DELETED
 }
 
 model CrmAuditEvent {

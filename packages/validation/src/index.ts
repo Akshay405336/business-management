@@ -8,3 +8,6 @@ export * from './service-package-code.js';
 export * from './proposal-document-code.js';
 export * from './proposal-pricing.js';
 export * from './platform-auth.schemas.js';
+export * from './project.schemas.js';
+export * from './project-phase-schedule.js';
+export * from './project-number.js';

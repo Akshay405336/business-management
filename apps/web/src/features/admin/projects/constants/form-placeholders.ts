@@ -1,0 +1,15 @@
+export const PROJECT_FORM_PLACEHOLDERS = {
+  searchProjects: 'Search by project number, name, or client…',
+  filterStatus: 'Status',
+  filterPriority: 'Priority',
+  filterPhase: 'Phase',
+  projectName: 'Website redesign and launch',
+  description: 'Brief summary of goals and context',
+  selectClient: 'Select a client',
+  selectQuotation: 'Link a quotation',
+  selectManager: 'Assign project manager',
+  scope: 'Scope, requirements, and constraints',
+  deliverables: 'Key deliverables',
+  acceptance: 'Acceptance criteria',
+  internalNotes: 'Internal notes (not shared with client)',
+} as const;

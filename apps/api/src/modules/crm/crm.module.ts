@@ -27,5 +27,6 @@ import { CrmOrganizationGuard } from './presentation/http/guards/crm-organizatio
     CrmOrganizationGuard,
     CrmExceptionFilter,
   ],
+  exports: [CRM_REPOSITORY, CrmOrganizationGuard, CrmExceptionFilter],
 })
 export class CrmModule {}

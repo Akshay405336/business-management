@@ -10,9 +10,9 @@
     "prisma.config.ts"
   ],
   "scripts": {
-    "dev": "pnpm run clean && tsc -p tsconfig.build.json && pnpm run \"/^dev:/\"",
+    "dev": "pnpm --filter @techwin/validation run build && pnpm run clean && tsc -p tsconfig.build.json && pnpm run \"/^dev:/\"",
     "dev:compile": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
-    "dev:serve": "node --watch-path=dist --watch-preserve-output dist/main.js",
+    "dev:serve": "node --watch-path=dist --watch-path=../../packages/validation/dist --watch-preserve-output dist/main.js",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
     "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "start": "node dist/main.js",

@@ -24,10 +24,15 @@ export function isValidMoneyCommaGrouping(intPart: string): boolean {
   return true;
 }
 
+/** Remove common currency prefixes/symbols so formatted display values parse as amounts. */
+export function stripMoneyFormattingPrefix(input: string): string {
+  return input.trim().replace(/^[^\d,-]+/, '');
+}
+
 export function normalizeMoneyInput(
   input: string,
 ): { success: true; value: string } | { success: false; error: string } {
-  const trimmed = input.trim();
+  const trimmed = stripMoneyFormattingPrefix(input);
   if (trimmed === '') {
     return { success: true, value: '0' };
   }

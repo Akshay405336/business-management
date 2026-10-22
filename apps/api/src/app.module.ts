@@ -6,10 +6,19 @@ import { CacheModule } from './infrastructure/cache/cache.module.js';
 import { LoggingModule } from './infrastructure/logging/logging.module.js';
 import { AuthModule } from './modules/auth/index.js';
 import { CrmModule } from './modules/crm/index.js';
+import { ProjectsModule } from './modules/projects/index.js';
 import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
-  imports: [AppConfigModule, LoggingModule, CacheModule, HealthModule, AuthModule, CrmModule],
+  imports: [
+    AppConfigModule,
+    LoggingModule,
+    CacheModule,
+    HealthModule,
+    AuthModule,
+    CrmModule,
+    ProjectsModule,
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

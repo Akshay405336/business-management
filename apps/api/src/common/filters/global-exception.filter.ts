@@ -66,6 +66,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const response = http.getResponse<Response>();
 
     if (exception instanceof ApiException) {
+      if (exception.details?.length) {
+        this.logger.warn(
+          `Request validation failed: ${request.method} ${request.url} ${exception.details
+            .map((detail) => `${detail.path || '(root)'}=${detail.message}`)
+            .join('; ')}`,
+        );
+      }
       sendApiError(request, response, {
         status: exception.getStatus(),
         code: exception.code,
@@ -77,14 +84,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof ZodError) {
+      const details = exception.issues.map((issue) => ({
+        path: issue.path.map(String).join('.'),
+        message: issue.message,
+      }));
+      this.logger.warn(
+        `Request validation failed: ${request.method} ${request.url} ${details
+          .map((detail) => `${detail.path || '(root)'}=${detail.message}`)
+          .join('; ')}`,
+      );
       sendApiError(request, response, {
         status: HttpStatus.BAD_REQUEST,
         code: API_ERROR_CODES.VALIDATION_FAILED,
         message: 'The request is invalid.',
-        details: exception.issues.map((issue) => ({
-          path: issue.path.map(String).join('.'),
-          message: issue.message,
-        })),
+        details,
       });
       return;
     }

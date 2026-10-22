@@ -67,7 +67,7 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     label: 'Project Management',
     icon: FolderKanban,
     items: [
-      { kind: 'soon', label: 'Projects', icon: FolderKanban },
+      { kind: 'link', href: '/admin/projects', label: 'Projects', icon: FolderKanban },
       { kind: 'soon', label: 'Project Tasks', icon: ClipboardList },
       { kind: 'soon', label: 'Milestones', icon: Target },
       { kind: 'soon', label: 'Team Assignments', icon: Users },

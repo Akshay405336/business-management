@@ -36,7 +36,7 @@ async function bootstrap(): Promise<void> {
     origin: (origin, callback) =>
       callback(null, origin === undefined || allowedOrigins.has(origin)),
     credentials: true,
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['content-type', 'authorization', PLATFORM_CSRF_HEADER, REQUEST_ID_HEADER],
     exposedHeaders: [REQUEST_ID_HEADER, 'retry-after'],
     maxAge: 600,

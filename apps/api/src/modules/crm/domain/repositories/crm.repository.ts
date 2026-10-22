@@ -21,6 +21,7 @@ export const SEQUENCE_KEYS = {
   client: 'client',
   proposal: 'proposal',
   quotation: 'quotation',
+  project: 'project',
 } as const;
 
 export interface CrmAuditInput {
