@@ -71,6 +71,7 @@ import {
   ORGANIZATION_SLUG_TECHWIN,
   SEQUENCE_KEYS,
 } from '../../../domain/repositories/crm.repository.js';
+import { DEFAULT_PIPELINE_STAGES } from '../../../domain/services/default-stages.js';
 
 const formatReference = (prefix: string, value: number): string =>
   `${prefix}-${String(value).padStart(6, '0')}`;
@@ -189,17 +190,38 @@ export class PrismaCrmRepository implements CrmRepository {
     }
 
     const pipelineId = crypto.randomUUID();
-    const created = await this.prisma.pipeline.create({
-      data: {
-        id: pipelineId,
-        organizationId,
-        name: DEFAULT_PIPELINE_NAME,
-        description: '',
-        status: 'ACTIVE',
-        isDefault: true,
-        sortOrder: 0,
-      },
-      include: { stages: pipelineStagesInclude },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const pipeline = await tx.pipeline.create({
+        data: {
+          id: pipelineId,
+          organizationId,
+          name: DEFAULT_PIPELINE_NAME,
+          description: '',
+          status: 'ACTIVE',
+          isDefault: true,
+          sortOrder: 0,
+        },
+      });
+      for (let index = 0; index < DEFAULT_PIPELINE_STAGES.length; index += 1) {
+        const stage = DEFAULT_PIPELINE_STAGES[index]!;
+        await tx.pipelineStage.create({
+          data: {
+            id: crypto.randomUUID(),
+            organizationId,
+            pipelineId: pipeline.id,
+            name: stage.name,
+            description: '',
+            color: stage.color,
+            status: 'ACTIVE',
+            outcome: stage.outcome,
+            sortOrder: index + 1,
+          },
+        });
+      }
+      return tx.pipeline.findFirstOrThrow({
+        where: { id: pipeline.id, organizationId },
+        include: { stages: pipelineStagesInclude },
+      });
     });
     return this.toPipeline(created);
   }
@@ -208,12 +230,30 @@ export class PrismaCrmRepository implements CrmRepository {
     return this.ensureDefaultPipeline(organizationId);
   }
 
-  async listPipelines(organizationId: string): Promise<readonly PipelineRecord[]> {
+  async listPipelines(
+    organizationId: string,
+    filters?: import('../../../domain/repositories/crm.repository.js').PipelineListFilters,
+  ): Promise<readonly PipelineRecord[]> {
     await this.ensureDefaultPipeline(organizationId);
+    const search = filters?.search?.trim();
     const rows = await this.prisma.pipeline.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(filters?.status ? { status: filters.status } : {}),
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { description: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : {}),
+      },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      include: { stages: pipelineStagesInclude },
+      include: {
+        stages: pipelineStagesInclude,
+        _count: { select: { leads: true } },
+      },
     });
     return rows.map((row) => this.toPipeline(row));
   }
@@ -221,7 +261,10 @@ export class PrismaCrmRepository implements CrmRepository {
   async getPipeline(organizationId: string, pipelineId: string): Promise<PipelineRecord | null> {
     const row = await this.prisma.pipeline.findFirst({
       where: { id: pipelineId, organizationId },
-      include: { stages: pipelineStagesInclude },
+      include: {
+        stages: pipelineStagesInclude,
+        _count: { select: { leads: true } },
+      },
     });
     return row ? this.toPipeline(row) : null;
   }
@@ -252,10 +295,14 @@ export class PrismaCrmRepository implements CrmRepository {
           sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
         },
       });
+      await this.syncPipelineStages(tx, organizationId, pipeline.id, input.stages);
       await this.writeAudit(tx, organizationId, { ...audit, entityId: pipeline.id });
       return tx.pipeline.findFirstOrThrow({
         where: { id: pipeline.id, organizationId },
-        include: { stages: pipelineStagesInclude },
+        include: {
+          stages: pipelineStagesInclude,
+          _count: { select: { leads: true } },
+        },
       });
     });
     return this.toPipeline(row);
@@ -279,10 +326,16 @@ export class PrismaCrmRepository implements CrmRepository {
           sortOrder: input.sortOrder,
         },
       });
+      if (input.stages) {
+        await this.syncPipelineStages(tx, organizationId, pipelineId, input.stages);
+      }
       await this.writeAudit(tx, organizationId, audit);
       return tx.pipeline.findFirstOrThrow({
         where: { id: pipelineId, organizationId },
-        include: { stages: pipelineStagesInclude },
+        include: {
+          stages: pipelineStagesInclude,
+          _count: { select: { leads: true } },
+        },
       });
     });
     return this.toPipeline(row);
@@ -549,6 +602,31 @@ export class PrismaCrmRepository implements CrmRepository {
   }
 
   async listLeads(organizationId: string, filters: LeadListFilters): Promise<PaginatedLeads> {
+    if (filters.pipelineId) {
+      const pipeline = await this.prisma.pipeline.findFirst({
+        where: { id: filters.pipelineId, organizationId },
+        select: { id: true },
+      });
+      if (!pipeline) throw new CrmNotFoundError('Pipeline');
+    }
+    if (filters.stageId) {
+      const stage = await this.prisma.pipelineStage.findFirst({
+        where: {
+          id: filters.stageId,
+          organizationId,
+          ...(filters.pipelineId ? { pipelineId: filters.pipelineId } : {}),
+        },
+        select: { id: true },
+      });
+      if (!stage) {
+        throw new CrmValidationError(
+          filters.pipelineId
+            ? 'The stage does not belong to the selected pipeline.'
+            : 'Pipeline stage not found.',
+        );
+      }
+    }
+
     const where = {
       organizationId,
       ...(filters.includeArchived ? {} : { archivedAt: null }),
@@ -602,6 +680,9 @@ export class PrismaCrmRepository implements CrmRepository {
       where: { id: input.pipelineId, organizationId },
     });
     if (!pipeline) throw new CrmNotFoundError('Pipeline');
+    if (pipeline.status !== 'ACTIVE') {
+      throw new CrmValidationError('Leads can only be created in an active pipeline.');
+    }
 
     let stageId = input.stageId;
     if (!stageId) {
@@ -685,10 +766,22 @@ export class PrismaCrmRepository implements CrmRepository {
     if (input.pipelineId || input.stageId) {
       const pipelineId = input.pipelineId ?? existing.pipelineId;
       const stageId = input.stageId ?? existing.stageId;
+      const pipeline = await this.prisma.pipeline.findFirst({
+        where: { id: pipelineId, organizationId },
+        select: { status: true },
+      });
+      if (!pipeline) throw new CrmNotFoundError('Pipeline');
+      if (pipeline.status !== 'ACTIVE') {
+        throw new CrmValidationError('Leads can only be assigned to an active pipeline.');
+      }
       const stage = await this.prisma.pipelineStage.findFirst({
         where: { id: stageId, pipelineId, organizationId },
       });
-      if (!stage) throw new CrmNotFoundError('Pipeline stage');
+      if (!stage) {
+        throw new CrmValidationError(
+          'The stage does not belong to the selected pipeline.',
+        );
+      }
       if (stage.status !== 'ACTIVE') {
         throw new CrmValidationError('Leads can only be assigned to active pipeline stages.');
       }
@@ -749,7 +842,11 @@ export class PrismaCrmRepository implements CrmRepository {
     const stage = await this.prisma.pipelineStage.findFirst({
       where: { id: stageId, pipelineId: lead.pipelineId, organizationId },
     });
-    if (!stage) throw new CrmNotFoundError('Pipeline stage');
+    if (!stage) {
+      throw new CrmValidationError(
+        "The target stage does not belong to this lead's pipeline.",
+      );
+    }
     if (stage.status !== 'ACTIVE') {
       throw new CrmValidationError('Leads can only be moved to active pipeline stages.');
     }
@@ -1466,6 +1563,63 @@ export class PrismaCrmRepository implements CrmRepository {
     return { ...proposal, organizationName: org.name };
   }
 
+  private async syncPipelineStages(
+    tx: Pick<PrismaService, 'pipelineStage' | 'lead'>,
+    organizationId: string,
+    pipelineId: string,
+    stages: readonly import('../../../domain/repositories/crm.repository.js').PipelineStageInput[],
+  ): Promise<void> {
+    const existing = await tx.pipelineStage.findMany({
+      where: { organizationId, pipelineId },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((row) => row.id));
+    const retainedIds = new Set<string>();
+
+    for (let index = 0; index < stages.length; index += 1) {
+      const stage = stages[index]!;
+      const sortOrder = index + 1;
+      if (stage.id && existingIds.has(stage.id)) {
+        retainedIds.add(stage.id);
+        await tx.pipelineStage.update({
+          where: { id: stage.id },
+          data: {
+            name: stage.name,
+            color: stage.color,
+            sortOrder,
+          },
+        });
+        continue;
+      }
+      const id = crypto.randomUUID();
+      retainedIds.add(id);
+      await tx.pipelineStage.create({
+        data: {
+          id,
+          organizationId,
+          pipelineId,
+          name: stage.name,
+          description: '',
+          color: stage.color,
+          status: 'ACTIVE',
+          outcome: 'NONE',
+          sortOrder,
+        },
+      });
+    }
+
+    for (const prior of existing) {
+      if (retainedIds.has(prior.id)) continue;
+      const leadCount = await tx.lead.count({ where: { organizationId, stageId: prior.id } });
+      if (leadCount > 0) {
+        throw new CrmValidationError(
+          'A stage with active leads cannot be removed. Reassign those leads first.',
+        );
+      }
+      await tx.pipelineStage.delete({ where: { id: prior.id } });
+    }
+  }
+
   private async assertUniqueStageName(
     organizationId: string,
     pipelineId: string,
@@ -1510,6 +1664,7 @@ export class PrismaCrmRepository implements CrmRepository {
       updatedAt: Date;
       _count?: { leads: number };
     }>;
+    _count?: { leads: number };
   }): PipelineRecord {
     return {
       id: row.id,
@@ -1519,6 +1674,7 @@ export class PrismaCrmRepository implements CrmRepository {
       status: row.status,
       isDefault: row.isDefault,
       sortOrder: row.sortOrder,
+      leadCount: row._count?.leads,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       stages: row.stages?.map((stage) => this.toStage(stage, stage._count?.leads ?? 0)),

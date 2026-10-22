@@ -34,7 +34,6 @@ export const newPhaseRow = (partial?: Partial<ProjectPhaseFormRow>): ProjectPhas
   description: partial?.description ?? '',
   startDate: partial?.startDate ?? '',
   expectedEndDate: partial?.expectedEndDate ?? '',
-  status: partial?.status ?? 'NOT_STARTED',
   startDateAuto: partial?.startDateAuto ?? false,
   expectedEndDateAuto: partial?.expectedEndDateAuto ?? false,
 });
@@ -69,7 +68,6 @@ function phaseToRow(phase: ProjectPhase): ProjectPhaseFormRow {
     description: phase.description,
     startDate: toDateInputValue(phase.startDate),
     expectedEndDate: toDateInputValue(phase.expectedEndDate),
-    status: phase.status,
     startDateAuto: false,
     expectedEndDateAuto: false,
   });
@@ -105,7 +103,6 @@ function phaseRowToPayload(row: ProjectPhaseFormRow) {
     description: row.description.trim() || undefined,
     startDate: toDateInputValue(row.startDate),
     expectedEndDate: toDateInputValue(row.expectedEndDate),
-    ...(row.persisted ? { status: row.status } : {}),
   };
 }
 

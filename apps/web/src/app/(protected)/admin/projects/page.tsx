@@ -1,5 +1,5 @@
-import { ProjectsPage } from '@/features/admin/projects/components/projects-page';
+import { redirect } from 'next/navigation';
 
 export default function AdminProjectsPage() {
-  return <ProjectsPage />;
+  redirect('/admin/project-tasks');
 }

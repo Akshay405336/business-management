@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  pipelineStageColorFieldSchema,
+  pipelineStageNameFieldSchema,
+} from './field-schemas.js';
 import { leadEmailSchema, leadPhoneSchema } from './lead-contact.js';
 import { MONEY_PARSE_ERROR, normalizeMoneyInput } from './money.js';
 import { normalizeProposalTaxRateFraction } from './proposal-pricing.js';
@@ -97,18 +101,58 @@ const optionalGstinSchema = z.preprocess(
 const dateOnly = z.iso.date({ error: 'Enter a valid date.' });
 const dateTime = z.iso.datetime({ offset: true });
 
+export const pipelineStageInputSchema = z
+  .object({
+    id: uuid.optional(),
+    name: pipelineStageNameFieldSchema,
+    color: pipelineStageColorFieldSchema,
+  })
+  .strict();
+
+function assertUniquePipelineStageNames(
+  stages: readonly { name: string }[],
+  ctx: z.RefinementCtx,
+  pathPrefix: 'stages',
+) {
+  const seen = new Set<string>();
+  stages.forEach((stage, index) => {
+    const key = stage.name.trim().toLowerCase();
+    if (seen.has(key)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Stage names must be unique within a pipeline.',
+        path: [pathPrefix, index, 'name'],
+      });
+    }
+    seen.add(key);
+  });
+}
+
 export const createPipelineRequestSchema = z
   .object({
     name: z.string().trim().min(1, 'Enter a pipeline name.').max(120),
     description: z.string().max(2000).optional(),
     status: pipelineStatusSchema.optional(),
+    stages: z.array(pipelineStageInputSchema).min(1, 'Add at least one stage.'),
+  })
+  .strict()
+  .superRefine((value, ctx) => assertUniquePipelineStageNames(value.stages, ctx, 'stages'));
+
+const updatePipelineRequestObjectSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Enter a pipeline name.').max(120).optional(),
+    description: z.string().max(2000).optional(),
+    status: pipelineStatusSchema.optional(),
+    sortOrder: z.number().int().optional(),
+    stages: z.array(pipelineStageInputSchema).min(1, 'Add at least one stage.').optional(),
   })
   .strict();
 
-export const updatePipelineRequestSchema = createPipelineRequestSchema
-  .partial()
-  .extend({ sortOrder: z.number().int().optional() })
-  .strict();
+export const updatePipelineRequestSchema = updatePipelineRequestObjectSchema.superRefine(
+  (value, ctx) => {
+    if (value.stages) assertUniquePipelineStageNames(value.stages, ctx, 'stages');
+  },
+);
 
 export const createPipelineStageRequestSchema = z
   .object({

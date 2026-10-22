@@ -76,6 +76,7 @@ export interface CrmPipeline {
   readonly status: PipelineStatus;
   readonly isDefault: boolean;
   readonly sortOrder: number;
+  readonly leadCount: number;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly stages: readonly CrmPipelineStage[];

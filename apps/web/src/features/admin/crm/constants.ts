@@ -8,6 +8,10 @@ export const CRM_LEAD_DIALOG_CLASS =
 export const CRM_PROPOSAL_FORM_DIALOG_CLASS =
   'flex max-h-[92vh] w-[calc(100vw-24px)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:w-[min(1000px,calc(100vw-64px))] sm:max-w-none';
 
+/** Pipeline create/edit dialog with inline stage editor */
+export const CRM_PIPELINE_FORM_DIALOG_CLASS =
+  'flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-[720px] flex-col gap-0 overflow-hidden p-0 sm:w-[min(720px,calc(100vw-2rem))]';
+
 export const STAGE_COLOR_PRESETS = [
   '#2563eb',
   '#7c3aed',

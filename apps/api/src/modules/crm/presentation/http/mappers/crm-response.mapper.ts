@@ -46,6 +46,9 @@ export const toCrmPipeline = (pipeline: PipelineRecord): CrmPipeline => ({
   status: pipeline.status,
   isDefault: pipeline.isDefault,
   sortOrder: pipeline.sortOrder,
+  leadCount:
+    pipeline.leadCount ??
+    (pipeline.stages ?? []).reduce((sum, stage) => sum + (stage.leadCount ?? 0), 0),
   createdAt: iso(pipeline.createdAt),
   updatedAt: iso(pipeline.updatedAt),
   stages: (pipeline.stages ?? []).map(toCrmPipelineStage),

@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
@@ -20,18 +21,19 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import type { CrmPipeline, CrmPipelineListResponse, CrmPipelineStage } from '@techwin/contracts';
-import type {
-  CreatePipelineStageRequest,
-  CreatePipelineRequest,
-  ReorderPipelineStagesRequest,
-  UpdatePipelineRequest,
-  UpdatePipelineStageRequest,
+import {
+  createPipelineRequestSchema,
+  updatePipelineRequestSchema,
+  type CreatePipelineStageRequest,
+  type CreatePipelineRequest,
+  type ReorderPipelineStagesRequest,
+  type UpdatePipelineRequest,
+  type UpdatePipelineStageRequest,
 } from '@techwin/validation';
 import { z } from 'zod';
 import { CrmUseCases } from '../../../application/crm-use-cases.js';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
 import {
-  createPipelineBodySchema,
   createStageBodySchema,
   crmPipelineListResponseSchema,
   crmPipelineResponseSchema,
@@ -39,7 +41,6 @@ import {
   deleteStageBodySchema,
   reorderStagesBodySchema,
   toOpenApiSchema,
-  updatePipelineBodySchema,
   updateStageBodySchema,
 } from '../dto/crm.schemas.js';
 import { CrmExceptionFilter } from '../filters/crm-exception.filter.js';
@@ -59,8 +60,15 @@ export class PipelineController {
   @Get()
   @ApiOperation({ summary: 'List pipelines for the current organization' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineListResponseSchema) })
-  async list(@CrmContext() ctx: CrmRequestContext): Promise<CrmPipelineListResponse> {
-    const pipelines = await this.crm.listPipelines(ctx);
+  async list(
+    @CrmContext() ctx: CrmRequestContext,
+    @Query('search') search?: string,
+    @Query('status') status?: 'ACTIVE' | 'INACTIVE',
+  ): Promise<CrmPipelineListResponse> {
+    const pipelines = await this.crm.listPipelines(ctx, {
+      search: search?.trim() || undefined,
+      status: status === 'ACTIVE' || status === 'INACTIVE' ? status : undefined,
+    });
     return { pipelines: pipelines.map(toCrmPipeline) };
   }
 
@@ -88,20 +96,22 @@ export class PipelineController {
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineResponseSchema) })
   async create(
     @CrmContext() ctx: CrmRequestContext,
-    @Body({ schema: createPipelineBodySchema }) body: CreatePipelineRequest,
+    @Body() raw: unknown,
   ): Promise<CrmPipeline> {
+    const body: CreatePipelineRequest = createPipelineRequestSchema.parse(raw);
     const pipeline = await this.crm.createPipeline(ctx, body);
     return toCrmPipeline(pipeline);
   }
 
   @Patch(':pipelineId')
-  @ApiOperation({ summary: 'Update pipeline metadata' })
+  @ApiOperation({ summary: 'Update pipeline details and stages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineResponseSchema) })
   async update(
     @CrmContext() ctx: CrmRequestContext,
     @Param('pipelineId') pipelineId: string,
-    @Body({ schema: updatePipelineBodySchema }) body: UpdatePipelineRequest,
+    @Body() raw: unknown,
   ): Promise<CrmPipeline> {
+    const body: UpdatePipelineRequest = updatePipelineRequestSchema.parse(raw);
     const pipeline = await this.crm.updatePipeline(ctx, pipelineId, body);
     return toCrmPipeline(pipeline);
   }

@@ -32,19 +32,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { formControlStateClass } from '@/shared/form/form-control-state';
 import { toDateInputValue } from '@/features/admin/crm/utils/format';
 import { cn } from '@/shared/lib/utils';
 import { CrmFormField } from '@/features/admin/crm/components/crm-feedback';
-import { PROJECT_PHASE_STATUSES } from '../constants';
-import { labelProjectPhaseStatus } from '../utils/labels';
 import {
   validatePhaseScheduleFieldErrors,
   type ProjectPhaseFormRow,
@@ -264,33 +255,6 @@ function SortablePhaseCard({
           />
         </CrmFormField>
       </div>
-
-      {row.persisted ? (
-        <CrmFormField
-          id={`phase-status-${row.key}`}
-          label="Phase status"
-          optional
-          className={cn(compactFieldClass, 'max-w-xs')}
-        >
-          <Select
-            value={row.status}
-            onValueChange={(value) =>
-              onChange(row.key, { status: value as ProjectPhaseFormRow['status'] })
-            }
-          >
-            <SelectTrigger id={`phase-status-${row.key}`} className="min-w-0">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PROJECT_PHASE_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {labelProjectPhaseStatus(status)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CrmFormField>
-      ) : null}
     </div>
   );
 }

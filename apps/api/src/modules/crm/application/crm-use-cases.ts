@@ -31,8 +31,11 @@ export interface CrmActor {
 export class CrmUseCases {
   constructor(@Inject(CRM_REPOSITORY) private readonly crm: CrmRepository) {}
 
-  listPipelines(actor: CrmActor) {
-    return this.crm.listPipelines(actor.organizationId);
+  listPipelines(
+    actor: CrmActor,
+    filters?: import('../domain/repositories/crm.repository.js').PipelineListFilters,
+  ) {
+    return this.crm.listPipelines(actor.organizationId, filters);
   }
 
   getDefaultPipeline(actor: CrmActor) {
@@ -45,7 +48,7 @@ export class CrmUseCases {
 
   createPipeline(
     actor: CrmActor,
-    input: { name: string; description?: string; status?: PipelineStatus },
+    input: import('../domain/repositories/crm.repository.js').CreatePipelineInput,
   ) {
     return this.crm.createPipeline(actor.organizationId, input, {
       type: 'PIPELINE_CREATED',
@@ -59,12 +62,7 @@ export class CrmUseCases {
   updatePipeline(
     actor: CrmActor,
     pipelineId: string,
-    input: {
-      name?: string;
-      description?: string;
-      status?: PipelineStatus;
-      sortOrder?: number;
-    },
+    input: import('../domain/repositories/crm.repository.js').UpdatePipelineInput,
   ) {
     return this.crm.updatePipeline(actor.organizationId, pipelineId, input, {
       type: 'PIPELINE_UPDATED',

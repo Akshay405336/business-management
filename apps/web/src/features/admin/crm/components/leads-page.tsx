@@ -4,9 +4,9 @@ import { API_ERROR_CODES } from '@techwin/contracts';
 import { createLeadRequestSchema, leadListQuerySchema } from '@techwin/validation';
 import { z } from 'zod';
 import { isApiError } from '@/shared/api/api-error';
-import { Eye, Kanban, LayoutList, Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, Kanban, LayoutList, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
 import { focusFirstInvalidField } from '@/shared/form/form-control-state';
 import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
@@ -72,6 +71,8 @@ import {
   CrmLoadingRows,
 } from './crm-feedback';
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from './crm-toolbar-header';
+/** Reuse search field width for pipeline selector on Leads header. */
+const LEADS_PIPELINE_SELECT_CLASS = CRM_HEADER_SEARCH_FORM_CLASS;
 import { KanbanBoard } from './kanban-board';
 import { LeadDetailDialog, type LeadDetailMode } from './lead-detail-sheet';
 import { PipelineStageSelectItems, PipelineStageSelectTrigger } from './pipeline-stage-select';
@@ -83,7 +84,11 @@ type CreateFormErrors = Partial<
   Record<'fullName' | 'stageId' | 'email' | 'phone' | 'estimatedValue' | 'pipelineId', string>
 >;
 
-const SEARCH_DEBOUNCE_MS = 400;
+function orderActivePipelines(pipelines: readonly CrmPipeline[]): CrmPipeline[] {
+  return pipelines
+    .filter((pipeline) => pipeline.status === 'ACTIVE')
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+}
 
 export function LeadsPage() {
   const router = useRouter();
@@ -92,20 +97,17 @@ export function LeadsPage() {
   const { pending, run } = useAsyncAction();
 
   const view: ViewMode = searchParams.get('view') === 'list' ? 'list' : 'kanban';
-  const search = searchParams.get('search') ?? '';
-  const pipelineId = searchParams.get('pipelineId') ?? '';
-  const stageId = searchParams.get('stageId') ?? '';
-  const priority = searchParams.get('priority') ?? '';
-  const source = searchParams.get('source') ?? '';
+  const pipelineIdParam = searchParams.get('pipelineId') ?? '';
   const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1);
   const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') ?? '20') || 20));
 
   const [pipelines, setPipelines] = useState<readonly CrmPipeline[]>([]);
+  const [pipelinesLoading, setPipelinesLoading] = useState(true);
+  const [pipelinesError, setPipelinesError] = useState<string | null>(null);
   const [leads, setLeads] = useState<readonly CrmLead[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchDraft, setSearchDraft] = useState(search);
+  const [leadsLoading, setLeadsLoading] = useState(false);
+  const [leadsError, setLeadsError] = useState<string | null>(null);
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
   const [detailMode, setDetailMode] = useState<LeadDetailMode>('view');
 
@@ -133,7 +135,6 @@ export function LeadsPage() {
     description: '',
   });
   const [createFieldErrors, setCreateFieldErrors] = useState<CreateFormErrors>({});
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateParams = useCallback(
     (patch: Record<string, string | null>) => {
@@ -147,21 +148,33 @@ export function LeadsPage() {
     [router, searchParams],
   );
 
-  const applySearch = useCallback(
-    (value: string) => {
-      const trimmed = value.trim();
-      updateParams({ search: trimmed || null, page: '1' });
-    },
-    [updateParams],
-  );
+  const activePipelines = useMemo(() => orderActivePipelines(pipelines), [pipelines]);
 
-  const query = useMemo((): LeadListQuery => {
+  const selectedPipeline = useMemo(() => {
+    const fromParam = activePipelines.find((pipeline) => pipeline.id === pipelineIdParam);
+    if (fromParam) return fromParam;
+    return activePipelines[0] ?? null;
+  }, [activePipelines, pipelineIdParam]);
+
+  const selectedPipelineId = selectedPipeline?.id ?? '';
+
+  useEffect(() => {
+    if (pipelinesLoading) return;
+    if (!selectedPipeline) {
+      if (pipelineIdParam) {
+        updateParams({ pipelineId: null, page: '1' });
+      }
+      return;
+    }
+    if (pipelineIdParam !== selectedPipeline.id) {
+      updateParams({ pipelineId: selectedPipeline.id, page: '1' });
+    }
+  }, [pipelinesLoading, selectedPipeline, pipelineIdParam, updateParams]);
+
+  const query = useMemo((): LeadListQuery | null => {
+    if (!selectedPipelineId) return null;
     const candidate: LeadListQuery = {
-      search: search.trim() || undefined,
-      pipelineId: pipelineId || undefined,
-      stageId: stageId || undefined,
-      priority: priority ? (priority as LeadPriority) : undefined,
-      source: source ? (source as LeadSource) : undefined,
+      pipelineId: selectedPipelineId,
       includeArchived: true,
       ...(view === 'kanban'
         ? { kanbanOrder: true, page: 1, pageSize: 100 }
@@ -170,22 +183,32 @@ export function LeadsPage() {
     const parsed = leadListQuerySchema.safeParse(candidate);
     if (parsed.success) return parsed.data;
     return view === 'kanban'
-      ? { includeArchived: true, kanbanOrder: true, page: 1, pageSize: 100 }
-      : { includeArchived: true, page: 1, pageSize: 20 };
-  }, [search, pipelineId, stageId, priority, source, view, page, pageSize]);
-
-  const activePipeline = useMemo(() => {
-    const defaultPipeline = pipelines.find((item) => item.isDefault);
-    const id = pipelineId || defaultPipeline?.id || pipelines[0]?.id;
-    return pipelines.find((item) => item.id === id) ?? defaultPipeline ?? pipelines[0] ?? null;
-  }, [pipelineId, pipelines]);
+      ? {
+          pipelineId: selectedPipelineId,
+          includeArchived: true,
+          kanbanOrder: true,
+          page: 1,
+          pageSize: 100,
+        }
+      : {
+          pipelineId: selectedPipelineId,
+          includeArchived: true,
+          page: 1,
+          pageSize: 20,
+        };
+  }, [selectedPipelineId, view, page, pageSize]);
 
   const stages = useMemo(
     () =>
-      [...(activePipeline?.stages ?? [])]
+      [...(selectedPipeline?.stages ?? [])]
         .filter((stage) => stage.status === 'ACTIVE')
         .sort((a, b) => a.sortOrder - b.sortOrder),
-    [activePipeline?.stages],
+    [selectedPipeline?.stages],
+  );
+
+  const pipelineLeads = useMemo(
+    () => leads.filter((lead) => lead.pipelineId === selectedPipelineId),
+    [leads, selectedPipelineId],
   );
 
   const createLiveFields = useZodFormFields(
@@ -210,12 +233,28 @@ export function LeadsPage() {
 
   const stageById = useMemo(() => new Map(stages.map((stage) => [stage.id, stage])), [stages]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadPipelines = useCallback(async () => {
+    setPipelinesLoading(true);
     try {
       const pipelineResult = await listPipelines();
       setPipelines(pipelineResult.pipelines);
+      setPipelinesError(null);
+    } catch (failure) {
+      setPipelinesError(describeCrmError(failure));
+    } finally {
+      setPipelinesLoading(false);
+    }
+  }, []);
 
+  const loadLeads = useCallback(async () => {
+    if (!query) {
+      setLeads([]);
+      setTotal(0);
+      return;
+    }
+    setLeads([]);
+    setLeadsLoading(true);
+    try {
       let leadQuery = query;
       let leadResult;
       try {
@@ -232,52 +271,41 @@ export function LeadsPage() {
 
       setLeads(leadResult.items);
       setTotal(leadResult.total);
-      setError(null);
-      if (!pipelineId) {
-        const preferred =
-          pipelineResult.pipelines.find((item) => item.isDefault) ?? pipelineResult.pipelines[0];
-        if (preferred) updateParams({ pipelineId: preferred.id });
-      }
+      setLeadsError(null);
     } catch (failure) {
-      setError(describeCrmError(failure));
+      setLeadsError(describeCrmError(failure));
     } finally {
-      setLoading(false);
+      setLeadsLoading(false);
     }
-  }, [query, pipelineId, updateParams]);
+  }, [query]);
+
+  const reloadAll = useCallback(async () => {
+    await loadPipelines();
+    await loadLeads();
+  }, [loadPipelines, loadLeads]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadPipelines();
+  }, [loadPipelines]);
 
   useEffect(() => {
-    setSearchDraft(search);
-  }, [search]);
+    void loadLeads();
+  }, [loadLeads]);
 
   useEffect(() => {
-    if (searchDraft === search) return;
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => {
-      applySearch(searchDraft);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => {
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    };
-  }, [searchDraft, search, applySearch]);
-
-  useEffect(() => {
-    if (!createOpen || !activePipeline) return;
+    if (!createOpen || !selectedPipeline) return;
     setCreateForm((form) => {
       const stageValid = stages.some((stage) => stage.id === form.stageId);
       return {
         ...form,
-        pipelineId: activePipeline.id,
+        pipelineId: selectedPipeline.id,
         stageId: stageValid ? form.stageId : (stages[0]?.id ?? ''),
       };
     });
-  }, [createOpen, activePipeline, stages]);
+  }, [createOpen, selectedPipeline, stages]);
 
   const onCreateLead = async () => {
-    const pipelineId = activePipeline?.id ?? createForm.pipelineId;
+    const pipelineId = selectedPipeline?.id ?? createForm.pipelineId;
     const tags = createForm.tags
       .split(',')
       .map((tag) => tag.trim())
@@ -317,13 +345,13 @@ export function LeadsPage() {
     }
 
     setCreateFieldErrors({});
-    setError(null);
+    setLeadsError(null);
     try {
       await run(() => createLead(parsed.data));
       setCreateOpen(false);
-      await load();
+      await loadLeads();
     } catch (failure) {
-      setError(describeCrmError(failure));
+      setLeadsError(describeCrmError(failure));
     }
   };
 
@@ -336,13 +364,13 @@ export function LeadsPage() {
     stageId: string;
     beforeLeadId: string | null;
   }) => {
-    const lead = leads.find((item) => item.id === leadId);
+    const lead = pipelineLeads.find((item) => item.id === leadId);
     const nextStageName = stages.find((stage) => stage.id === stageId)?.name ?? 'stage';
     const stageChanged = lead?.stageId !== stageId;
     try {
       await run(() => changeLeadStage(leadId, { stageId, beforeLeadId }));
       if (stageChanged) toast.success(`Lead moved to ${nextStageName}.`);
-      await load();
+      await loadLeads();
     } catch (failure) {
       toast.error(describeCrmError(failure));
       throw failure;
@@ -350,34 +378,33 @@ export function LeadsPage() {
   };
 
   const moveLeadToStage = async (leadId: string, nextStageId: string) => {
-    const lead = leads.find((item) => item.id === leadId);
+    const lead = pipelineLeads.find((item) => item.id === leadId);
     if (lead?.stageId === nextStageId) return;
     await persistLeadKanbanMove({ leadId, stageId: nextStageId, beforeLeadId: null });
   };
 
   const deleteLeadTarget = useMemo(
-    () => leads.find((lead) => lead.id === deleteLeadId) ?? null,
-    [leads, deleteLeadId],
+    () => pipelineLeads.find((lead) => lead.id === deleteLeadId) ?? null,
+    [pipelineLeads, deleteLeadId],
   );
 
   const confirmDeleteLead = async () => {
     if (!deleteLeadId) return;
-    setError(null);
+    setLeadsError(null);
     try {
       await run(() => deleteLead(deleteLeadId));
       if (detailLeadId === deleteLeadId) setDetailLeadId(null);
       setDeleteLeadId(null);
       toast.success('Lead deleted.');
-      await load();
+      await loadLeads();
     } catch (failure) {
       toast.error(describeCrmError(failure));
     }
   };
 
   const openCreate = () => {
-    const defaultPipeline =
-      activePipeline ?? pipelines.find((item) => item.isDefault) ?? pipelines[0];
-    const firstActiveStage = [...(defaultPipeline?.stages ?? [])]
+    if (!selectedPipeline) return;
+    const firstActiveStage = [...(selectedPipeline.stages ?? [])]
       .filter((stage) => stage.status === 'ACTIVE')
       .sort((a, b) => a.sortOrder - b.sortOrder)[0];
     setCreateForm({
@@ -387,7 +414,7 @@ export function LeadsPage() {
       phone: '',
       website: '',
       source: 'WEBSITE',
-      pipelineId: defaultPipeline?.id ?? '',
+      pipelineId: selectedPipeline.id,
       stageId: firstActiveStage?.id ?? '',
       priority: 'MEDIUM',
       estimatedValue: '0',
@@ -407,28 +434,19 @@ export function LeadsPage() {
     { label: 'Leads' },
   ] as const;
 
-  const listFiltersActive = Boolean(
-    search.trim() || stageId || priority || source || pipelineId,
-  );
+  const pageError = pipelinesError ?? leadsError;
   const listTablePhase = deriveDataTablePhase({
-    loading: loading && view === 'list',
-    error,
-    rowCount: leads.length,
+    loading: (pipelinesLoading || leadsLoading) && view === 'list',
+    error: pageError,
+    rowCount: selectedPipeline ? pipelineLeads.length : 0,
   });
   const listTableRefreshing = isDataTableRefreshing({
-    loading: loading && view === 'list',
-    rowCount: leads.length,
+    loading: leadsLoading && view === 'list',
+    rowCount: pipelineLeads.length,
   });
 
-  const clearListFilters = () => {
-    setSearchDraft('');
-    updateParams({
-      search: null,
-      stageId: null,
-      priority: null,
-      source: null,
-      page: '1',
-    });
+  const onPipelineChange = (nextPipelineId: string) => {
+    updateParams({ pipelineId: nextPipelineId, page: '1' });
   };
 
   return (
@@ -439,24 +457,25 @@ export function LeadsPage() {
         description="Track opportunities in a list or kanban board."
         toolbar={
           <>
-            <form
-              className={CRM_HEADER_SEARCH_FORM_CLASS}
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                applySearch(searchDraft);
-              }}
+            <Select
+              value={selectedPipelineId || undefined}
+              onValueChange={onPipelineChange}
+              disabled={pipelinesLoading || activePipelines.length === 0}
             >
-              <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0">
-                <Input
-                  className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
-                  placeholder={CRM_FORM_PLACEHOLDERS.searchLeads}
-                  value={searchDraft}
-                  onChange={(event) => setSearchDraft(event.target.value)}
-                  aria-label="Search leads"
-                />
-              </InputGroup>
-            </form>
+              <SelectTrigger
+                className={cn('h-9', LEADS_PIPELINE_SELECT_CLASS)}
+                aria-label="Pipeline"
+              >
+                <SelectValue placeholder="Select pipeline" />
+              </SelectTrigger>
+              <SelectContent>
+                {activePipelines.map((pipeline) => (
+                  <SelectItem key={pipeline.id} value={pipeline.id}>
+                    {pipeline.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="flex shrink-0 items-center gap-2">
               <Tabs
                 value={view}
@@ -475,7 +494,13 @@ export function LeadsPage() {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
-              <Button type="button" size="sm" className="h-9 shrink-0" onClick={openCreate}>
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 shrink-0"
+                disabled={!selectedPipeline || stages.length === 0}
+                onClick={openCreate}
+              >
                 <Plus aria-hidden="true" />
                 New Lead
               </Button>
@@ -484,11 +509,22 @@ export function LeadsPage() {
         }
       />
 
-      {error && leads.length > 0 ? <CrmErrorAlert message={error} /> : null}
+      {pageError && pipelineLeads.length > 0 ? <CrmErrorAlert message={pageError} /> : null}
 
-      {loading && view === 'kanban' ? <CrmLoadingRows rows={6} /> : null}
+      {pipelinesLoading ? <CrmLoadingRows rows={4} /> : null}
 
-      {view === 'list' ? (
+      {!pipelinesLoading && activePipelines.length === 0 ? (
+        <CrmEmptyState
+          title="No active pipelines"
+          description="Activate a pipeline on the Pipeline page before managing leads."
+        />
+      ) : null}
+
+      {!pipelinesLoading && activePipelines.length > 0 && leadsLoading && view === 'kanban' ? (
+        <CrmLoadingRows rows={6} />
+      ) : null}
+
+      {!pipelinesLoading && activePipelines.length > 0 && view === 'list' ? (
         <DataTable
           phase={listTablePhase}
           colSpan={6}
@@ -504,17 +540,18 @@ export function LeadsPage() {
             </TableRow>
           }
           empty={{
-            title: listFiltersActive ? 'No results match your filters' : 'No leads yet',
-            description: listFiltersActive
-              ? 'Try a different search term or filter, or clear filters to see all leads.'
-              : 'Create a lead to start tracking opportunities in your pipeline.',
-            action: listFiltersActive ? undefined : { label: 'Create lead', onClick: openCreate },
-            secondaryAction: listFiltersActive
-              ? { label: 'Clear filters', onClick: clearListFilters }
-              : undefined,
+            title: 'No leads in this pipeline',
+            description:
+              stages.length === 0
+                ? 'Add active stages to this pipeline before creating leads.'
+                : 'Create a lead to start tracking opportunities in this workflow.',
+            action:
+              stages.length > 0 && selectedPipeline
+                ? { label: 'Create lead', onClick: openCreate }
+                : undefined,
           }}
-          errorMessage={error}
-          onRetry={() => void load()}
+          errorMessage={pageError}
+          onRetry={() => void reloadAll()}
           refreshing={listTableRefreshing}
           footer={
             <TablePagination
@@ -529,7 +566,7 @@ export function LeadsPage() {
             />
           }
         >
-          {leads.map((lead) => (
+          {pipelineLeads.map((lead) => (
             <TableRow key={lead.id}>
               <TableCell>
                 <div className="grid">
@@ -582,16 +619,19 @@ export function LeadsPage() {
         </DataTable>
       ) : null}
 
-      {!loading && view === 'kanban' ? (
-        activePipeline && stages.length === 0 ? (
+      {!pipelinesLoading &&
+      activePipelines.length > 0 &&
+      !leadsLoading &&
+      view === 'kanban' ? (
+        selectedPipeline && stages.length === 0 ? (
           <CrmEmptyState
-            title="No active pipeline stages"
-            description="Configure at least one active stage on the Pipeline page before using the Kanban board."
+            title="No active stages"
+            description="Add at least one active stage to this pipeline on the Pipeline page."
           />
-        ) : activePipeline ? (
+        ) : selectedPipeline ? (
           <KanbanBoard
             stages={stages}
-            leads={leads}
+            leads={pipelineLeads}
             disabled={pending}
             onPersistMove={persistLeadKanbanMove}
             onView={(leadId) => openLeadDetail(leadId, 'view')}
@@ -599,12 +639,7 @@ export function LeadsPage() {
             onDelete={setDeleteLeadId}
             onStageChange={(leadId, stageId) => void moveLeadToStage(leadId, stageId)}
           />
-        ) : (
-          <CrmEmptyState
-            title="Select a pipeline"
-            description="Choose a pipeline to view the board."
-          />
-        )
+        ) : null
       ) : null}
 
       <LeadDetailDialog
@@ -615,7 +650,7 @@ export function LeadsPage() {
         onOpenChange={(open) => {
           if (!open) setDetailLeadId(null);
         }}
-        onUpdated={() => void load()}
+        onUpdated={() => void loadLeads()}
       />
 
       <AlertDialog
@@ -661,8 +696,8 @@ export function LeadsPage() {
           <DialogHeader className="space-y-1 px-6 pt-6 pb-2">
             <DialogTitle>Create lead</DialogTitle>
             <DialogDescription>
-              Adds to {activePipeline?.name ?? 'your default pipeline'}. Pipeline is chosen
-              automatically.
+              Adds to {selectedPipeline?.name ?? 'the selected pipeline'}. Stages are limited to
+              that pipeline.
             </DialogDescription>
           </DialogHeader>
           <div className={cn('max-h-[min(62vh,520px)] overflow-y-auto px-6 py-2', formGridClass)}>

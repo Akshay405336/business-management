@@ -40,6 +40,7 @@ export interface PipelineRecord {
   readonly status: PipelineStatus;
   readonly isDefault: boolean;
   readonly sortOrder: number;
+  readonly leadCount?: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly stages?: readonly PipelineStageRecord[];
@@ -203,10 +204,22 @@ export interface LeadListFilters {
   readonly pageSize: number;
 }
 
+export interface PipelineStageInput {
+  readonly id?: string;
+  readonly name: string;
+  readonly color: string;
+}
+
+export interface PipelineListFilters {
+  readonly search?: string;
+  readonly status?: PipelineStatus;
+}
+
 export interface CreatePipelineInput {
   readonly name: string;
   readonly description?: string;
   readonly status?: PipelineStatus;
+  readonly stages: readonly PipelineStageInput[];
 }
 
 export interface UpdatePipelineInput {
@@ -214,6 +227,7 @@ export interface UpdatePipelineInput {
   readonly description?: string;
   readonly status?: PipelineStatus;
   readonly sortOrder?: number;
+  readonly stages?: readonly PipelineStageInput[];
 }
 
 export interface CreateStageInput {
@@ -394,7 +408,10 @@ export interface CrmRepository {
   ensureOrganizationForAdmin(adminId: string): Promise<{ readonly organizationId: string }>;
 
   ensureDefaultPipeline(organizationId: string): Promise<PipelineRecord>;
-  listPipelines(organizationId: string): Promise<readonly PipelineRecord[]>;
+  listPipelines(
+    organizationId: string,
+    filters?: PipelineListFilters,
+  ): Promise<readonly PipelineRecord[]>;
   getPipeline(organizationId: string, pipelineId: string): Promise<PipelineRecord | null>;
   getDefaultPipeline(organizationId: string): Promise<PipelineRecord>;
   createPipeline(

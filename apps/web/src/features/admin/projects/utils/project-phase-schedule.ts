@@ -5,8 +5,6 @@ import {
   suggestPhaseStartDate,
   type ProjectPhaseScheduleContext,
 } from '@techwin/validation';
-import type { ProjectPhaseStatus } from '../types';
-
 export type ProjectPhaseFormRow = {
   key: string;
   id: string | null;
@@ -15,7 +13,6 @@ export type ProjectPhaseFormRow = {
   description: string;
   startDate: string;
   expectedEndDate: string;
-  status: ProjectPhaseStatus;
   /** When true, start date is maintained by auto-scheduling until the user edits it. */
   startDateAuto: boolean;
   /** When true, expected end is maintained by auto-scheduling until the user edits it. */

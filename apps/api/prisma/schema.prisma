@@ -75,6 +75,7 @@ model PlatformAdmin {
   managedProjects  Project[]          @relation("ProjectManager")
   createdProjects  Project[]          @relation("ProjectCreator")
   ownedProjectPhases ProjectPhase[]   @relation("PhaseOwner")
+  assignedProjectTasks ProjectTask[] @relation("ProjectTaskAssignee")
 
   @@index([organizationId])
   @@map("platform_admins")
@@ -170,6 +171,7 @@ model Organization {
   servicePackages ServicePackage[]
   projects        Project[]
   projectPhases   ProjectPhase[]
+  projectTasks    ProjectTask[]
   sequences       OrganizationSequence[]
   auditEvents     CrmAuditEvent[]
 
@@ -615,6 +617,7 @@ model Project {
   projectManager  PlatformAdmin?    @relation("ProjectManager", fields: [projectManagerAdminId], references: [id], onDelete: SetNull)
   createdBy       PlatformAdmin     @relation("ProjectCreator", fields: [createdByAdminId], references: [id], onDelete: Restrict)
   phases          ProjectPhase[]
+  tasks           ProjectTask[]
 
   @@unique([organizationId, projectNumber])
   @@index([organizationId, status, currentPhase])
@@ -640,9 +643,51 @@ model ProjectPhase {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner        PlatformAdmin? @relation("PhaseOwner", fields: [ownerAdminId], references: [id], onDelete: SetNull)
+  tasks        ProjectTask[]
 
   @@index([organizationId, projectId])
   @@map("project_phases")
+}
+
+enum ProjectTaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+}
+
+enum ProjectTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model ProjectTask {
+  id               String              @id @db.Uuid
+  organizationId   String              @map("organization_id") @db.Uuid
+  projectId        String              @map("project_id") @db.Uuid
+  phaseId          String              @map("phase_id") @db.Uuid
+  title            String              @db.VarChar(200)
+  description      String              @default("") @db.VarChar(4000)
+  status           ProjectTaskStatus   @default(TODO)
+  priority         ProjectTaskPriority @default(MEDIUM)
+  assigneeAdminId  String?             @map("assignee_admin_id") @db.Uuid
+  startDate        DateTime?           @map("start_date") @db.Date
+  dueDate          DateTime?           @map("due_date") @db.Date
+  labels           String[]            @default([])
+  sortOrder        Int                 @map("sort_order")
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase        ProjectPhase  @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+  assignee     PlatformAdmin? @relation("ProjectTaskAssignee", fields: [assigneeAdminId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, projectId])
+  @@index([organizationId, phaseId, sortOrder])
+  @@map("project_tasks")
 }
 
 enum CrmAuditEventType {

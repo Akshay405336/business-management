@@ -11,8 +11,22 @@ import type {
   UpdatePipelineStageRequest,
 } from '../types';
 
-export function listPipelines(signal?: AbortSignal): Promise<CrmPipelineListResponse> {
-  return apiRequest<CrmPipelineListResponse>(CRM_ROUTES.pipelines, { auth: true, signal });
+export type PipelineListQuery = {
+  search?: string;
+  status?: 'ACTIVE' | 'INACTIVE';
+};
+
+export function listPipelines(
+  query?: PipelineListQuery,
+  signal?: AbortSignal,
+): Promise<CrmPipelineListResponse> {
+  const params = new URLSearchParams();
+  const search = query?.search?.trim();
+  if (search) params.set('search', search);
+  if (query?.status) params.set('status', query.status);
+  const qs = params.toString();
+  const path = qs ? `${CRM_ROUTES.pipelines}?${qs}` : CRM_ROUTES.pipelines;
+  return apiRequest<CrmPipelineListResponse>(path, { auth: true, signal });
 }
 
 export function getDefaultPipeline(signal?: AbortSignal): Promise<CrmPipeline> {
