@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import { normalizeIsoDateOnlyInput, projectListQuerySchema } from './project.schemas.js';
+import { projectTaskPrioritySchema } from './project-task-priority.schema.js';
+
+export { projectTaskPrioritySchema };
 
 const dateOnlyOptional = z.preprocess(
   (value) => {
@@ -19,8 +22,6 @@ const optionalNullableUuid = z.preprocess(
 );
 
 export const projectTaskStatusSchema = z.enum(['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'COMPLETED']);
-
-export const projectTaskPrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']);
 
 const labelsSchema = z
   .array(z.string().trim().min(1).max(40))

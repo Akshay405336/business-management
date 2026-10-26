@@ -32,7 +32,10 @@ export class CrmConflictError extends CrmError {
 
 export class CrmValidationError extends CrmError {
   readonly code = 'VALIDATION_FAILED';
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly details?: readonly { path: string; message: string }[],
+  ) {
     super(message);
   }
 }

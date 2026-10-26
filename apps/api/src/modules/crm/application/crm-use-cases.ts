@@ -12,6 +12,14 @@ import type {
 } from '../domain/crm-types.js';
 import { CrmNotFoundError } from '../domain/errors/crm.errors.js';
 import {
+  assertLeadContactAvailable,
+  normalizeLeadContactForPersistence,
+} from './lead-contact-uniqueness.js';
+import {
+  normalizedLeadEmailOrNull,
+  normalizedLeadPhoneOrNull,
+} from '@techwin/validation';
+import {
   CRM_REPOSITORY,
   type ChangeServicePackageStatusInput,
   type CreateProposalInput,
@@ -174,7 +182,7 @@ export class CrmUseCases {
     return this.require(this.crm.getLead(actor.organizationId, leadId), 'Lead');
   }
 
-  createLead(
+  async createLead(
     actor: CrmActor,
     input: {
       fullName: string;
@@ -195,10 +203,22 @@ export class CrmUseCases {
       tags?: readonly string[];
     },
   ) {
+    const contact = normalizeLeadContactForPersistence({
+      phone: input.phone,
+      email: input.email,
+    });
+    await assertLeadContactAvailable(this.crm, actor.organizationId, {
+      phone: contact.phone ?? null,
+      email: contact.email ?? null,
+    });
     const leadId = crypto.randomUUID();
     return this.crm.createLead(
       actor.organizationId,
-      { ...input, createdByAdminId: actor.adminId },
+      {
+        ...input,
+        ...contact,
+        createdByAdminId: actor.adminId,
+      },
       {
         type: 'LEAD_CREATED',
         adminId: actor.adminId,
@@ -208,7 +228,7 @@ export class CrmUseCases {
     );
   }
 
-  updateLead(
+  async updateLead(
     actor: CrmActor,
     leadId: string,
     input: {
@@ -231,12 +251,30 @@ export class CrmUseCases {
       archived?: boolean;
     },
   ) {
+    const existing = await this.getLead(actor, leadId);
     const { archived, ...rest } = input;
+    const contact = normalizeLeadContactForPersistence(rest);
+    await assertLeadContactAvailable(
+      this.crm,
+      actor.organizationId,
+      {
+        phone:
+          rest.phone !== undefined
+            ? (contact.phone ?? null)
+            : normalizedLeadPhoneOrNull(existing.phone),
+        email:
+          rest.email !== undefined
+            ? (contact.email ?? null)
+            : normalizedLeadEmailOrNull(existing.email),
+      },
+      { excludeLeadId: leadId },
+    );
     return this.crm.updateLead(
       actor.organizationId,
       leadId,
       {
         ...rest,
+        ...contact,
         archivedAt: archived === undefined ? undefined : archived ? new Date() : null,
       },
       {

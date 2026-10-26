@@ -4,6 +4,9 @@ export const PROJECT_ROUTES = {
   projects: `${API_PREFIX}/projects`,
   project: (id: string) => `${API_PREFIX}/projects/${id}`,
   projectStatus: (id: string) => `${API_PREFIX}/projects/${id}/status`,
+  projectPlan: (id: string) => `${API_PREFIX}/projects/${id}/plan`,
+  projectStartProduction: (id: string) => `${API_PREFIX}/projects/${id}/start-production`,
+  projectComplete: (id: string) => `${API_PREFIX}/projects/${id}/complete`,
   projectNumberPreview: `${API_PREFIX}/projects/number-preview`,
   projectManagers: `${API_PREFIX}/projects/managers`,
   clientQuotations: (clientId: string) => `${API_PREFIX}/projects/clients/${clientId}/quotations`,
@@ -21,7 +24,18 @@ export type ProjectLifecyclePhase =
 
 export type ProjectPhaseStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED';
 
-export type ProjectLifecycleTab = 'ALL' | 'UPCOMING' | 'ONGOING' | 'COMPLETED';
+export type ProjectExecutionLifecycle =
+  | 'NOT_PLANNED'
+  | 'PLANNED'
+  | 'IN_PRODUCTION'
+  | 'COMPLETED';
+
+export type ProjectLifecycleTab =
+  | 'ALL'
+  | 'NOT_PLANNED'
+  | 'PLANNED'
+  | 'IN_PRODUCTION'
+  | 'COMPLETED';
 
 export interface ProjectManagerOption {
   readonly id: string;
@@ -51,6 +65,9 @@ export interface ProjectListItem {
   readonly priority: ProjectPriority;
   readonly startDate: string;
   readonly status: ProjectStatus;
+  readonly executionLifecycle: ProjectExecutionLifecycle;
+  readonly actualProductionStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly phaseCount: number;
   readonly progressPercent: number;
 }
@@ -79,8 +96,9 @@ export interface ProjectDetail extends ProjectListItem {
 
 export interface ProjectListTabCounts {
   readonly all: number;
-  readonly upcoming: number;
-  readonly ongoing: number;
+  readonly notPlanned: number;
+  readonly planned: number;
+  readonly inProduction: number;
   readonly completed: number;
 }
 

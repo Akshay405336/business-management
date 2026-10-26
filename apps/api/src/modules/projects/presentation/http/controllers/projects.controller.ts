@@ -25,8 +25,10 @@ import {
   changeProjectStatusRequestSchema,
   createProjectRequestSchema,
   parseProjectListQuery,
+  saveProjectPlanRequestSchema,
   updateProjectRequestSchema,
   type CreateProjectRequest,
+  type SaveProjectPlanRequest,
   type UpdateProjectRequest,
 } from '@techwin/validation';
 import { z } from 'zod';
@@ -45,6 +47,9 @@ import { ListProjectManagersHandler } from '../../../application/list-project-ma
 import { ListProjectsHandler } from '../../../application/list-projects/list-projects.handler.js';
 import { PreviewProjectNumberHandler } from '../../../application/preview-project-number/preview-project-number.handler.js';
 import { UpdateProjectHandler } from '../../../application/update-project/update-project.handler.js';
+import { CompleteProjectHandler } from '../../../application/complete-project/complete-project.handler.js';
+import { SaveProjectPlanHandler } from '../../../application/save-project-plan/save-project-plan.handler.js';
+import { StartProjectProductionHandler } from '../../../application/start-project-production/start-project-production.handler.js';
 import {
   clientQuotationOptionSchema,
   projectDetailResponseSchema,
@@ -94,6 +99,10 @@ export class ProjectsController {
     private readonly listProjectManagers: ListProjectManagersHandler,
     @Inject(ListClientQuotationsHandler)
     private readonly listClientQuotationsHandler: ListClientQuotationsHandler,
+    @Inject(SaveProjectPlanHandler) private readonly saveProjectPlan: SaveProjectPlanHandler,
+    @Inject(StartProjectProductionHandler)
+    private readonly startProjectProduction: StartProjectProductionHandler,
+    @Inject(CompleteProjectHandler) private readonly completeProject: CompleteProjectHandler,
   ) {}
 
   @Get()
@@ -184,6 +193,44 @@ export class ProjectsController {
       projectId: id,
       input: toUpdateProjectInput(body),
     });
+    return toProjectDetail(project);
+  }
+
+  @Post(':id/plan')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Save project execution plan' })
+  @ApiOkResponse({ schema: toOpenApiSchema(projectDetailResponseSchema) })
+  async savePlan(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('id') id: string,
+    @Body() raw: unknown,
+  ): Promise<ProjectDetail> {
+    const body: SaveProjectPlanRequest = saveProjectPlanRequestSchema.parse(raw);
+    const project = await this.saveProjectPlan.execute(toProjectActor(ctx), id, body);
+    return toProjectDetail(project);
+  }
+
+  @Post(':id/start-production')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start project production' })
+  @ApiOkResponse({ schema: toOpenApiSchema(projectDetailResponseSchema) })
+  async startProduction(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('id') id: string,
+  ): Promise<ProjectDetail> {
+    const project = await this.startProjectProduction.execute(toProjectActor(ctx), id);
+    return toProjectDetail(project);
+  }
+
+  @Post(':id/complete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Complete project' })
+  @ApiOkResponse({ schema: toOpenApiSchema(projectDetailResponseSchema) })
+  async complete(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('id') id: string,
+  ): Promise<ProjectDetail> {
+    const project = await this.completeProject.execute(toProjectActor(ctx), id);
     return toProjectDetail(project);
   }
 

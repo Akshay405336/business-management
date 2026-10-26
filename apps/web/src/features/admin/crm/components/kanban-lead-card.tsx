@@ -15,11 +15,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
+import {
+  LeadEmailIconButton,
+  LeadEmailTextRow,
+  LeadPhoneTextRow,
+  LeadWhatsAppIconButton,
+  stopLeadCardPointer,
+} from './lead-contact-quick-actions';
 import { PipelineStageMenuRadioItem } from './pipeline-stage-menu-items';
 import type { CrmLead, CrmPipelineStage } from '../types';
 
 function stopCardPointer(event: PointerEvent) {
-  event.stopPropagation();
+  stopLeadCardPointer(event);
 }
 
 function KanbanCardActions({
@@ -138,7 +145,6 @@ export function KanbanLeadCard({
   onStageChange: (stageId: string) => void;
 }) {
   const company = lead.companyName?.trim();
-  const phone = lead.phone?.trim();
 
   return (
     <div
@@ -156,13 +162,16 @@ export function KanbanLeadCard({
         <p className="text-muted-foreground truncate text-[13px] leading-tight">{company}</p>
       ) : null}
 
-      {phone ? (
-        <p className="text-muted-foreground truncate text-[13px] leading-tight tabular-nums">{phone}</p>
-      ) : null}
+      <LeadPhoneTextRow phone={lead.phone} />
+      <LeadEmailTextRow email={lead.email} />
 
       <div className="flex items-center justify-between gap-1">
         <PriorityBadge priority={lead.priority} className="px-1.5 py-0.5 leading-none" />
-        <KanbanStageChangeButton lead={lead} stages={stages} onStageChange={onStageChange} />
+        <div className="flex shrink-0 items-center gap-0">
+          <LeadWhatsAppIconButton phone={lead.phone} />
+          <LeadEmailIconButton email={lead.email} />
+          <KanbanStageChangeButton lead={lead} stages={stages} onStageChange={onStageChange} />
+        </div>
       </div>
     </div>
   );

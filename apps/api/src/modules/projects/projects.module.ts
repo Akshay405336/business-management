@@ -11,6 +11,9 @@ import { ListProjectManagersHandler } from './application/list-project-managers/
 import { ListProjectsHandler } from './application/list-projects/list-projects.handler.js';
 import { PreviewProjectNumberHandler } from './application/preview-project-number/preview-project-number.handler.js';
 import { UpdateProjectHandler } from './application/update-project/update-project.handler.js';
+import { CompleteProjectHandler } from './application/complete-project/complete-project.handler.js';
+import { SaveProjectPlanHandler } from './application/save-project-plan/save-project-plan.handler.js';
+import { StartProjectProductionHandler } from './application/start-project-production/start-project-production.handler.js';
 import { CreateProjectTaskHandler } from './application/create-project-task/create-project-task.handler.js';
 import { DeleteProjectTaskHandler } from './application/delete-project-task/delete-project-task.handler.js';
 import { GetProjectTaskBoardHandler } from './application/get-project-task-board/get-project-task-board.handler.js';
@@ -50,6 +53,9 @@ export const projectPersistenceProviders: Provider[] = [
     PreviewProjectNumberHandler,
     ListProjectManagersHandler,
     ListClientQuotationsHandler,
+    SaveProjectPlanHandler,
+    StartProjectProductionHandler,
+    CompleteProjectHandler,
     ProjectExceptionFilter,
   ],
 })

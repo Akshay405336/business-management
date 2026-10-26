@@ -58,8 +58,9 @@ export const projectTaskSummaryListResponseSchema = z.object({
   pageSize: z.number().int(),
   tabCounts: z.object({
     all: z.number().int(),
-    upcoming: z.number().int(),
-    ongoing: z.number().int(),
+    notPlanned: z.number().int(),
+    planned: z.number().int(),
+    inProduction: z.number().int(),
     completed: z.number().int(),
   }),
 });

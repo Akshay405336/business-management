@@ -2,7 +2,7 @@ import { Catch, HttpStatus, type ArgumentsHost, type ExceptionFilter } from '@ne
 import { API_ERROR_CODES, type ApiErrorCode } from '@techwin/contracts';
 import type { Request, Response } from 'express';
 import { sendApiError } from '../../../../../common/filters/api-error.response.js';
-import { CrmError, type CrmErrorCode } from '../../../domain/errors/crm.errors.js';
+import { CrmError, CrmValidationError, type CrmErrorCode } from '../../../domain/errors/crm.errors.js';
 
 const HTTP_MAPPING: Record<CrmErrorCode, { status: number; code: ApiErrorCode }> = {
   NOT_FOUND: { status: HttpStatus.NOT_FOUND, code: API_ERROR_CODES.NOT_FOUND },
@@ -28,6 +28,7 @@ export class CrmExceptionFilter implements ExceptionFilter<CrmError> {
       status: mapping.status,
       code: mapping.code,
       message: error.message,
+      details: error instanceof CrmValidationError ? error.details : undefined,
     });
   }
 }

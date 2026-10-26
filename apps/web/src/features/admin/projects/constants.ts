@@ -26,8 +26,16 @@ export const PROJECT_PHASE_STATUSES = [
 
 export const PROJECT_LIFECYCLE_TABS = [
   'ALL',
-  'UPCOMING',
-  'ONGOING',
+  'NOT_PLANNED',
+  'PLANNED',
+  'IN_PRODUCTION',
+  'COMPLETED',
+] as const;
+
+export const PROJECT_EXECUTION_LIFECYCLES = [
+  'NOT_PLANNED',
+  'PLANNED',
+  'IN_PRODUCTION',
   'COMPLETED',
 ] as const;
 

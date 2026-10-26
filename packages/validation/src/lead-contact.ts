@@ -29,3 +29,28 @@ export const leadPhoneSchema = z
   .min(1, LEAD_PHONE_REQUIRED)
   .transform(normalizeIndianMobileInput)
   .pipe(z.string().regex(/^[6-9]\d{9}$/, LEAD_PHONE_INVALID));
+
+/** Canonical 10-digit mobile for persistence and duplicate checks. */
+export function normalizedLeadPhoneForStorage(phone: string): string {
+  return normalizeIndianMobileInput(phone.trim());
+}
+
+/** Returns null when the value is empty; otherwise normalized storage form. */
+export function normalizedLeadPhoneOrNull(phone: string | null | undefined): string | null {
+  if (phone === null || phone === undefined) return null;
+  const trimmed = phone.trim();
+  if (!trimmed) return null;
+  return normalizedLeadPhoneForStorage(trimmed);
+}
+
+/** Canonical lowercase email for persistence and duplicate checks. */
+export function normalizedLeadEmailForStorage(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+export function normalizedLeadEmailOrNull(email: string | null | undefined): string | null {
+  if (email === null || email === undefined) return null;
+  const trimmed = email.trim();
+  if (!trimmed) return null;
+  return normalizedLeadEmailForStorage(trimmed);
+}

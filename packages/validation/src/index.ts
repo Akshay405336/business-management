@@ -9,6 +9,7 @@ export * from './proposal-document-code.js';
 export * from './proposal-pricing.js';
 export * from './platform-auth.schemas.js';
 export * from './project.schemas.js';
+export * from './project-task-priority.schema.js';
 export * from './project-task.schemas.js';
 export * from './project-phase-schedule.js';
 export * from './project-number.js';

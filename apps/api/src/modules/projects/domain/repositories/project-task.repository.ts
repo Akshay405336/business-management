@@ -22,6 +22,8 @@ export interface ProjectTaskRecord {
   readonly assignee: ProjectTaskAssigneeRecord | null;
   readonly startDate: string | null;
   readonly dueDate: string | null;
+  readonly actualStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly labels: readonly string[];
   readonly sortOrder: number;
   readonly createdAt: string;
@@ -34,6 +36,8 @@ export interface ProjectTaskSummaryPhaseRecord {
   readonly status: import('../project-types.js').ProjectPhaseStatus;
   readonly startDate: string;
   readonly expectedEndDate: string;
+  readonly actualStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly sortOrder: number;
   readonly taskCount: number;
   readonly completedTaskCount: number;
@@ -49,6 +53,9 @@ export interface ProjectTaskSummaryRecord {
   readonly companyName: string;
   readonly priority: import('../project-types.js').ProjectPriority;
   readonly status: import('../project-types.js').ProjectStatus;
+  readonly executionLifecycle: import('../project-types.js').ProjectExecutionLifecycle;
+  readonly actualProductionStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly startDate: string;
   readonly expectedEndDate: string;
   readonly phaseCount: number;
@@ -65,6 +72,8 @@ export interface ProjectTaskBoardPhaseRecord {
   readonly status: import('../project-types.js').ProjectPhaseStatus;
   readonly startDate: string;
   readonly expectedEndDate: string;
+  readonly actualStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly sortOrder: number;
   readonly taskCount: number;
   readonly completedTaskCount: number;
@@ -80,6 +89,9 @@ export interface ProjectTaskBoardRecord {
     readonly clientName: string;
     readonly companyName: string;
     readonly status: import('../project-types.js').ProjectStatus;
+    readonly executionLifecycle: import('../project-types.js').ProjectExecutionLifecycle;
+    readonly actualProductionStartedAt: string | null;
+    readonly actualCompletedAt: string | null;
     readonly priority: import('../project-types.js').ProjectPriority;
     readonly startDate: string;
     readonly expectedEndDate: string;

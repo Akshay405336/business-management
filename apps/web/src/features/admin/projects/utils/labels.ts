@@ -1,4 +1,5 @@
 import type {
+  ProjectExecutionLifecycle,
   ProjectLifecyclePhase,
   ProjectLifecycleTab,
   ProjectPhaseStatus,
@@ -23,6 +24,16 @@ export const labelProjectPhase = (phase: ProjectLifecyclePhase): string => {
 export const labelProjectPhaseStatus = (status: ProjectPhaseStatus): string => titleCase(status);
 
 export const labelProjectLifecycleTab = (tab: ProjectLifecycleTab): string => {
-  if (tab === 'ALL') return 'All projects';
+  if (tab === 'ALL') return 'All Projects';
+  if (tab === 'NOT_PLANNED') return 'Not Planned';
+  if (tab === 'IN_PRODUCTION') return 'In Production';
   return titleCase(tab);
+};
+
+export const labelProjectExecutionLifecycle = (
+  lifecycle: ProjectExecutionLifecycle,
+): string => {
+  if (lifecycle === 'NOT_PLANNED') return 'Not Planned';
+  if (lifecycle === 'IN_PRODUCTION') return 'In Production';
+  return titleCase(lifecycle);
 };

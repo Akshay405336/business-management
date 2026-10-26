@@ -2,6 +2,7 @@ import {
   changeProjectStatusRequestSchema,
   createProjectRequestBodySchema,
   createProjectRequestSchema,
+  projectExecutionLifecycleSchema,
   projectLifecyclePhaseSchema,
   projectPhaseInputObjectSchema,
   projectPrioritySchema,
@@ -50,6 +51,9 @@ export const projectListItemResponseSchema = z.object({
   priority: projectPrioritySchema,
   startDate: z.string(),
   status: projectStatusSchema,
+  executionLifecycle: projectExecutionLifecycleSchema,
+  actualProductionStartedAt: z.string().nullable(),
+  actualCompletedAt: z.string().nullable(),
   phaseCount: z.number().int(),
   progressPercent: z.number().int(),
 });
@@ -83,8 +87,9 @@ export const projectListResponseSchema = z.object({
   pageSize: z.number().int(),
   tabCounts: z.object({
     all: z.number().int(),
-    upcoming: z.number().int(),
-    ongoing: z.number().int(),
+    notPlanned: z.number().int(),
+    planned: z.number().int(),
+    inProduction: z.number().int(),
     completed: z.number().int(),
   }),
 });

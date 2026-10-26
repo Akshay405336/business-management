@@ -57,7 +57,7 @@ import {
   toDateInputValue,
   toDateTimeLocalValue,
 } from '../utils/format';
-import { describeCrmError } from '../utils/errors';
+import { applyCrmLeadContactFieldErrors, describeCrmError } from '../utils/errors';
 import { labelActivityType, labelLeadPriority, labelLeadSource } from '../utils/labels';
 import { formatDateTime } from '@/shared/lib/format';
 import {
@@ -261,7 +261,12 @@ export function LeadDetailDialog({
         onOpenChange(false);
       }
     } catch (failure) {
-      toast.error(describeCrmError(failure));
+      if (applyCrmLeadContactFieldErrors(failure, setDraftErrors)) {
+        toast.error('Fix the highlighted fields before updating.');
+        focusFirstInvalidField();
+      } else {
+        toast.error(describeCrmError(failure));
+      }
     }
   };
 

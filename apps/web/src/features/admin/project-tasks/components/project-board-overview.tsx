@@ -13,8 +13,10 @@ import {
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { ProjectExecutionLifecycleBadge } from '@/features/admin/projects/components/project-execution-lifecycle-badge';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
 import { ProjectStatusBadge } from '@/features/admin/projects/components/project-status-badge';
+import { formatElapsedCalendarDays } from '../utils/execution-schedule';
 import { cn } from '@/shared/lib/utils';
 import type { ProjectTaskBoardResponse } from '../types';
 import {
@@ -50,11 +52,15 @@ export function ProjectBoardOverview({
   board,
   onAddTask,
   addTaskDisabled,
+  onCompleteProject,
+  completeDisabled,
   className,
 }: {
   board: ProjectTaskBoardResponse;
   onAddTask: () => void;
   addTaskDisabled?: boolean;
+  onCompleteProject?: () => void;
+  completeDisabled?: boolean;
   className?: string;
 }) {
   const { project } = board;
@@ -111,24 +117,48 @@ export function ProjectBoardOverview({
               <Plus className="size-3.5" aria-hidden="true" />
               Add Task
             </Button>
+            {onCompleteProject ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                className="h-8"
+                disabled={completeDisabled}
+                onClick={onCompleteProject}
+              >
+                Complete Project
+              </Button>
+            ) : null}
             <Button variant="outline" size="sm" className="h-8" asChild>
-            <Link href={`/admin/project-tasks?edit=${project.id}`}>
-              <Pencil className="size-3.5" aria-hidden="true" />
-              Edit project
-            </Link>
+              <Link href={`/admin/project-tasks/${project.id}/plan`}>View Plan</Link>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href={`/admin/project-tasks?edit=${project.id}`}>
+                <Pencil className="size-3.5" aria-hidden="true" />
+                Edit project
+              </Link>
             </Button>
           </div>
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ProjectExecutionLifecycleBadge lifecycle={project.executionLifecycle} />
           <ProjectStatusBadge status={project.status} />
           <ProjectPriorityBadge priority={project.priority} />
           <span className="text-muted-foreground hidden text-xs sm:inline" aria-hidden="true">
             ·
           </span>
           <p className="text-foreground text-xs font-medium tabular-nums">
-            {formatDateOnly(project.startDate)} – {formatDateOnly(project.expectedEndDate)}
+            Planned: {formatDateOnly(project.startDate)} – {formatDateOnly(project.expectedEndDate)}
           </p>
+          {project.actualProductionStartedAt ? (
+            <p className="text-muted-foreground text-xs tabular-nums">
+              Production started: {formatDateOnly(project.actualProductionStartedAt.slice(0, 10))}
+              {project.executionLifecycle === 'IN_PRODUCTION'
+                ? ` · ${formatElapsedCalendarDays(project.actualProductionStartedAt, new Date().toISOString())}`
+                : null}
+            </p>
+          ) : null}
           {timeline ? (
             <span
               className={cn(

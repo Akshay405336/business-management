@@ -1,5 +1,6 @@
 import { API_PREFIX } from './http.js';
 import type {
+  ProjectExecutionLifecycle,
   ProjectLifecycleTab,
   ProjectPhaseStatus,
   ProjectPriority,
@@ -37,6 +38,8 @@ export interface ProjectTask {
   readonly assignee: ProjectTaskAssignee | null;
   readonly startDate: string | null;
   readonly dueDate: string | null;
+  readonly actualStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly labels: readonly string[];
   readonly sortOrder: number;
   readonly createdAt: string;
@@ -49,6 +52,8 @@ export interface ProjectTaskSummaryPhaseItem {
   readonly status: ProjectPhaseStatus;
   readonly startDate: string;
   readonly expectedEndDate: string;
+  readonly actualStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly sortOrder: number;
   readonly taskCount: number;
   readonly completedTaskCount: number;
@@ -64,6 +69,9 @@ export interface ProjectTaskSummaryItem {
   readonly companyName: string;
   readonly priority: ProjectPriority;
   readonly status: ProjectStatus;
+  readonly executionLifecycle: ProjectExecutionLifecycle;
+  readonly actualProductionStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly startDate: string;
   readonly expectedEndDate: string;
   readonly phaseCount: number;
@@ -80,8 +88,9 @@ export interface ProjectTaskSummaryListResponse {
   readonly pageSize: number;
   readonly tabCounts: {
     readonly all: number;
-    readonly upcoming: number;
-    readonly ongoing: number;
+    readonly notPlanned: number;
+    readonly planned: number;
+    readonly inProduction: number;
     readonly completed: number;
   };
 }
@@ -93,6 +102,8 @@ export interface ProjectTaskBoardPhase {
   readonly status: import('./projects.js').ProjectPhaseStatus;
   readonly startDate: string;
   readonly expectedEndDate: string;
+  readonly actualStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly sortOrder: number;
   readonly taskCount: number;
   readonly completedTaskCount: number;
@@ -108,6 +119,9 @@ export interface ProjectTaskBoardResponse {
     readonly clientName: string;
     readonly companyName: string;
     readonly status: ProjectStatus;
+    readonly executionLifecycle: ProjectExecutionLifecycle;
+    readonly actualProductionStartedAt: string | null;
+    readonly actualCompletedAt: string | null;
     readonly priority: ProjectPriority;
     readonly startDate: string;
     readonly expectedEndDate: string;

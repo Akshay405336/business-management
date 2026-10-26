@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertDialog,
@@ -17,6 +18,7 @@ import { useAdminToast } from '@/features/admin/components/toast';
 import { CrmErrorAlert, CrmLoadingRows } from '@/features/admin/crm/components/crm-feedback';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
+import { completeProject } from '@/features/admin/projects/api/projects';
 import {
   createProjectTask,
   deleteProjectTask,
@@ -30,8 +32,10 @@ import { ProjectTaskFormDialog } from './project-task-form-dialog';
 import { ProjectTaskKanbanBoard } from './project-task-kanban-board';
 
 export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [board, setBoard] = useState<ProjectTaskBoardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +62,15 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!board) return;
+    const lifecycle = board.project.executionLifecycle;
+    if (lifecycle === 'NOT_PLANNED' || lifecycle === 'PLANNED') {
+      router.replace(`/admin/project-tasks/${projectId}/plan`);
+    }
+  }, [board, projectId, router]);
+
+  const readOnly = board?.project.executionLifecycle === 'COMPLETED';
   const tasks = useMemo(() => board?.phases.flatMap((phase) => phase.tasks) ?? [], [board]);
   const phases = useMemo(() => board?.phases ?? [], [board]);
 
@@ -92,7 +105,19 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
     }
   };
 
+  const confirmCompleteProject = async () => {
+    try {
+      await run(() => completeProject(projectId));
+      toast.success('Project marked completed.');
+      setCompleteOpen(false);
+      await load();
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
   const handleSave = async (payload: Parameters<typeof createProjectTask>[1]) => {
+    if (readOnly) return;
     if (editingTask) {
       await updateProjectTask(projectId, editingTask.id, payload);
       toast.success('Task updated.');
@@ -145,20 +170,30 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
       <ProjectBoardOverview
         board={board}
         onAddTask={() => openCreate()}
-        addTaskDisabled={pending}
+        addTaskDisabled={pending || readOnly}
+        onCompleteProject={
+          board.project.executionLifecycle === 'IN_PRODUCTION'
+            ? () => setCompleteOpen(true)
+            : undefined
+        }
+        completeDisabled={pending}
       />
       <ProjectTaskKanbanBoard
         phases={phases}
         tasks={tasks}
-        disabled={pending}
+        disabled={pending || readOnly}
         onPersistMove={persistMove}
         onView={openEdit}
         onEdit={openEdit}
-        onDelete={(taskId) => {
-          const task = tasks.find((t) => t.id === taskId);
-          if (task) setDeleteTarget(task);
-        }}
-        onAddInPhase={(phaseId) => openCreate(phaseId)}
+        onDelete={
+          readOnly
+            ? () => {}
+            : (taskId) => {
+                const task = tasks.find((t) => t.id === taskId);
+                if (task) setDeleteTarget(task);
+              }
+        }
+        onAddInPhase={readOnly ? () => {} : (phaseId) => openCreate(phaseId)}
       />
       <ProjectTaskFormDialog
         open={formOpen}
@@ -168,6 +203,23 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
         defaultPhaseId={defaultPhaseId}
         onSubmit={handleSave}
       />
+      <AlertDialog open={completeOpen} onOpenChange={setCompleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Mark “{project.name}” as completed? All tasks must be finished. The server will record
+              the completion timestamp.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmCompleteProject()}>
+              Complete Project
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

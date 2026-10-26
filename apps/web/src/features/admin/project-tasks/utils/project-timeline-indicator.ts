@@ -1,3 +1,4 @@
+import type { ProjectExecutionLifecycle } from '@techwin/contracts';
 import type { ProjectStatus } from '../types';
 
 export type ProjectTimelineIndicatorVariant =
@@ -100,4 +101,88 @@ export const projectTimelineIndicatorClass: Record<ProjectTimelineIndicatorVaria
   overdue: 'border-red-200 bg-red-50 text-red-900',
   completed: 'border-slate-200 bg-slate-50 text-slate-700',
   neutral: 'border-border bg-muted text-muted-foreground',
+};
+
+export type ProjectCardTimelineTone = 'pre-start' | 'in-flight';
+
+export type ProjectCardTimelineIndicator = {
+  readonly label: string;
+  readonly tone: ProjectCardTimelineTone;
+};
+
+function dateOnlyFromTimestamp(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const day = iso.slice(0, 10);
+  return DATE_ONLY.test(day) ? day : null;
+}
+
+/** Minimal text-only timeline copy for project management grid cards. */
+export function getProjectCardTimelineIndicator(
+  input: {
+    readonly executionLifecycle: ProjectExecutionLifecycle;
+    readonly startDate: string;
+    readonly actualProductionStartedAt: string | null;
+    readonly actualCompletedAt: string | null;
+  },
+  todayIso: string = localDateOnlyIso(),
+): ProjectCardTimelineIndicator | null {
+  const expectedStart = input.startDate.slice(0, 10);
+  if (!isValidDateOnly(expectedStart)) return null;
+
+  const productionStart = dateOnlyFromTimestamp(input.actualProductionStartedAt);
+  const completedAt = dateOnlyFromTimestamp(input.actualCompletedAt);
+  const productionStarted =
+    productionStart !== null &&
+    (input.executionLifecycle === 'IN_PRODUCTION' || input.executionLifecycle === 'COMPLETED');
+
+  if (input.executionLifecycle === 'COMPLETED' && productionStarted && completedAt) {
+    const days = calendarDaysBetween(productionStart, completedAt) + 1;
+    if (days < 1) return null;
+    return {
+      label: days === 1 ? 'Completed in 1 day' : `Completed in ${days} days`,
+      tone: 'in-flight',
+    };
+  }
+
+  if (input.executionLifecycle === 'IN_PRODUCTION' && productionStarted) {
+    const projectDay = calendarDaysBetween(productionStart, todayIso) + 1;
+    if (projectDay < 1) return null;
+    return {
+      label: projectDay <= 1 ? 'Day 1 of project' : `Day ${projectDay} of project`,
+      tone: 'in-flight',
+    };
+  }
+
+  if (input.executionLifecycle !== 'NOT_PLANNED' && input.executionLifecycle !== 'PLANNED') {
+    return null;
+  }
+
+  if (todayIso < expectedStart) {
+    const daysUntil = calendarDaysBetween(todayIso, expectedStart);
+    if (daysUntil <= 0) {
+      return { label: 'Starts today', tone: 'pre-start' };
+    }
+    if (daysUntil === 1) {
+      return { label: 'Starts in 1 day', tone: 'pre-start' };
+    }
+    return { label: `Starts in ${daysUntil} days`, tone: 'pre-start' };
+  }
+
+  if (todayIso === expectedStart) {
+    return { label: 'Starts today', tone: 'pre-start' };
+  }
+
+  const daysPassed = calendarDaysBetween(expectedStart, todayIso);
+  if (daysPassed <= 0) {
+    return { label: 'Starts today', tone: 'pre-start' };
+  }
+  if (daysPassed === 1) {
+    return { label: 'Start date passed by 1 day', tone: 'pre-start' };
+  }
+  return { label: `Start date passed by ${daysPassed} days`, tone: 'pre-start' };
+}
+
+export const projectCardTimelineToneClass: Record<ProjectCardTimelineTone, string> = {
+  'pre-start': 'text-red-600 dark:text-red-400',
+  'in-flight': 'text-green-600 dark:text-green-500',
 };

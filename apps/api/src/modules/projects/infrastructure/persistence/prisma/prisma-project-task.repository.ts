@@ -6,7 +6,8 @@ import {
   ProjectValidationError,
 } from '../../../domain/errors/project.errors.js';
 import { ProjectTaskProgressPolicy } from '../../../domain/services/project-task-progress.policy.js';
-import type { ProjectLifecycleTab } from '../../../domain/project-types.js';
+import { ProjectExecutionLifecyclePolicy } from '../../../domain/services/project-execution-lifecycle.policy.js';
+import type { ProjectExecutionLifecycle, ProjectLifecycleTab } from '../../../domain/project-types.js';
 import type {
   CreateProjectTaskInput,
   PaginatedProjectTaskSummaries,
@@ -34,15 +35,9 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     return new Date().toISOString().slice(0, 10);
   }
 
-  private lifecycleTabWhere(tab: ProjectLifecycleTab | undefined, todayIso: string): Prisma.ProjectWhereInput {
+  private lifecycleTabWhere(tab: ProjectLifecycleTab | undefined): Prisma.ProjectWhereInput {
     if (!tab || tab === 'ALL') return {};
-    const today = parseDateOnly(todayIso);
-    if (tab === 'COMPLETED') return { status: 'COMPLETED' };
-    const activeLifecycle: Prisma.ProjectWhereInput = {
-      status: { notIn: ['COMPLETED', 'CANCELLED'] },
-    };
-    if (tab === 'UPCOMING') return { ...activeLifecycle, startDate: { gt: today } };
-    return { ...activeLifecycle, startDate: { lte: today } };
+    return { executionLifecycle: tab };
   }
 
   private buildListBaseWhere(
@@ -66,23 +61,23 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     };
   }
 
-  private async countTabBuckets(
-    baseWhere: Prisma.ProjectWhereInput,
-    todayIso: string,
-  ) {
-    const [all, upcoming, ongoing, completed] = await Promise.all([
+  private async countTabBuckets(baseWhere: Prisma.ProjectWhereInput) {
+    const [all, notPlanned, planned, inProduction, completed] = await Promise.all([
       this.prisma.project.count({ where: baseWhere }),
       this.prisma.project.count({
-        where: { AND: [baseWhere, this.lifecycleTabWhere('UPCOMING', todayIso)] },
+        where: { AND: [baseWhere, this.lifecycleTabWhere('NOT_PLANNED')] },
       }),
       this.prisma.project.count({
-        where: { AND: [baseWhere, this.lifecycleTabWhere('ONGOING', todayIso)] },
+        where: { AND: [baseWhere, this.lifecycleTabWhere('PLANNED')] },
       }),
       this.prisma.project.count({
-        where: { AND: [baseWhere, this.lifecycleTabWhere('COMPLETED', todayIso)] },
+        where: { AND: [baseWhere, this.lifecycleTabWhere('IN_PRODUCTION')] },
+      }),
+      this.prisma.project.count({
+        where: { AND: [baseWhere, this.lifecycleTabWhere('COMPLETED')] },
       }),
     ]);
-    return { all, upcoming, ongoing, completed };
+    return { all, notPlanned, planned, inProduction, completed };
   }
 
   private toTaskRecord(
@@ -106,6 +101,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         : null,
       startDate: row.startDate ? dateOnly(row.startDate) : null,
       dueDate: row.dueDate ? dateOnly(row.dueDate) : null,
+      actualStartedAt: row.actualStartedAt?.toISOString() ?? null,
+      actualCompletedAt: row.actualCompletedAt?.toISOString() ?? null,
       labels: row.labels,
       sortOrder: row.sortOrder,
       createdAt: row.createdAt.toISOString(),
@@ -126,10 +123,16 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   private async assertProject(organizationId: string, projectId: string) {
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, organizationId },
-      select: { id: true },
+      select: { id: true, executionLifecycle: true },
     });
     if (!project) throw new ProjectNotFoundError('Project');
     return project;
+  }
+
+  private assertCanMutateTasks(executionLifecycle: ProjectExecutionLifecycle): void {
+    if (executionLifecycle === 'COMPLETED') {
+      throw new ProjectValidationError('Completed projects are read-only.');
+    }
   }
 
   private async assertPhaseInProject(
@@ -158,17 +161,16 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     organizationId: string,
     filters: ProjectTaskSummaryListFilters,
   ): Promise<PaginatedProjectTaskSummaries> {
-    const todayIso = this.todayIso();
     const baseWhere = this.buildListBaseWhere(organizationId, filters);
     const where: Prisma.ProjectWhereInput = {
-      AND: [baseWhere, this.lifecycleTabWhere(filters.lifecycleTab, todayIso)],
+      AND: [baseWhere, this.lifecycleTabWhere(filters.lifecycleTab)],
     };
     const page = filters.page;
     const pageSize = filters.pageSize;
     const skip = (page - 1) * pageSize;
 
     const [tabCounts, total, rows] = await Promise.all([
-      this.countTabBuckets(baseWhere, todayIso),
+      this.countTabBuckets(baseWhere),
       this.prisma.project.count({ where }),
       this.prisma.project.findMany({
         where,
@@ -198,6 +200,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
           status: phase.status,
           startDate: dateOnly(phase.startDate),
           expectedEndDate: dateOnly(phase.expectedEndDate),
+          actualStartedAt: phase.actualStartedAt?.toISOString() ?? null,
+          actualCompletedAt: phase.actualCompletedAt?.toISOString() ?? null,
           sortOrder: phase.sortOrder,
           ...this.taskStats(phaseTasks),
         };
@@ -211,6 +215,9 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         companyName: row.companyName,
         priority: row.priority,
         status: row.status,
+        executionLifecycle: row.executionLifecycle,
+        actualProductionStartedAt: row.actualProductionStartedAt?.toISOString() ?? null,
+        actualCompletedAt: row.actualCompletedAt?.toISOString() ?? null,
         startDate: dateOnly(row.startDate),
         expectedEndDate: dateOnly(row.expectedEndDate),
         phaseCount: phases.length,
@@ -253,6 +260,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         status: phase.status,
         startDate: dateOnly(phase.startDate),
         expectedEndDate: dateOnly(phase.expectedEndDate),
+        actualStartedAt: phase.actualStartedAt?.toISOString() ?? null,
+        actualCompletedAt: phase.actualCompletedAt?.toISOString() ?? null,
         sortOrder: phase.sortOrder,
         tasks: phaseTasks,
         ...stats,
@@ -267,6 +276,9 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         clientName: row.clientName,
         companyName: row.companyName,
         status: row.status,
+        executionLifecycle: row.executionLifecycle,
+        actualProductionStartedAt: row.actualProductionStartedAt?.toISOString() ?? null,
+        actualCompletedAt: row.actualCompletedAt?.toISOString() ?? null,
         priority: row.priority,
         startDate: dateOnly(row.startDate),
         expectedEndDate: dateOnly(row.expectedEndDate),
@@ -294,7 +306,11 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     projectId: string,
     input: CreateProjectTaskInput,
   ): Promise<ProjectTaskRecord> {
-    await this.assertProject(organizationId, projectId);
+    const project = await this.assertProject(organizationId, projectId);
+    this.assertCanMutateTasks(project.executionLifecycle);
+    if (project.executionLifecycle !== 'IN_PRODUCTION') {
+      ProjectExecutionLifecyclePolicy.assertCanSavePlan(project.executionLifecycle);
+    }
     await this.assertPhaseInProject(organizationId, projectId, input.phaseId);
     await this.assertAssignee(organizationId, input.assigneeAdminId);
 
@@ -327,8 +343,16 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     taskId: string,
     input: UpdateProjectTaskInput,
   ): Promise<ProjectTaskRecord> {
+    const project = await this.assertProject(organizationId, projectId);
+    this.assertCanMutateTasks(project.executionLifecycle);
     const existing = await this.getTask(organizationId, projectId, taskId);
     if (!existing) throw new ProjectNotFoundError('Task');
+    if (
+      project.executionLifecycle === 'NOT_PLANNED' ||
+      project.executionLifecycle === 'PLANNED'
+    ) {
+      ProjectExecutionLifecyclePolicy.assertCanSavePlan(project.executionLifecycle);
+    }
 
     if (input.phaseId) {
       await this.assertPhaseInProject(organizationId, projectId, input.phaseId);
@@ -339,6 +363,12 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
 
     const nextPhaseId = input.phaseId ?? existing.phaseId;
     const phaseChanged = nextPhaseId !== existing.phaseId;
+    const nextStatus = input.status ?? existing.status;
+    const now = new Date();
+    const recordActualStart =
+      (nextStatus === 'IN_PROGRESS' || nextStatus === 'IN_REVIEW' || nextStatus === 'COMPLETED') &&
+      !existing.actualStartedAt;
+    const recordActualComplete = nextStatus === 'COMPLETED' && !existing.actualCompletedAt;
 
     const row = await this.prisma.$transaction(async (tx) => {
       if (phaseChanged) {
@@ -364,6 +394,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
             : {}),
           ...(input.dueDate !== undefined ? { dueDate: parseOptionalDate(input.dueDate) } : {}),
           ...(input.labels !== undefined ? { labels: [...input.labels] } : {}),
+          ...(recordActualStart ? { actualStartedAt: now } : {}),
+          ...(recordActualComplete ? { actualCompletedAt: now } : {}),
           ...(phaseChanged
             ? {
                 sortOrder: (await this.listPhaseTaskIds(tx, organizationId, nextPhaseId)).length - 1,
@@ -372,6 +404,10 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         },
         include: taskInclude,
       });
+      await this.syncPhaseActualTimes(tx, organizationId, nextPhaseId);
+      if (phaseChanged) {
+        await this.syncPhaseActualTimes(tx, organizationId, existing.phaseId);
+      }
       return updated;
     });
 
@@ -379,6 +415,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   }
 
   async deleteTask(organizationId: string, projectId: string, taskId: string): Promise<void> {
+    const project = await this.assertProject(organizationId, projectId);
+    ProjectExecutionLifecyclePolicy.assertCanSavePlan(project.executionLifecycle);
     const existing = await this.getTask(organizationId, projectId, taskId);
     if (!existing) throw new ProjectNotFoundError('Task');
 
@@ -397,6 +435,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     phaseId: string,
     beforeTaskId: string | null | undefined,
   ): Promise<ProjectTaskRecord> {
+    const project = await this.assertProject(organizationId, projectId);
+    this.assertCanMutateTasks(project.executionLifecycle);
     const task = await this.getTask(organizationId, projectId, taskId);
     if (!task) throw new ProjectNotFoundError('Task');
     await this.assertPhaseInProject(organizationId, projectId, phaseId);
@@ -432,6 +472,37 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     });
 
     return this.toTaskRecord(row);
+  }
+
+  private async syncPhaseActualTimes(
+    tx: Pick<PrismaService, 'projectPhase' | 'projectTask'>,
+    organizationId: string,
+    phaseId: string,
+  ): Promise<void> {
+    const phase = await tx.projectPhase.findFirst({
+      where: { id: phaseId, organizationId },
+      select: { id: true, actualStartedAt: true, actualCompletedAt: true },
+    });
+    if (!phase) return;
+    const tasks = await tx.projectTask.findMany({
+      where: { organizationId, phaseId },
+      select: { status: true },
+    });
+    const anyActive = tasks.some(
+      (task) =>
+        task.status === 'IN_PROGRESS' || task.status === 'IN_REVIEW' || task.status === 'COMPLETED',
+    );
+    const allCompleted = tasks.length > 0 && tasks.every((task) => task.status === 'COMPLETED');
+    const now = new Date();
+    await tx.projectPhase.update({
+      where: { id: phaseId },
+      data: {
+        ...(anyActive && !phase.actualStartedAt ? { actualStartedAt: now } : {}),
+        ...(allCompleted && !phase.actualCompletedAt ? { actualCompletedAt: now } : {}),
+        ...(allCompleted ? { status: 'COMPLETED' as const } : {}),
+        ...(anyActive && !allCompleted ? { status: 'IN_PROGRESS' as const } : {}),
+      },
+    });
   }
 
   private resolveInsertIndex(orderedIds: readonly string[], beforeTaskId?: string | null): number {

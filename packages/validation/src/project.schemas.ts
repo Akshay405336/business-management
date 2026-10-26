@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MONEY_PARSE_ERROR, normalizeMoneyInput } from './money.js';
 import { collectProjectPhaseScheduleIssues } from './project-phase-schedule.js';
+import { projectTaskPrioritySchema } from './project-task-priority.schema.js';
 
 const moneyString = z.union([
   z
@@ -57,7 +58,20 @@ export const projectPhaseStatusSchema = z.enum([
   'BLOCKED',
 ]);
 
-export const projectLifecycleTabSchema = z.enum(['ALL', 'UPCOMING', 'ONGOING', 'COMPLETED']);
+export const projectExecutionLifecycleSchema = z.enum([
+  'NOT_PLANNED',
+  'PLANNED',
+  'IN_PRODUCTION',
+  'COMPLETED',
+]);
+
+export const projectLifecycleTabSchema = z.enum([
+  'ALL',
+  'NOT_PLANNED',
+  'PLANNED',
+  'IN_PRODUCTION',
+  'COMPLETED',
+]);
 
 const uuid = z.string().uuid();
 
@@ -231,3 +245,46 @@ export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>;
 export type ChangeProjectStatusRequest = z.infer<typeof changeProjectStatusRequestSchema>;
 export type ProjectListQuery = z.infer<typeof projectListQuerySchema>;
 export type ProjectPhaseInput = z.infer<typeof projectPhaseInputSchema>;
+
+const planTaskDateOptional = z.preprocess(
+  (value) => {
+    if (value === '' || value === null || value === undefined) return null;
+    return normalizeIsoDateOnlyInput(value);
+  },
+  z.iso.date({ error: 'Enter a valid date.' }).nullable().optional(),
+);
+
+export const projectPlanTaskInputSchema = z
+  .object({
+    id: uuid.optional(),
+    title: z.string().trim().min(1, 'Enter a task title.').max(200),
+    description: optionalTrimmedDescription,
+    priority: projectTaskPrioritySchema.optional(),
+    assigneeAdminId: optionalNullableUuid,
+    startDate: planTaskDateOptional,
+    dueDate: planTaskDateOptional,
+  })
+  .strict()
+  .check((ctx) => {
+    const { startDate, dueDate } = ctx.value;
+    if (startDate && dueDate && dueDate < startDate) {
+      ctx.issues.push({
+        code: 'custom',
+        message: 'Due date must be on or after the start date.',
+        path: ['dueDate'],
+        input: ctx.value,
+      });
+    }
+  });
+
+export const projectPlanPhaseInputSchema = projectPhaseInputObjectSchema.extend({
+  tasks: z.array(projectPlanTaskInputSchema),
+});
+
+export const saveProjectPlanRequestSchema = z
+  .object({
+    phases: z.array(projectPlanPhaseInputSchema).min(1, 'Add at least one phase.'),
+  })
+  .strict();
+
+export type SaveProjectPlanRequest = z.infer<typeof saveProjectPlanRequestSchema>;

@@ -565,6 +565,13 @@ enum ProjectPriority {
   URGENT
 }
 
+enum ProjectExecutionLifecycle {
+  NOT_PLANNED
+  PLANNED
+  IN_PRODUCTION
+  COMPLETED
+}
+
 enum ProjectLifecyclePhase {
   PLANNING
   PRODUCTION
@@ -588,8 +595,11 @@ model Project {
   name                    String                @db.VarChar(200)
   description             String                @default("") @db.VarChar(4000)
   priority                ProjectPriority
-  status                  ProjectStatus         @default(ACTIVE)
-  currentPhase            ProjectLifecyclePhase @default(PLANNING) @map("current_phase")
+  status                  ProjectStatus               @default(ACTIVE)
+  executionLifecycle      ProjectExecutionLifecycle   @default(NOT_PLANNED) @map("execution_lifecycle")
+  actualProductionStartedAt DateTime?                 @map("actual_production_started_at") @db.Timestamptz(3)
+  actualCompletedAt       DateTime?                   @map("actual_completed_at") @db.Timestamptz(3)
+  currentPhase            ProjectLifecyclePhase       @default(PLANNING) @map("current_phase")
   clientId                String                @map("client_id") @db.Uuid
   proposalId              String?               @map("proposal_id") @db.Uuid
   projectManagerAdminId   String?               @map("project_manager_admin_id") @db.Uuid
@@ -621,6 +631,7 @@ model Project {
 
   @@unique([organizationId, projectNumber])
   @@index([organizationId, status, currentPhase])
+  @@index([organizationId, executionLifecycle])
   @@index([organizationId, clientId])
   @@map("projects")
 }
@@ -637,6 +648,8 @@ model ProjectPhase {
   expectedEndDate  DateTime              @map("expected_end_date") @db.Date
   ownerAdminId     String?               @map("owner_admin_id") @db.Uuid
   sortOrder        Int                   @map("sort_order")
+  actualStartedAt  DateTime?             @map("actual_started_at") @db.Timestamptz(3)
+  actualCompletedAt DateTime?            @map("actual_completed_at") @db.Timestamptz(3)
   createdAt        DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
@@ -677,6 +690,8 @@ model ProjectTask {
   dueDate          DateTime?           @map("due_date") @db.Date
   labels           String[]            @default([])
   sortOrder        Int                 @map("sort_order")
+  actualStartedAt  DateTime?           @map("actual_started_at") @db.Timestamptz(3)
+  actualCompletedAt DateTime?          @map("actual_completed_at") @db.Timestamptz(3)
   createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 

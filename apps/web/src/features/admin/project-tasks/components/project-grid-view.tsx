@@ -11,6 +11,7 @@ export function ProjectGridView({
   onToggleActive,
   onEdit,
   onDelete,
+  onLifecycleChange,
   className,
 }: {
   items: readonly ProjectTaskSummaryItem[];
@@ -18,6 +19,7 @@ export function ProjectGridView({
   onToggleActive: (project: ProjectActionTarget) => void;
   onEdit: (id: string) => void;
   onDelete: (project: ProjectActionTarget) => void;
+  onLifecycleChange?: () => void;
   className?: string;
 }) {
   return (
@@ -35,6 +37,7 @@ export function ProjectGridView({
           onToggleActive={onToggleActive}
           onEdit={onEdit}
           onDelete={onDelete}
+          onLifecycleChange={onLifecycleChange}
         />
       ))}
     </div>

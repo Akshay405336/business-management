@@ -2,6 +2,7 @@ export type {
   ClientQuotationListResponse,
   ClientQuotationOption,
   ProjectDetail,
+  ProjectExecutionLifecycle,
   ProjectLifecyclePhase,
   ProjectLifecycleTab,
   ProjectListItem,

@@ -61,7 +61,7 @@ import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import { CRM_LEAD_DIALOG_CLASS, DEFAULT_LEAD_CURRENCY, LEAD_PRIORITIES, LEAD_SOURCES } from '../constants';
 import type { CrmLead, CrmPipeline, LeadListQuery, LeadPriority, LeadSource } from '../types';
 import { formatMoney } from '../utils/format';
-import { describeCrmError } from '../utils/errors';
+import { applyCrmLeadContactFieldErrors, describeCrmError } from '../utils/errors';
 import { labelLeadPriority, labelLeadSource } from '../utils/labels';
 import {
   CrmEmptyState,
@@ -73,6 +73,7 @@ import {
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from './crm-toolbar-header';
 /** Reuse search field width for pipeline selector on Leads header. */
 const LEADS_PIPELINE_SELECT_CLASS = CRM_HEADER_SEARCH_FORM_CLASS;
+import { LeadEmailQuickRow, LeadPhoneQuickRow } from './lead-contact-quick-actions';
 import { KanbanBoard } from './kanban-board';
 import { LeadDetailDialog, type LeadDetailMode } from './lead-detail-sheet';
 import { PipelineStageSelectItems, PipelineStageSelectTrigger } from './pipeline-stage-select';
@@ -351,7 +352,11 @@ export function LeadsPage() {
       setCreateOpen(false);
       await loadLeads();
     } catch (failure) {
-      setLeadsError(describeCrmError(failure));
+      if (!applyCrmLeadContactFieldErrors(failure, setCreateFieldErrors)) {
+        setLeadsError(describeCrmError(failure));
+      } else {
+        focusFirstInvalidField();
+      }
     }
   };
 
@@ -569,12 +574,14 @@ export function LeadsPage() {
           {pipelineLeads.map((lead) => (
             <TableRow key={lead.id}>
               <TableCell>
-                <div className="grid">
+                <div className="grid min-w-0 gap-0.5">
                   <span className="font-medium">{lead.fullName}</span>
                   <span className="text-muted-foreground text-xs">
                     {lead.referenceNumber}
                     {lead.companyName ? ` · ${lead.companyName}` : ''}
                   </span>
+                  <LeadPhoneQuickRow phone={lead.phone} className="max-w-[14rem]" />
+                  <LeadEmailQuickRow email={lead.email} className="max-w-[14rem]" />
                 </div>
               </TableCell>
               <TableCell>

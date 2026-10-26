@@ -1,4 +1,5 @@
 import type {
+  ProjectExecutionLifecycle,
   ProjectLifecyclePhase,
   ProjectLifecycleTab,
   ProjectPhaseStatus,
@@ -19,9 +20,28 @@ export interface ProjectListFilters {
 
 export interface ProjectListTabCounts {
   readonly all: number;
-  readonly upcoming: number;
-  readonly ongoing: number;
+  readonly notPlanned: number;
+  readonly planned: number;
+  readonly inProduction: number;
   readonly completed: number;
+}
+
+export interface ProjectPlanTaskInput {
+  readonly id?: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly priority?: import('../project-task-types.js').ProjectTaskPriority;
+  readonly assigneeAdminId?: string | null;
+  readonly startDate?: string | null;
+  readonly dueDate?: string | null;
+}
+
+export interface ProjectPlanPhaseInput extends ProjectPhaseInput {
+  readonly tasks: readonly ProjectPlanTaskInput[];
+}
+
+export interface SaveProjectPlanInput {
+  readonly phases: readonly ProjectPlanPhaseInput[];
 }
 
 export interface PaginatedProjects {
@@ -64,6 +84,9 @@ export interface ProjectListRecord {
   readonly priority: ProjectPriority;
   readonly startDate: string;
   readonly status: ProjectStatus;
+  readonly executionLifecycle: ProjectExecutionLifecycle;
+  readonly actualProductionStartedAt: string | null;
+  readonly actualCompletedAt: string | null;
   readonly phaseCount: number;
   readonly progressPercent: number;
 }
@@ -164,4 +187,20 @@ export interface ProjectRepository {
     organizationId: string,
     clientId: string,
   ): Promise<readonly ClientQuotationRecord[]>;
+  saveProjectPlan(
+    organizationId: string,
+    projectId: string,
+    input: SaveProjectPlanInput,
+    audit: { adminId: string | null },
+  ): Promise<ProjectDetailRecord>;
+  startProduction(
+    organizationId: string,
+    projectId: string,
+    audit: { adminId: string | null },
+  ): Promise<ProjectDetailRecord>;
+  completeProject(
+    organizationId: string,
+    projectId: string,
+    audit: { adminId: string | null },
+  ): Promise<ProjectDetailRecord>;
 }

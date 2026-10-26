@@ -87,7 +87,10 @@ export function ProjectListView({
     >
       {items.map((project) => {
         const target = toActionTarget(project);
-        const boardHref = `/admin/project-tasks/${project.id}`;
+        const boardHref =
+          project.executionLifecycle === 'NOT_PLANNED' || project.executionLifecycle === 'PLANNED'
+            ? `/admin/project-tasks/${project.id}/plan`
+            : `/admin/project-tasks/${project.id}`;
         return (
           <TableRow key={project.id}>
             <TableCell className="min-w-0">

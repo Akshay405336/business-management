@@ -469,6 +469,16 @@ export interface CrmRepository {
 
   listLeads(organizationId: string, filters: LeadListFilters): Promise<PaginatedLeads>;
   getLead(organizationId: string, leadId: string): Promise<LeadRecord | null>;
+  findLeadIdByPhone(
+    organizationId: string,
+    phone: string,
+    excludeLeadId?: string,
+  ): Promise<string | null>;
+  findLeadIdByEmail(
+    organizationId: string,
+    email: string,
+    excludeLeadId?: string,
+  ): Promise<string | null>;
   createLead(
     organizationId: string,
     input: CreateLeadInput,

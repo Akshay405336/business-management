@@ -13,12 +13,17 @@ import {
   nextActiveStageSortOrder,
 } from './pipeline-stage-order.js';
 import {
+  normalizedLeadEmailOrNull,
+  normalizedLeadPhoneOrNull,
+} from '@techwin/validation';
+import {
   CrmConflictError,
   CrmNotFoundError,
   CrmPipelineInUseError,
   CrmStageDeleteBlockedError,
   CrmValidationError,
 } from '../../../domain/errors/crm.errors.js';
+import { rethrowLeadContactUniqueViolation } from './lead-contact-unique-violation.js';
 import {
   computeLineItemTotals,
   computeProposalTotals,
@@ -671,6 +676,38 @@ export class PrismaCrmRepository implements CrmRepository {
     return row ? this.toLead(row) : null;
   }
 
+  async findLeadIdByPhone(
+    organizationId: string,
+    phone: string,
+    excludeLeadId?: string,
+  ): Promise<string | null> {
+    const row = await this.prisma.lead.findFirst({
+      where: {
+        organizationId,
+        phone,
+        ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
+      },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+
+  async findLeadIdByEmail(
+    organizationId: string,
+    email: string,
+    excludeLeadId?: string,
+  ): Promise<string | null> {
+    const row = await this.prisma.lead.findFirst({
+      where: {
+        organizationId,
+        email,
+        ...(excludeLeadId ? { id: { not: excludeLeadId } } : {}),
+      },
+      select: { id: true },
+    });
+    return row?.id ?? null;
+  }
+
   async createLead(
     organizationId: string,
     input: CreateLeadInput,
@@ -707,7 +744,11 @@ export class PrismaCrmRepository implements CrmRepository {
     }
 
     const leadId = crypto.randomUUID();
-    const row = await this.prisma.$transaction(async (tx) => {
+    const phone = normalizedLeadPhoneOrNull(input.phone);
+    const email = normalizedLeadEmailOrNull(input.email);
+    let row;
+    try {
+      row = await this.prisma.$transaction(async (tx) => {
       const seq = await this.nextSequence(tx, organizationId, SEQUENCE_KEYS.lead);
       const referenceNumber = formatReference('LD', seq);
       const kanbanSortOrder = await this.nextKanbanSortOrder(tx, organizationId, stageId);
@@ -718,8 +759,8 @@ export class PrismaCrmRepository implements CrmRepository {
           referenceNumber,
           fullName: input.fullName,
           companyName: input.companyName ?? '',
-          email: input.email ?? null,
-          phone: input.phone ?? null,
+          email,
+          phone,
           website: input.website ?? null,
           source: input.source ?? 'OTHER',
           pipelineId: input.pipelineId,
@@ -751,6 +792,9 @@ export class PrismaCrmRepository implements CrmRepository {
       await this.writeAudit(tx, organizationId, { ...audit, entityId: lead.id });
       return lead;
     });
+    } catch (error) {
+      rethrowLeadContactUniqueViolation(error);
+    }
     return this.toLead(row);
   }
 
@@ -787,14 +831,18 @@ export class PrismaCrmRepository implements CrmRepository {
       }
     }
 
-    const row = await this.prisma.$transaction(async (tx) => {
+    const phone = input.phone !== undefined ? normalizedLeadPhoneOrNull(input.phone) : undefined;
+    const email = input.email !== undefined ? normalizedLeadEmailOrNull(input.email) : undefined;
+    let row;
+    try {
+      row = await this.prisma.$transaction(async (tx) => {
       const lead = await tx.lead.update({
         where: { id: leadId },
         data: {
           fullName: input.fullName,
           companyName: input.companyName,
-          email: input.email,
-          phone: input.phone,
+          email,
+          phone,
           website: input.website,
           source: input.source,
           pipelineId: input.pipelineId,
@@ -815,6 +863,9 @@ export class PrismaCrmRepository implements CrmRepository {
       await this.writeAudit(tx, organizationId, audit);
       return lead;
     });
+    } catch (error) {
+      rethrowLeadContactUniqueViolation(error);
+    }
     return this.toLead(row);
   }
 

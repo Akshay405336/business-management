@@ -11,6 +11,7 @@ import {
 import { ProjectProgressPolicy } from '../../../domain/services/project-progress.policy.js';
 import type { ProjectLifecycleTab } from '../../../domain/project-types.js';
 import { ProjectSchedulePolicy } from '../../../domain/services/project-schedule.policy.js';
+import { ProjectExecutionLifecyclePolicy } from '../../../domain/services/project-execution-lifecycle.policy.js';
 import type {
   ClientQuotationRecord,
   CreateProjectInput,
@@ -23,6 +24,7 @@ import type {
   ProjectPhaseInput,
   ProjectPhaseRecord,
   ProjectRepository,
+  SaveProjectPlanInput,
   UpdateProjectInput,
 } from '../../../domain/repositories/project.repository.js';
 import type { ProjectStatus } from '../../../domain/project-types.js';
@@ -91,6 +93,9 @@ export class PrismaProjectRepository implements ProjectRepository {
       priority: row.priority,
       startDate: dateOnly(row.startDate),
       status: row.status,
+      executionLifecycle: row.executionLifecycle,
+      actualProductionStartedAt: row.actualProductionStartedAt?.toISOString() ?? null,
+      actualCompletedAt: row.actualCompletedAt?.toISOString() ?? null,
       phaseCount: row.phases.length,
       progressPercent: ProjectProgressPolicy.calculatePercent(row.phases),
     };
@@ -246,44 +251,30 @@ export class PrismaProjectRepository implements ProjectRepository {
     return new Date().toISOString().slice(0, 10);
   }
 
-  private lifecycleTabWhere(tab: ProjectLifecycleTab | undefined, todayIso: string): Prisma.ProjectWhereInput {
+  private lifecycleTabWhere(tab: ProjectLifecycleTab | undefined): Prisma.ProjectWhereInput {
     if (!tab || tab === 'ALL') return {};
-    const today = parseDateOnly(todayIso);
-    if (tab === 'COMPLETED') {
-      return { status: 'COMPLETED' };
-    }
-    const activeLifecycle: Prisma.ProjectWhereInput = {
-      status: { notIn: ['COMPLETED', 'CANCELLED'] },
-    };
-    if (tab === 'UPCOMING') {
-      return { ...activeLifecycle, startDate: { gt: today } };
-    }
-    return { ...activeLifecycle, startDate: { lte: today } };
+    return { executionLifecycle: tab };
   }
 
   private async countTabBuckets(
     baseWhere: Prisma.ProjectWhereInput,
-    todayIso: string,
   ): Promise<ProjectListTabCounts> {
-    const [all, upcoming, ongoing, completed] = await Promise.all([
+    const [all, notPlanned, planned, inProduction, completed] = await Promise.all([
       this.prisma.project.count({ where: baseWhere }),
       this.prisma.project.count({
-        where: {
-          AND: [baseWhere, this.lifecycleTabWhere('UPCOMING', todayIso)],
-        },
+        where: { AND: [baseWhere, this.lifecycleTabWhere('NOT_PLANNED')] },
       }),
       this.prisma.project.count({
-        where: {
-          AND: [baseWhere, this.lifecycleTabWhere('ONGOING', todayIso)],
-        },
+        where: { AND: [baseWhere, this.lifecycleTabWhere('PLANNED')] },
       }),
       this.prisma.project.count({
-        where: {
-          AND: [baseWhere, this.lifecycleTabWhere('COMPLETED', todayIso)],
-        },
+        where: { AND: [baseWhere, this.lifecycleTabWhere('IN_PRODUCTION')] },
+      }),
+      this.prisma.project.count({
+        where: { AND: [baseWhere, this.lifecycleTabWhere('COMPLETED')] },
       }),
     ]);
-    return { all, upcoming, ongoing, completed };
+    return { all, notPlanned, planned, inProduction, completed };
   }
 
   private assertPhaseDateRange(startDate: string, expectedEndDate: string): void {
@@ -356,9 +347,8 @@ export class PrismaProjectRepository implements ProjectRepository {
   }
 
   async listProjects(organizationId: string, filters: ProjectListFilters): Promise<PaginatedProjects> {
-    const todayIso = this.todayIso();
     const baseWhere = this.buildListBaseWhere(organizationId, filters);
-    const tabWhere = this.lifecycleTabWhere(filters.lifecycleTab, todayIso);
+    const tabWhere = this.lifecycleTabWhere(filters.lifecycleTab);
     const where: Prisma.ProjectWhereInput =
       tabWhere && Object.keys(tabWhere).length > 0 ? { AND: [baseWhere, tabWhere] } : baseWhere;
     const skip = (filters.page - 1) * filters.pageSize;
@@ -372,7 +362,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       }),
       this.prisma.project.count({ where }),
     ]);
-    const tabCounts = await this.countTabBuckets(baseWhere, todayIso);
+    const tabCounts = await this.countTabBuckets(baseWhere);
     return {
       items: rows.map((row) => this.toListRecord(row)),
       total,
@@ -476,6 +466,7 @@ export class PrismaProjectRepository implements ProjectRepository {
           description: input.description ?? '',
           priority: input.priority,
           status: 'ACTIVE',
+          executionLifecycle: 'NOT_PLANNED',
           currentPhase: 'PLANNING',
           clientId: client.id,
           proposalId: proposal?.id ?? null,
@@ -668,5 +659,199 @@ export class PrismaProjectRepository implements ProjectRepository {
         entityId: projectId,
       });
     });
+  }
+
+  async saveProjectPlan(
+    organizationId: string,
+    projectId: string,
+    input: SaveProjectPlanInput,
+    audit: { adminId: string | null },
+  ): Promise<ProjectDetailRecord> {
+    const existing = await this.getProject(organizationId, projectId);
+    if (!existing) throw new ProjectNotFoundError('Project');
+    ProjectExecutionLifecyclePolicy.assertCanSavePlan(existing.executionLifecycle);
+
+    const phaseInputs: ProjectPhaseInput[] = input.phases.map((phase) => ({
+      id: phase.id,
+      name: phase.name,
+      description: phase.description,
+      startDate: phase.startDate,
+      expectedEndDate: phase.expectedEndDate,
+      ownerAdminId: phase.ownerAdminId,
+      status: phase.status ?? 'NOT_STARTED',
+    }));
+    await this.assertPhaseOwners(organizationId, phaseInputs);
+    ProjectSchedulePolicy.assertProjectPhaseSchedule(
+      existing.startDate,
+      existing.expectedEndDate,
+      phaseInputs.map((phase) => ({
+        startDate: phase.startDate,
+        expectedEndDate: phase.expectedEndDate,
+      })),
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.syncProjectPhases(tx, organizationId, projectId, phaseInputs, existing.phases);
+      const phases = await tx.projectPhase.findMany({
+        where: { organizationId, projectId },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, sortOrder: true },
+      });
+      const phaseIdByOrder = new Map(phases.map((phase) => [phase.sortOrder, phase.id]));
+
+      const retainedTaskIds = new Set<string>();
+      for (let index = 0; index < input.phases.length; index += 1) {
+        const phaseInput = input.phases[index]!;
+        const phaseId = phaseIdByOrder.get(index + 1);
+        if (!phaseId) throw new ProjectValidationError('Failed to resolve phase for tasks.');
+        for (let taskIndex = 0; taskIndex < phaseInput.tasks.length; taskIndex += 1) {
+          const task = phaseInput.tasks[taskIndex]!;
+          const sortOrder = taskIndex + 1;
+          if (task.id) {
+            const owned = await tx.projectTask.findFirst({
+              where: { id: task.id, organizationId, projectId },
+              select: { id: true },
+            });
+            if (!owned) {
+              throw new ProjectValidationError('One or more tasks are not part of this project.');
+            }
+            retainedTaskIds.add(task.id);
+            await tx.projectTask.update({
+              where: { id: task.id },
+              data: {
+                phaseId,
+                title: task.title,
+                description: task.description ?? '',
+                priority: task.priority ?? 'MEDIUM',
+                assigneeAdminId: task.assigneeAdminId ?? null,
+                startDate: task.startDate ? parseDateOnly(task.startDate) : null,
+                dueDate: task.dueDate ? parseDateOnly(task.dueDate) : null,
+                sortOrder,
+                status: 'TODO',
+              },
+            });
+            continue;
+          }
+          const id = crypto.randomUUID();
+          retainedTaskIds.add(id);
+          await tx.projectTask.create({
+            data: {
+              id,
+              organizationId,
+              projectId,
+              phaseId,
+              title: task.title,
+              description: task.description ?? '',
+              status: 'TODO',
+              priority: task.priority ?? 'MEDIUM',
+              assigneeAdminId: task.assigneeAdminId ?? null,
+              startDate: task.startDate ? parseDateOnly(task.startDate) : null,
+              dueDate: task.dueDate ? parseDateOnly(task.dueDate) : null,
+              labels: [],
+              sortOrder,
+            },
+          });
+        }
+      }
+
+      const existingTasks = await tx.projectTask.findMany({
+        where: { organizationId, projectId },
+        select: { id: true },
+      });
+      for (const task of existingTasks) {
+        if (retainedTaskIds.has(task.id)) continue;
+        await tx.projectTask.delete({ where: { id: task.id } });
+      }
+
+      await tx.project.update({
+        where: { id: projectId },
+        data: { executionLifecycle: ProjectExecutionLifecyclePolicy.nextAfterPlanSaved() },
+      });
+      await this.writeAudit(tx, organizationId, {
+        adminId: audit.adminId,
+        type: 'PROJECT_UPDATED',
+        entityId: projectId,
+      });
+    });
+
+    const updated = await this.getProject(organizationId, projectId);
+    if (!updated) throw new ProjectNotFoundError('Project');
+    return updated;
+  }
+
+  async startProduction(
+    organizationId: string,
+    projectId: string,
+    audit: { adminId: string | null },
+  ): Promise<ProjectDetailRecord> {
+    const existing = await this.getProject(organizationId, projectId);
+    if (!existing) throw new ProjectNotFoundError('Project');
+    ProjectExecutionLifecyclePolicy.assertCanStartProduction(existing.executionLifecycle);
+    const taskCount = await this.prisma.projectTask.count({ where: { organizationId, projectId } });
+    if (taskCount === 0) {
+      throw new ProjectValidationError('Save a plan with at least one task before starting production.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.project.update({
+        where: { id: projectId },
+        data: {
+          executionLifecycle: ProjectExecutionLifecyclePolicy.nextAfterProductionStart(),
+          actualProductionStartedAt: new Date(),
+          currentPhase: 'PRODUCTION',
+        },
+      });
+      await this.writeAudit(tx, organizationId, {
+        adminId: audit.adminId,
+        type: 'PROJECT_UPDATED',
+        entityId: projectId,
+      });
+    });
+
+    const updated = await this.getProject(organizationId, projectId);
+    if (!updated) throw new ProjectNotFoundError('Project');
+    return updated;
+  }
+
+  async completeProject(
+    organizationId: string,
+    projectId: string,
+    audit: { adminId: string | null },
+  ): Promise<ProjectDetailRecord> {
+    const existing = await this.getProject(organizationId, projectId);
+    if (!existing) throw new ProjectNotFoundError('Project');
+    ProjectExecutionLifecyclePolicy.assertCanCompleteProject(existing.executionLifecycle);
+    if (!existing.actualProductionStartedAt) {
+      throw new ProjectValidationError('Production must be started before completing the project.');
+    }
+
+    const incomplete = await this.prisma.projectTask.count({
+      where: { organizationId, projectId, status: { not: 'COMPLETED' } },
+    });
+    if (incomplete > 0) {
+      throw new ProjectValidationError(
+        `${incomplete} task${incomplete === 1 ? '' : 's'} must be completed before closing the project.`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.project.update({
+        where: { id: projectId },
+        data: {
+          executionLifecycle: ProjectExecutionLifecyclePolicy.nextAfterComplete(),
+          actualCompletedAt: new Date(),
+          currentPhase: 'COMPLETED',
+        },
+      });
+      await this.writeAudit(tx, organizationId, {
+        adminId: audit.adminId,
+        type: 'PROJECT_UPDATED',
+        entityId: projectId,
+      });
+    });
+
+    const updated = await this.getProject(organizationId, projectId);
+    if (!updated) throw new ProjectNotFoundError('Project');
+    return updated;
   }
 }

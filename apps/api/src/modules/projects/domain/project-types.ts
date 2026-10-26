@@ -8,4 +8,15 @@ export type ProjectLifecyclePhase =
   | 'HANDOVER'
   | 'COMPLETED';
 export type ProjectPhaseStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'BLOCKED';
-export type ProjectLifecycleTab = 'ALL' | 'UPCOMING' | 'ONGOING' | 'COMPLETED';
+export type ProjectExecutionLifecycle =
+  | 'NOT_PLANNED'
+  | 'PLANNED'
+  | 'IN_PRODUCTION'
+  | 'COMPLETED';
+
+export type ProjectLifecycleTab =
+  | 'ALL'
+  | 'NOT_PLANNED'
+  | 'PLANNED'
+  | 'IN_PRODUCTION'
+  | 'COMPLETED';

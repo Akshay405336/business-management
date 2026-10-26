@@ -11,6 +11,7 @@ import type {
   ProjectNumberPreviewResponse,
   UpdateProjectRequest,
 } from '../types';
+import type { SaveProjectPlanRequest } from '@techwin/validation';
 
 type ProjectManagersResponse = {
   readonly managers: readonly { id: string; displayName: string; email: string }[];
@@ -72,4 +73,28 @@ export function changeProjectStatus(
 
 export function deleteProject(id: string): Promise<void> {
   return apiRequest<void>(PROJECT_ROUTES.project(id), { method: 'DELETE', auth: true });
+}
+
+export function saveProjectPlan(id: string, body: SaveProjectPlanRequest): Promise<ProjectDetail> {
+  return apiRequest<ProjectDetail>(PROJECT_ROUTES.projectPlan(id), {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function startProjectProduction(id: string): Promise<ProjectDetail> {
+  return apiRequest<ProjectDetail>(PROJECT_ROUTES.projectStartProduction(id), {
+    method: 'POST',
+    auth: true,
+    body: {},
+  });
+}
+
+export function completeProject(id: string): Promise<ProjectDetail> {
+  return apiRequest<ProjectDetail>(PROJECT_ROUTES.projectComplete(id), {
+    method: 'POST',
+    auth: true,
+    body: {},
+  });
 }

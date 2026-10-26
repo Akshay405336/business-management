@@ -76,7 +76,13 @@ export function ProjectTasksPage() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | ProjectStatus>('ALL');
   const [priorityFilter, setPriorityFilter] = useState<'ALL' | ProjectPriority>('ALL');
   const [lifecycleTab, setLifecycleTab] = useState<ProjectLifecycleTab>('ALL');
-  const [tabCounts, setTabCounts] = useState({ all: 0, upcoming: 0, ongoing: 0, completed: 0 });
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    notPlanned: 0,
+    planned: 0,
+    inProduction: 0,
+    completed: 0,
+  });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,8 +153,9 @@ export function ProjectTasksPage() {
 
   const tabCountLabel = (tab: ProjectLifecycleTab) => {
     if (tab === 'ALL') return tabCounts.all;
-    if (tab === 'UPCOMING') return tabCounts.upcoming;
-    if (tab === 'ONGOING') return tabCounts.ongoing;
+    if (tab === 'NOT_PLANNED') return tabCounts.notPlanned;
+    if (tab === 'PLANNED') return tabCounts.planned;
+    if (tab === 'IN_PRODUCTION') return tabCounts.inProduction;
     return tabCounts.completed;
   };
 
@@ -316,6 +323,7 @@ export function ProjectTasksPage() {
             onToggleActive={(target) => void toggleActive(target)}
             onEdit={openEdit}
             onDelete={setDeleteTarget}
+            onLifecycleChange={() => void load()}
             className={actionsBusy ? 'opacity-80' : undefined}
           />
         )
