@@ -19,12 +19,14 @@ function stopMenuPointer(event: PointerEvent) {
 export function ProjectCardActionsMenu({
   project,
   disabled,
+  editDisabled,
   onToggleActive,
   onEdit,
   onDelete,
 }: {
   project: ProjectActionTarget;
   disabled?: boolean;
+  editDisabled?: boolean;
   onToggleActive: (project: ProjectActionTarget) => void;
   onEdit: (id: string) => void;
   onDelete: (project: ProjectActionTarget) => void;
@@ -54,7 +56,10 @@ export function ProjectCardActionsMenu({
             <Power className="size-3.5" aria-hidden="true" />
             {isActive ? 'Deactivate' : 'Activate'}
           </DropdownMenuItem>
-          <DropdownMenuItem disabled={disabled} onSelect={() => onEdit(project.id)}>
+          <DropdownMenuItem
+            disabled={disabled || editDisabled}
+            onSelect={() => onEdit(project.id)}
+          >
             <Pencil className="size-3.5" aria-hidden="true" />
             Edit
           </DropdownMenuItem>

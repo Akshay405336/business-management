@@ -50,6 +50,9 @@ import {
   previewProjectNumber,
   updateProject,
 } from '../api/projects';
+import { ProjectPlanLockNotice } from './project-plan-lock-notice';
+import { isProjectPlanLocked } from '../constants/plan-lock';
+import type { ProjectExecutionLifecycle } from '../types';
 import { CRM_PROJECT_FORM_DIALOG_CLASS, PROJECT_PRIORITIES } from '../constants';
 import { PROJECT_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import type { ClientQuotationOption, ProjectManagerOption } from '../types';
@@ -99,6 +102,14 @@ export function ProjectFormDialog({
   const [numberPreviewHint, setNumberPreviewHint] = useState('');
   const [loadingProject, setLoadingProject] = useState(false);
   const [phaseSubmitAttempted, setPhaseSubmitAttempted] = useState(false);
+  const [executionLifecycle, setExecutionLifecycle] = useState<ProjectExecutionLifecycle | null>(
+    null,
+  );
+
+  const planBaselineLocked = executionLifecycle
+    ? isProjectPlanLocked(executionLifecycle)
+    : false;
+  const projectFullyReadOnly = executionLifecycle === 'COMPLETED';
 
   const activeClients = useMemo(
     () => clients.filter((client) => client.status === 'ACTIVE'),
@@ -143,6 +154,7 @@ export function ProjectFormDialog({
     setFieldErrors({});
     setQuotations([]);
     setPhaseSubmitAttempted(false);
+    setExecutionLifecycle(null);
     liveFields.reset();
   }, [liveFields]);
 
@@ -187,6 +199,7 @@ export function ProjectFormDialog({
     void getProject(editingId)
       .then((project) => {
         setForm(projectToForm(project));
+        setExecutionLifecycle(project.executionLifecycle);
         setFieldErrors({});
         liveFields.reset();
       })
@@ -273,14 +286,24 @@ export function ProjectFormDialog({
   };
 
   const onSubmit = async () => {
+    if (projectFullyReadOnly) return;
     liveFields.prepareSubmit();
     setPhaseSubmitAttempted(true);
-    const phaseErrors = validatePhaseFormRows(
-      form.phases,
-      form.startDate,
-      form.expectedEndDate,
-    );
-    const payload = editingId ? formToUpdatePayload(form) : formToCreatePayload(form);
+    const phaseErrors =
+      editingId && planBaselineLocked
+        ? {}
+        : validatePhaseFormRows(form.phases, form.startDate, form.expectedEndDate);
+    let payload = editingId ? formToUpdatePayload(form) : formToCreatePayload(form);
+    if (editingId && planBaselineLocked) {
+      const {
+        startDate: _start,
+        expectedEndDate: _end,
+        phases: _phases,
+        scopeAndRequirements: _scope,
+        ...safePayload
+      } = payload;
+      payload = safePayload as typeof payload;
+    }
     const schema = editingId ? updateProjectRequestSchema : createProjectRequestSchema;
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
@@ -456,6 +479,7 @@ export function ProjectFormDialog({
                       id="startDate"
                       type="date"
                       value={form.startDate}
+                      disabled={planBaselineLocked || projectFullyReadOnly}
                       className={formControlStateClass(liveFields.controlState('startDate'))}
                       {...liveFields.controlProps('startDate', 'startDate')}
                       onChange={(event) => {
@@ -487,6 +511,7 @@ export function ProjectFormDialog({
                       id="expectedEndDate"
                       type="date"
                       value={form.expectedEndDate}
+                      disabled={planBaselineLocked || projectFullyReadOnly}
                       className={formControlStateClass(liveFields.controlState('expectedEndDate'))}
                       {...liveFields.controlProps('expectedEndDate', 'expectedEndDate')}
                       onChange={(event) => {
@@ -656,89 +681,98 @@ export function ProjectFormDialog({
                 </div>
               </section>
 
-              <section className="grid gap-4">
-                <h3 className="text-sm font-semibold">Project scope</h3>
-                <div className={formGridClass}>
-                  <div className={formGridFullWidthClass}>
-                    <CrmFormField
-                      label="Scope and requirements"
-                      id="scopeAndRequirements"
-                      optional
-                      validated={Boolean(fieldError('scopeAndRequirements'))}
-                      error={fieldError('scopeAndRequirements')}
-                    >
-                      <Textarea
-                        id="scopeAndRequirements"
-                        rows={3}
-                        value={form.scopeAndRequirements}
-                        placeholder={PROJECT_FORM_PLACEHOLDERS.scope}
-                        className={formControlStateClass(
-                          liveFields.controlState('scopeAndRequirements'),
-                        )}
-                        {...liveFields.controlProps('scopeAndRequirements', 'scopeAndRequirements')}
-                        onChange={(event) => {
-                          setForm((current) => ({
-                            ...current,
-                            scopeAndRequirements: event.target.value,
-                          }));
-                          clearFormFieldError(setFieldErrors, 'scopeAndRequirements');
-                        }}
-                      />
-                    </CrmFormField>
-                  </div>
-                </div>
-              </section>
+              {planBaselineLocked ? (
+                <ProjectPlanLockNotice className="my-2" />
+              ) : (
+                <>
+                  <section className="grid gap-4">
+                    <h3 className="text-sm font-semibold">Project scope</h3>
+                    <div className={formGridClass}>
+                      <div className={formGridFullWidthClass}>
+                        <CrmFormField
+                          label="Scope and requirements"
+                          id="scopeAndRequirements"
+                          optional
+                          validated={Boolean(fieldError('scopeAndRequirements'))}
+                          error={fieldError('scopeAndRequirements')}
+                        >
+                          <Textarea
+                            id="scopeAndRequirements"
+                            rows={3}
+                            value={form.scopeAndRequirements}
+                            placeholder={PROJECT_FORM_PLACEHOLDERS.scope}
+                            className={formControlStateClass(
+                              liveFields.controlState('scopeAndRequirements'),
+                            )}
+                            {...liveFields.controlProps(
+                              'scopeAndRequirements',
+                              'scopeAndRequirements',
+                            )}
+                            onChange={(event) => {
+                              setForm((current) => ({
+                                ...current,
+                                scopeAndRequirements: event.target.value,
+                              }));
+                              clearFormFieldError(setFieldErrors, 'scopeAndRequirements');
+                            }}
+                          />
+                        </CrmFormField>
+                      </div>
+                    </div>
+                  </section>
 
-              <ProjectPhasesEditor
-                phases={form.phases}
-                projectStartDate={form.startDate}
-                projectExpectedEndDate={form.expectedEndDate}
-                fieldErrors={fieldErrors}
-                submitAttempted={phaseSubmitAttempted}
-                onAddPhase={() =>
-                  setForm((current) => ({
-                    ...current,
-                    phases: addProjectPhase(
-                      current.phases,
-                      current.startDate,
-                      current.expectedEndDate,
-                    ),
-                  }))
-                }
-                onPatchPhase={(key, patch, manualDateField) =>
-                  setForm((current) => ({
-                    ...current,
-                    phases: patchProjectPhaseRow(
-                      current.phases,
-                      key,
-                      patch,
-                      manualDateField ?? null,
-                      current.startDate,
-                      current.expectedEndDate,
-                    ),
-                  }))
-                }
-                onReorderPhases={(phases) =>
-                  setForm((current) => ({
-                    ...current,
-                    phases: reorderProjectPhases(
-                      phases,
-                      current.startDate,
-                      current.expectedEndDate,
-                    ),
-                  }))
-                }
-                onRemovePhases={(phases) =>
-                  setForm((current) => ({
-                    ...current,
-                    phases: replaceProjectPhases(
-                      phases,
-                      current.startDate,
-                      current.expectedEndDate,
-                    ),
-                  }))
-                }
-              />
+                  <ProjectPhasesEditor
+                    phases={form.phases}
+                    projectStartDate={form.startDate}
+                    projectExpectedEndDate={form.expectedEndDate}
+                    fieldErrors={fieldErrors}
+                    submitAttempted={phaseSubmitAttempted}
+                    onAddPhase={() =>
+                      setForm((current) => ({
+                        ...current,
+                        phases: addProjectPhase(
+                          current.phases,
+                          current.startDate,
+                          current.expectedEndDate,
+                        ),
+                      }))
+                    }
+                    onPatchPhase={(key, patch, manualDateField) =>
+                      setForm((current) => ({
+                        ...current,
+                        phases: patchProjectPhaseRow(
+                          current.phases,
+                          key,
+                          patch,
+                          manualDateField ?? null,
+                          current.startDate,
+                          current.expectedEndDate,
+                        ),
+                      }))
+                    }
+                    onReorderPhases={(phases) =>
+                      setForm((current) => ({
+                        ...current,
+                        phases: reorderProjectPhases(
+                          phases,
+                          current.startDate,
+                          current.expectedEndDate,
+                        ),
+                      }))
+                    }
+                    onRemovePhases={(phases) =>
+                      setForm((current) => ({
+                        ...current,
+                        phases: replaceProjectPhases(
+                          phases,
+                          current.startDate,
+                          current.expectedEndDate,
+                        ),
+                      }))
+                    }
+                  />
+                </>
+              )}
             </div>
           )}
         </div>
@@ -747,7 +781,11 @@ export function ProjectFormDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={pending || loadingProject} onClick={() => void onSubmit()}>
+          <Button
+            type="button"
+            disabled={pending || loadingProject || projectFullyReadOnly}
+            onClick={() => void onSubmit()}
+          >
             {pending ? (
               <>
                 <Loader2 className="size-4 animate-spin" aria-hidden="true" />

@@ -10,6 +10,10 @@ const HTTP_MAPPING: Record<ProjectErrorCode, { status: number; code: ApiErrorCod
     status: HttpStatus.BAD_REQUEST,
     code: API_ERROR_CODES.VALIDATION_FAILED,
   },
+  PROJECT_PLAN_LOCKED: {
+    status: HttpStatus.CONFLICT,
+    code: API_ERROR_CODES.PROJECT_PLAN_LOCKED,
+  },
 };
 
 @Catch(ProjectError)

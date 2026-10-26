@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertDialog,
@@ -22,7 +23,11 @@ import { getProject, saveProjectPlan } from '@/features/admin/projects/api/proje
 import { ProjectExecutionLifecycleBadge } from '@/features/admin/projects/components/project-execution-lifecycle-badge';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
 import type { ProjectDetail } from '@/features/admin/projects/types';
-import { labelProjectExecutionLifecycle } from '@/features/admin/projects/utils/labels';
+import { ProjectPlanLockNotice } from '@/features/admin/projects/components/project-plan-lock-notice';
+import {
+  isProjectPlanLocked,
+  PROJECT_PLAN_LOCKED_MESSAGE,
+} from '@/features/admin/projects/constants/plan-lock';
 import type { SaveProjectPlanRequest } from '@techwin/validation';
 import {
   createProjectTask,
@@ -36,6 +41,7 @@ import { ProjectTaskFormDialog } from './project-task-form-dialog';
 import { ProjectTaskKanbanBoard } from './project-task-kanban-board';
 
 export function ProjectPlanningPage({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
   const [project, setProject] = useState<ProjectDetail | null>(null);
@@ -47,9 +53,7 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProjectTask | null>(null);
 
-  const readOnly =
-    project?.executionLifecycle === 'IN_PRODUCTION' ||
-    project?.executionLifecycle === 'COMPLETED';
+  const readOnly = project ? isProjectPlanLocked(project.executionLifecycle) : false;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,6 +76,11 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!project || !readOnly) return;
+    router.replace(`/admin/project-tasks/${projectId}?viewPlan=1`);
+  }, [project, projectId, readOnly, router]);
 
   const tasks = useMemo(() => board?.phases.flatMap((phase) => phase.tasks) ?? [], [board]);
   const phases = useMemo(() => board?.phases ?? [], [board]);
@@ -225,12 +234,18 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
             <Button type="button" onClick={() => void savePlan()} disabled={pending}>
               Save Plan
             </Button>
-          ) : (
-            <p className="text-muted-foreground text-xs">
-              {labelProjectExecutionLifecycle(project.executionLifecycle)} — plan is read-only.
-            </p>
-          )}
+          ) : null}
         </div>
+        {readOnly ? (
+          <ProjectPlanLockNotice
+            className="mt-3"
+            message={
+              project.executionLifecycle === 'COMPLETED'
+                ? 'Completed projects are read-only.'
+                : PROJECT_PLAN_LOCKED_MESSAGE
+            }
+          />
+        ) : null}
       </section>
       <ProjectTaskKanbanBoard
         phases={phases}

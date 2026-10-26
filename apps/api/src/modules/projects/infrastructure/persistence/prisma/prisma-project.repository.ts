@@ -508,6 +508,10 @@ export class PrismaProjectRepository implements ProjectRepository {
   ): Promise<ProjectDetailRecord> {
     const existing = await this.getProject(organizationId, projectId);
     if (!existing) throw new ProjectNotFoundError('Project');
+    ProjectExecutionLifecyclePolicy.assertCanUpdateProject(
+      existing.executionLifecycle,
+      input,
+    );
 
     const clientId = input.clientId ?? existing.clientId;
     const client = await this.loadClient(organizationId, clientId);
@@ -691,6 +695,13 @@ export class PrismaProjectRepository implements ProjectRepository {
     );
 
     await this.prisma.$transaction(async (tx) => {
+      const lifecycleRow = await tx.project.findFirst({
+        where: { id: projectId, organizationId },
+        select: { executionLifecycle: true },
+      });
+      if (!lifecycleRow) throw new ProjectNotFoundError('Project');
+      ProjectExecutionLifecyclePolicy.assertCanSavePlan(lifecycleRow.executionLifecycle);
+
       await this.syncProjectPhases(tx, organizationId, projectId, phaseInputs, existing.phases);
       const phases = await tx.projectPhase.findMany({
         where: { organizationId, projectId },
@@ -793,14 +804,21 @@ export class PrismaProjectRepository implements ProjectRepository {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.project.update({
-        where: { id: projectId },
+      const updated = await tx.project.updateMany({
+        where: {
+          id: projectId,
+          organizationId,
+          executionLifecycle: 'PLANNED',
+        },
         data: {
           executionLifecycle: ProjectExecutionLifecyclePolicy.nextAfterProductionStart(),
           actualProductionStartedAt: new Date(),
           currentPhase: 'PRODUCTION',
         },
       });
+      if (updated.count === 0) {
+        throw new ProjectValidationError('Only a planned project can start production.');
+      }
       await this.writeAudit(tx, organizationId, {
         adminId: audit.adminId,
         type: 'PROJECT_UPDATED',
@@ -835,14 +853,21 @@ export class PrismaProjectRepository implements ProjectRepository {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.project.update({
-        where: { id: projectId },
+      const updated = await tx.project.updateMany({
+        where: {
+          id: projectId,
+          organizationId,
+          executionLifecycle: 'IN_PRODUCTION',
+        },
         data: {
           executionLifecycle: ProjectExecutionLifecyclePolicy.nextAfterComplete(),
           actualCompletedAt: new Date(),
           currentPhase: 'COMPLETED',
         },
       });
+      if (updated.count === 0) {
+        throw new ProjectValidationError('Only a project in production can be marked completed.');
+      }
       await this.writeAudit(tx, organizationId, {
         adminId: audit.adminId,
         type: 'PROJECT_UPDATED',

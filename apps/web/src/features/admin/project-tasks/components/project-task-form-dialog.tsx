@@ -3,6 +3,7 @@
 import {
   createProjectTaskRequestSchema,
   updateProjectTaskRequestSchema,
+  type UpdateProjectTaskRequest,
 } from '@techwin/validation';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -92,12 +93,15 @@ function formToPayload(form: FormState) {
   };
 }
 
+export type ProjectTaskFormMode = 'plan' | 'execution' | 'readonly';
+
 export function ProjectTaskFormDialog({
   open,
   onOpenChange,
   phases,
   editingTask,
   defaultPhaseId,
+  mode = 'plan',
   onSubmit,
 }: {
   open: boolean;
@@ -105,6 +109,7 @@ export function ProjectTaskFormDialog({
   phases: readonly ProjectTaskBoardPhase[];
   editingTask: ProjectTask | null;
   defaultPhaseId?: string;
+  mode?: ProjectTaskFormMode;
   onSubmit: (payload: ReturnType<typeof formToPayload>) => Promise<void>;
 }) {
   const toast = useAdminToast();
@@ -124,10 +129,27 @@ export function ProjectTaskFormDialog({
     void listProjectManagers().then((res) => setManagers(res.managers));
   }, [open, editingTask, defaultPhaseId, phases]);
 
-  const title = editingTask ? 'Edit task' : 'Add task';
+  const executionOnly = mode === 'execution';
+  const viewOnly = mode === 'readonly';
+  const title = viewOnly
+    ? 'Task details'
+    : editingTask
+      ? executionOnly
+        ? 'Update task progress'
+        : 'Edit task'
+      : 'Add task';
 
   const handleSave = async () => {
-    const payload = formToPayload(form);
+    if (viewOnly) return;
+    const fullPayload = formToPayload(form);
+    const payload: UpdateProjectTaskRequest =
+      executionOnly && editingTask
+        ? {
+            status: fullPayload.status,
+            assigneeAdminId: fullPayload.assigneeAdminId,
+            labels: fullPayload.labels,
+          }
+        : fullPayload;
     const schema = editingTask ? updateProjectTaskRequestSchema : createProjectTaskRequestSchema;
     const parsed = schema.safeParse(payload);
     if (!parsed.success) {
@@ -152,7 +174,9 @@ export function ProjectTaskFormDialog({
         <DialogHeader className="px-6 pt-6">
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Tasks belong to a project phase. Dates and assignee are optional.
+            {executionOnly
+              ? 'Update status and assignee during production. Planned task details stay locked.'
+              : 'Tasks belong to a project phase. Dates and assignee are optional.'}
           </DialogDescription>
         </DialogHeader>
         <div className="overflow-y-auto px-6 pb-2">
@@ -160,6 +184,7 @@ export function ProjectTaskFormDialog({
             <CrmFormField label="Title" required className={formGridFullWidthClass}>
               <Input
                 value={form.title}
+                disabled={executionOnly || viewOnly}
                 onChange={(e) => setForm((c) => ({ ...c, title: e.target.value }))}
               />
               <CrmInlineFieldError message={fieldErrors.title} />
@@ -167,6 +192,7 @@ export function ProjectTaskFormDialog({
             <CrmFormField label="Phase" required className={formGridFullWidthClass}>
               <Select
                 value={form.phaseId}
+                disabled={executionOnly || viewOnly}
                 onValueChange={(value) => setForm((c) => ({ ...c, phaseId: value }))}
               >
                 <SelectTrigger>
@@ -185,6 +211,7 @@ export function ProjectTaskFormDialog({
             <CrmFormField label="Priority" required>
               <Select
                 value={form.priority}
+                disabled={executionOnly || viewOnly}
                 onValueChange={(value) =>
                   setForm((c) => ({ ...c, priority: value as FormState['priority'] }))
                 }
@@ -204,6 +231,7 @@ export function ProjectTaskFormDialog({
             <CrmFormField label="Status" required>
               <Select
                 value={form.status}
+                disabled={viewOnly}
                 onValueChange={(value) =>
                   setForm((c) => ({ ...c, status: value as FormState['status'] }))
                 }
@@ -223,6 +251,7 @@ export function ProjectTaskFormDialog({
             <CrmFormField label="Assignee" className={formGridFullWidthClass}>
               <Select
                 value={form.assigneeAdminId || '__none__'}
+                disabled={viewOnly}
                 onValueChange={(value) =>
                   setForm((c) => ({
                     ...c,
@@ -247,6 +276,7 @@ export function ProjectTaskFormDialog({
               <Input
                 type="date"
                 value={form.startDate}
+                disabled={executionOnly || viewOnly}
                 onChange={(e) => setForm((c) => ({ ...c, startDate: e.target.value }))}
               />
               <CrmInlineFieldError message={fieldErrors.startDate} />
@@ -255,6 +285,7 @@ export function ProjectTaskFormDialog({
               <Input
                 type="date"
                 value={form.dueDate}
+                disabled={executionOnly || viewOnly}
                 onChange={(e) => setForm((c) => ({ ...c, dueDate: e.target.value }))}
               />
               <CrmInlineFieldError message={fieldErrors.dueDate} />
@@ -263,6 +294,7 @@ export function ProjectTaskFormDialog({
               <Textarea
                 rows={3}
                 value={form.description}
+                disabled={executionOnly || viewOnly}
                 onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))}
               />
             </CrmFormField>
@@ -270,6 +302,7 @@ export function ProjectTaskFormDialog({
               <Input
                 placeholder="Comma-separated labels"
                 value={form.labelsText}
+                disabled={viewOnly}
                 onChange={(e) => setForm((c) => ({ ...c, labelsText: e.target.value }))}
               />
             </CrmFormField>
@@ -279,10 +312,12 @@ export function ProjectTaskFormDialog({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" disabled={pending} onClick={() => void handleSave()}>
-            {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-            Save task
-          </Button>
+          {!viewOnly ? (
+            <Button type="button" disabled={pending} onClick={() => void handleSave()}>
+              {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+              {executionOnly ? 'Save progress' : 'Save task'}
+            </Button>
+          ) : null}
         </DialogFooter>
       </DialogContent>
     </Dialog>

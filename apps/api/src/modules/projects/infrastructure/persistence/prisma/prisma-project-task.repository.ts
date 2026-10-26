@@ -308,9 +308,7 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   ): Promise<ProjectTaskRecord> {
     const project = await this.assertProject(organizationId, projectId);
     this.assertCanMutateTasks(project.executionLifecycle);
-    if (project.executionLifecycle !== 'IN_PRODUCTION') {
-      ProjectExecutionLifecyclePolicy.assertCanSavePlan(project.executionLifecycle);
-    }
+    ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
     await this.assertPhaseInProject(organizationId, projectId, input.phaseId);
     await this.assertAssignee(organizationId, input.assigneeAdminId);
 
@@ -347,7 +345,9 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     this.assertCanMutateTasks(project.executionLifecycle);
     const existing = await this.getTask(organizationId, projectId, taskId);
     if (!existing) throw new ProjectNotFoundError('Task');
-    if (
+    if (project.executionLifecycle === 'IN_PRODUCTION') {
+      ProjectExecutionLifecyclePolicy.assertCanUpdateTaskInProduction(input);
+    } else if (
       project.executionLifecycle === 'NOT_PLANNED' ||
       project.executionLifecycle === 'PLANNED'
     ) {
@@ -416,7 +416,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
 
   async deleteTask(organizationId: string, projectId: string, taskId: string): Promise<void> {
     const project = await this.assertProject(organizationId, projectId);
-    ProjectExecutionLifecyclePolicy.assertCanSavePlan(project.executionLifecycle);
+    this.assertCanMutateTasks(project.executionLifecycle);
+    ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
     const existing = await this.getTask(organizationId, projectId, taskId);
     if (!existing) throw new ProjectNotFoundError('Task');
 
@@ -437,6 +438,7 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   ): Promise<ProjectTaskRecord> {
     const project = await this.assertProject(organizationId, projectId);
     this.assertCanMutateTasks(project.executionLifecycle);
+    ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
     const task = await this.getTask(organizationId, projectId, taskId);
     if (!task) throw new ProjectNotFoundError('Task');
     await this.assertPhaseInProject(organizationId, projectId, phaseId);

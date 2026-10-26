@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import { CrmErrorAlert, CrmLoadingRows } from '@/features/admin/crm/components/c
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { completeProject } from '@/features/admin/projects/api/projects';
+import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import {
   createProjectTask,
   deleteProjectTask,
@@ -30,9 +31,11 @@ import type { ProjectTask, ProjectTaskBoardResponse } from '../types';
 import { ProjectBoardOverview } from './project-board-overview';
 import { ProjectTaskFormDialog } from './project-task-form-dialog';
 import { ProjectTaskKanbanBoard } from './project-task-kanban-board';
+import { ProjectViewPlanModal } from './project-view-plan-modal';
 
 export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
   const [completeOpen, setCompleteOpen] = useState(false);
@@ -43,6 +46,14 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
   const [defaultPhaseId, setDefaultPhaseId] = useState<string | undefined>();
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProjectTask | null>(null);
+  const [viewPlanUserOpen, setViewPlanUserOpen] = useState(false);
+  const viewPlanFromQuery = searchParams.get('viewPlan') === '1';
+  const viewPlanOpen = viewPlanUserOpen || (viewPlanFromQuery && Boolean(board));
+
+  const clearViewPlanQuery = useCallback(() => {
+    if (searchParams.get('viewPlan') !== '1') return;
+    router.replace(`/admin/project-tasks/${projectId}`, { scroll: false });
+  }, [projectId, router, searchParams]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,7 +81,10 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
     }
   }, [board, projectId, router]);
 
-  const readOnly = board?.project.executionLifecycle === 'COMPLETED';
+  const lifecycle = board?.project.executionLifecycle;
+  const planLocked = lifecycle ? isProjectPlanLocked(lifecycle) : false;
+  const readOnly = lifecycle === 'COMPLETED';
+  const taskFormMode = readOnly ? 'readonly' : planLocked ? 'execution' : 'plan';
   const tasks = useMemo(() => board?.phases.flatMap((phase) => phase.tasks) ?? [], [board]);
   const phases = useMemo(() => board?.phases ?? [], [board]);
 
@@ -91,6 +105,7 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
     phaseId: string;
     beforeTaskId: string | null;
   }) => {
+    if (planLocked) return;
     try {
       await run(() =>
         moveProjectTask(projectId, input.taskId, {
@@ -117,7 +132,7 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
   };
 
   const handleSave = async (payload: Parameters<typeof createProjectTask>[1]) => {
-    if (readOnly) return;
+    if (readOnly || (planLocked && !editingTask)) return;
     if (editingTask) {
       await updateProjectTask(projectId, editingTask.id, payload);
       toast.success('Task updated.');
@@ -170,30 +185,40 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
       <ProjectBoardOverview
         board={board}
         onAddTask={() => openCreate()}
-        addTaskDisabled={pending || readOnly}
+        addTaskDisabled={pending || readOnly || planLocked}
         onCompleteProject={
           board.project.executionLifecycle === 'IN_PRODUCTION'
             ? () => setCompleteOpen(true)
             : undefined
         }
         completeDisabled={pending}
+        onViewPlan={() => setViewPlanUserOpen(true)}
+      />
+      <ProjectViewPlanModal
+        open={viewPlanOpen}
+        onOpenChange={(open) => {
+          setViewPlanUserOpen(open);
+          if (!open) clearViewPlanQuery();
+        }}
+        projectId={projectId}
+        board={board}
       />
       <ProjectTaskKanbanBoard
         phases={phases}
         tasks={tasks}
-        disabled={pending || readOnly}
+        disabled={pending || readOnly || planLocked}
         onPersistMove={persistMove}
         onView={openEdit}
         onEdit={openEdit}
         onDelete={
-          readOnly
+          readOnly || planLocked
             ? () => {}
             : (taskId) => {
                 const task = tasks.find((t) => t.id === taskId);
                 if (task) setDeleteTarget(task);
               }
         }
-        onAddInPhase={readOnly ? () => {} : (phaseId) => openCreate(phaseId)}
+        onAddInPhase={readOnly || planLocked ? () => {} : (phaseId) => openCreate(phaseId)}
       />
       <ProjectTaskFormDialog
         open={formOpen}
@@ -201,6 +226,7 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
         phases={phases}
         editingTask={editingTask}
         defaultPhaseId={defaultPhaseId}
+        mode={taskFormMode}
         onSubmit={handleSave}
       />
       <AlertDialog open={completeOpen} onOpenChange={setCompleteOpen}>

@@ -14,6 +14,7 @@ import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { formatDateOnly } from '@/features/admin/crm/utils/format';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
 import { ProjectProgressBar } from '@/features/admin/projects/components/project-progress-bar';
+import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import { ProjectStatusBadge } from '@/features/admin/projects/components/project-status-badge';
 import type { ProjectActionTarget } from '@/features/admin/projects/hooks/use-project-list-actions';
 import type { ProjectTaskSummaryItem } from '../types';
@@ -148,7 +149,7 @@ export function ProjectListView({
                 <TableIconButton
                   className="size-8 shrink-0"
                   label="Edit project"
-                  disabled={actionsDisabled}
+                  disabled={actionsDisabled || isProjectPlanLocked(project.executionLifecycle)}
                   onClick={() => onEdit(project.id)}
                 >
                   <Pencil className="size-4" aria-hidden="true" />

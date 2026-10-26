@@ -1,4 +1,4 @@
-export type ProjectErrorCode = 'NOT_FOUND' | 'VALIDATION_FAILED';
+export type ProjectErrorCode = 'NOT_FOUND' | 'VALIDATION_FAILED' | 'PROJECT_PLAN_LOCKED';
 
 export abstract class ProjectError extends Error {
   abstract readonly code: ProjectErrorCode;
@@ -18,6 +18,13 @@ export class ProjectNotFoundError extends ProjectError {
 
 export class ProjectValidationError extends ProjectError {
   readonly code = 'VALIDATION_FAILED';
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+export class ProjectPlanLockedError extends ProjectError {
+  readonly code = 'PROJECT_PLAN_LOCKED';
   constructor(message: string) {
     super(message);
   }

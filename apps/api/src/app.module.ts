@@ -7,6 +7,7 @@ import { LoggingModule } from './infrastructure/logging/logging.module.js';
 import { AuthModule } from './modules/auth/index.js';
 import { CrmModule } from './modules/crm/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
+import { EmployeesModule } from './modules/employees/index.js';
 import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
@@ -18,6 +19,7 @@ import { HealthModule } from './modules/health/health.module.js';
     AuthModule,
     CrmModule,
     ProjectsModule,
+    EmployeesModule,
   ],
 })
 export class AppModule implements NestModule {

@@ -18,6 +18,8 @@ import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { formatDateOnly } from '@/features/admin/crm/utils/format';
 import { startProjectProduction } from '@/features/admin/projects/api/projects';
+import { ProjectPlanLockNotice } from '@/features/admin/projects/components/project-plan-lock-notice';
+import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import { ProjectCardActionsMenu } from '@/features/admin/projects/components/project-card-actions-menu';
 import type { ProjectActionTarget } from '@/features/admin/projects/hooks/use-project-list-actions';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
@@ -51,6 +53,7 @@ export function ProjectTaskSummaryCard({
 
   const planHref = `/admin/project-tasks/${project.id}/plan`;
   const boardHref = `/admin/project-tasks/${project.id}`;
+  const viewPlanHref = `${boardHref}?viewPlan=1`;
   const actionTarget: ProjectActionTarget = {
     id: project.id,
     name: project.name,
@@ -93,6 +96,7 @@ export function ProjectTaskSummaryCard({
           <ProjectCardActionsMenu
             project={actionTarget}
             disabled={actionsDisabled || lifecycle === 'COMPLETED'}
+            editDisabled={isProjectPlanLocked(lifecycle)}
             onToggleActive={onToggleActive}
             onEdit={onEdit}
             onDelete={onDelete}
@@ -148,7 +152,7 @@ export function ProjectTaskSummaryCard({
         {lifecycle === 'PLANNED' ? (
           <>
             <Button asChild variant="default" className="h-9 w-full shrink-0">
-              <Link href={planHref}>View Plan</Link>
+              <Link href={planHref}>Edit Plan</Link>
             </Button>
             <Button
               type="button"
@@ -167,8 +171,9 @@ export function ProjectTaskSummaryCard({
               <Link href={boardHref}>Open Production Board</Link>
             </Button>
             <Button asChild variant="outline" className="h-9 w-full shrink-0">
-              <Link href={planHref}>View Plan</Link>
+              <Link href={viewPlanHref}>View Plan</Link>
             </Button>
+            <ProjectPlanLockNotice compact className="px-0.5" />
           </>
         ) : null}
         {lifecycle === 'COMPLETED' ? (
@@ -177,7 +182,7 @@ export function ProjectTaskSummaryCard({
               <Link href={boardHref}>View Project</Link>
             </Button>
             <Button asChild variant="outline" className="h-9 w-full shrink-0">
-              <Link href={planHref}>View Plan</Link>
+              <Link href={viewPlanHref}>View Plan</Link>
             </Button>
           </>
         ) : null}

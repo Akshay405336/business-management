@@ -72,6 +72,9 @@ model PlatformAdmin {
   createdClients        Client[]
   convertedLeads   Lead[]             @relation("LeadConvertedBy")
   crmAuditEvents   CrmAuditEvent[]
+  employeeProfile  Employee?
+  createdEmployees Employee[] @relation("EmployeeCreatedBy")
+  updatedEmployees Employee[] @relation("EmployeeUpdatedBy")
   managedProjects  Project[]          @relation("ProjectManager")
   createdProjects  Project[]          @relation("ProjectCreator")
   ownedProjectPhases ProjectPhase[]   @relation("PhaseOwner")
@@ -172,6 +175,7 @@ model Organization {
   projects        Project[]
   projectPhases   ProjectPhase[]
   projectTasks    ProjectTask[]
+  employees       Employee[]
   sequences       OrganizationSequence[]
   auditEvents     CrmAuditEvent[]
 
@@ -747,4 +751,63 @@ model CrmAuditEvent {
 
   @@index([organizationId, createdAt])
   @@map("crm_audit_events")
+}
+
+enum EmployeeEmploymentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum EmployeeEmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+model Employee {
+  id                 String                   @id @db.Uuid
+  organizationId     String                   @map("organization_id") @db.Uuid
+  employeeCode       String                   @map("employee_code") @db.VarChar(32)
+  firstName          String                   @map("first_name") @db.VarChar(80)
+  lastName           String                   @map("last_name") @db.VarChar(80)
+  displayName        String                   @map("display_name") @db.VarChar(160)
+  workEmail          String                   @map("work_email") @db.VarChar(254)
+  phone              String                   @db.VarChar(32)
+  alternatePhone     String?                  @map("alternate_phone") @db.VarChar(32)
+  profileImageUrl    String?                  @map("profile_image_url") @db.VarChar(512)
+  jobTitle           String                   @map("job_title") @db.VarChar(120)
+  department         String                   @db.VarChar(120)
+  employmentType     EmployeeEmploymentType   @map("employment_type")
+  employmentStatus   EmployeeEmploymentStatus @default(ACTIVE) @map("employment_status")
+  dateOfJoining      DateTime                 @map("date_of_joining") @db.Date
+  probationEndDate   DateTime?                @map("probation_end_date") @db.Date
+  employmentEndDate  DateTime?                @map("employment_end_date") @db.Date
+  workLocation       String?                  @map("work_location") @db.VarChar(160)
+  reportingManagerId String?                  @map("reporting_manager_id") @db.Uuid
+  notes              String                   @default("") @db.VarChar(4000)
+  platformAdminId    String?                  @unique @map("platform_admin_id") @db.Uuid
+  deactivatedAt      DateTime?                @map("deactivated_at") @db.Timestamptz(3)
+  createdByAdminId   String                   @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId   String?                  @map("updated_by_admin_id") @db.Uuid
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reportingManager Employee?      @relation("EmployeeReportingLine", fields: [reportingManagerId], references: [id], onDelete: SetNull)
+  directReports    Employee[]     @relation("EmployeeReportingLine")
+  platformAdmin    PlatformAdmin? @relation(fields: [platformAdminId], references: [id], onDelete: SetNull)
+  createdBy        PlatformAdmin  @relation("EmployeeCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedBy        PlatformAdmin? @relation("EmployeeUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, employeeCode])
+  @@unique([organizationId, workEmail])
+  @@unique([organizationId, phone])
+  @@index([organizationId, employmentStatus])
+  @@index([organizationId, department])
+  @@index([organizationId, dateOfJoining])
+  @@index([organizationId, updatedAt])
+  @@map("employees")
 }

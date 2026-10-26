@@ -91,7 +91,7 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     label: 'Human Resources',
     icon: Briefcase,
     items: [
-      { kind: 'soon', label: 'Employees', icon: Users },
+      { kind: 'link', href: '/admin/employees', label: 'Employees', icon: Users },
       { kind: 'soon', label: 'Departments', icon: Building2 },
       { kind: 'soon', label: 'Attendance', icon: CalendarDays },
       { kind: 'soon', label: 'Leave Management', icon: CalendarDays },

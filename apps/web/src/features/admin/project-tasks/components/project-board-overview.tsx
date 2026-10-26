@@ -14,6 +14,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { formatDateOnly } from '@/features/admin/crm/utils/format';
 import { ProjectExecutionLifecycleBadge } from '@/features/admin/projects/components/project-execution-lifecycle-badge';
+import { ProjectPlanLockNotice } from '@/features/admin/projects/components/project-plan-lock-notice';
+import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
 import { ProjectStatusBadge } from '@/features/admin/projects/components/project-status-badge';
 import { formatElapsedCalendarDays } from '../utils/execution-schedule';
@@ -54,6 +56,7 @@ export function ProjectBoardOverview({
   addTaskDisabled,
   onCompleteProject,
   completeDisabled,
+  onViewPlan,
   className,
 }: {
   board: ProjectTaskBoardResponse;
@@ -61,9 +64,11 @@ export function ProjectBoardOverview({
   addTaskDisabled?: boolean;
   onCompleteProject?: () => void;
   completeDisabled?: boolean;
+  onViewPlan: () => void;
   className?: string;
 }) {
   const { project } = board;
+  const planLocked = isProjectPlanLocked(project.executionLifecycle);
   const clampedProgress = Math.min(100, Math.max(0, project.progressPercent));
 
   const timeline = getProjectTimelineIndicator({
@@ -107,16 +112,18 @@ export function ProjectBoardOverview({
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              className="h-8"
-              onClick={onAddTask}
-              disabled={addTaskDisabled}
-            >
-              <Plus className="size-3.5" aria-hidden="true" />
-              Add Task
-            </Button>
+            {!planLocked ? (
+              <Button
+                type="button"
+                size="sm"
+                className="h-8"
+                onClick={onAddTask}
+                disabled={addTaskDisabled}
+              >
+                <Plus className="size-3.5" aria-hidden="true" />
+                Add Task
+              </Button>
+            ) : null}
             {onCompleteProject ? (
               <Button
                 type="button"
@@ -129,20 +136,23 @@ export function ProjectBoardOverview({
                 Complete Project
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href={`/admin/project-tasks/${project.id}/plan`}>View Plan</Link>
+            <Button type="button" variant="outline" size="sm" className="h-8" onClick={onViewPlan}>
+              View Plan
             </Button>
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href={`/admin/project-tasks?edit=${project.id}`}>
-                <Pencil className="size-3.5" aria-hidden="true" />
-                Edit project
-              </Link>
-            </Button>
+            {!planLocked ? (
+              <Button variant="outline" size="sm" className="h-8" asChild>
+                <Link href={`/admin/project-tasks?edit=${project.id}`}>
+                  <Pencil className="size-3.5" aria-hidden="true" />
+                  Edit project
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ProjectExecutionLifecycleBadge lifecycle={project.executionLifecycle} />
+          {planLocked ? <ProjectPlanLockNotice compact /> : null}
           <ProjectStatusBadge status={project.status} />
           <ProjectPriorityBadge priority={project.priority} />
           <span className="text-muted-foreground hidden text-xs sm:inline" aria-hidden="true">
