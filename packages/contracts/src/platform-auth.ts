@@ -1,4 +1,4 @@
-export type PlatformAdminRole = 'SUPER_ADMIN';
+export type PlatformAdminRole = 'SUPER_ADMIN' | 'ORGANIZATION_MEMBER';
 
 export interface PlatformAdminProfile {
   readonly id: string;
@@ -18,13 +18,22 @@ export interface PlatformSessionSummary {
   readonly current: boolean;
 }
 
-/** Returned after a successful password check. No session exists yet. */
-export interface PlatformLoginResponse {
+/** Super Admin password step: TOTP must complete before a session exists. */
+export interface PlatformLoginTotpRequiredResponse {
   readonly status: 'totp_required';
   readonly challengeExpiresAt: string;
   /** True when the authenticator has not been confirmed yet (first sign-in). */
   readonly enrollmentPending: boolean;
 }
+
+/** Organization members: password verification completes sign-in (no TOTP). */
+export type PlatformLoginAuthenticatedResponse = PlatformVerifyTotpResponse & {
+  readonly status: 'authenticated';
+};
+
+export type PlatformLoginResponse =
+  | PlatformLoginTotpRequiredResponse
+  | PlatformLoginAuthenticatedResponse;
 
 export interface PlatformAccessTokenResponse {
   readonly tokenType: 'Bearer';

@@ -21,8 +21,8 @@ export function AdminLoginForm() {
       <header className="grid gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Sign in to Techwin</h1>
         <p className="text-muted-foreground text-sm">
-          Use your platform administrator credentials. You will confirm with your authenticator app
-          next.
+          Sign in with your email and password. Super Admin accounts also confirm with an
+          authenticator app.
         </p>
       </header>
 

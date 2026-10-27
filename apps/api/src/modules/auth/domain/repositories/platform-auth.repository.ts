@@ -68,6 +68,8 @@ export interface PlatformAuthRepository {
     audit: PlatformAuditEvent,
   ): Promise<{ readonly revokedSessions: number; readonly deactivatedAdmins: number }>;
   updatePasswordHash(adminId: string, passwordHash: string): Promise<void>;
+  /** Records a successful password-only sign-in (no TOTP step). */
+  recordSuccessfulLogin(adminId: string, now: Date): Promise<void>;
   updateTotpSecretCiphertext(adminId: string, ciphertext: string): Promise<void>;
   /**
    * Records a successful TOTP use: stores the time step, confirms enrollment
@@ -82,6 +84,8 @@ export interface PlatformAuthRepository {
   recordChallengeFailure(challengeId: string): Promise<number>;
   /** Marks the challenge consumed; false if it was already consumed or expired. */
   consumeChallenge(challengeId: string, now: Date): Promise<boolean>;
+  /** Voids every outstanding TOTP challenge for the administrator (password-only login). */
+  consumeAllPendingChallenges(adminId: string, now: Date): Promise<void>;
   deleteStaleChallenges(adminId: string, now: Date): Promise<void>;
 
   createSession(session: PlatformSession, refreshToken: NewRefreshToken): Promise<void>;

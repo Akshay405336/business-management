@@ -51,6 +51,17 @@ function isPrismaUnavailable(error: unknown): error is Error & { code: string } 
   return typeof code === 'string' && PRISMA_UNAVAILABLE_CODES.has(code);
 }
 
+function prismaKnownRequestCode(error: unknown): string | null {
+  if (!(error instanceof Error) || error.name !== 'PrismaClientKnownRequestError') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : null;
+}
+
+function requestCorrelationId(request: Request): string {
+  const header = request.headers['x-request-id'];
+  return typeof header === 'string' && header.trim() ? header.trim() : 'unknown';
+}
+
 /**
  * Last line of defence: converts every exception into the standard error
  * envelope. Server errors are logged with their stack but returned to the
@@ -84,10 +95,23 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (exception instanceof ZodError) {
-      const details = exception.issues.map((issue) => ({
-        path: issue.path.map(String).join('.'),
-        message: issue.message,
-      }));
+      const details = exception.issues.map((issue) => {
+        if (
+          issue.code === 'unrecognized_keys' &&
+          'keys' in issue &&
+          Array.isArray(issue.keys) &&
+          issue.keys.length > 0
+        ) {
+          return {
+            path: String(issue.keys[0]),
+            message: issue.message,
+          };
+        }
+        return {
+          path: issue.path.map(String).join('.'),
+          message: issue.message,
+        };
+      });
       this.logger.warn(
         `Request validation failed: ${request.method} ${request.url} ${details
           .map((detail) => `${detail.path || '(root)'}=${detail.message}`)
@@ -140,7 +164,18 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     const error = exception instanceof Error ? exception : new Error(String(exception));
-    this.logger.error(`Unhandled ${error.name}: ${error.message}`, error.stack);
+    const prismaCode = prismaKnownRequestCode(exception);
+    const correlationId = requestCorrelationId(request);
+    if (prismaCode === 'P2022') {
+      this.logger.error(
+        `[${correlationId}] Database schema mismatch (${prismaCode}) on ${request.method} ${request.url}: ${error.message}. Apply pending migrations (pnpm db:migrate:deploy).`,
+      );
+    } else {
+      this.logger.error(
+        `[${correlationId}] Unhandled ${error.name} on ${request.method} ${request.url}: ${error.message}`,
+        error.stack,
+      );
+    }
     sendApiError(request, response, {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       code: API_ERROR_CODES.INTERNAL_ERROR,

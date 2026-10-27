@@ -47,6 +47,8 @@ const LOGIN_NOTICES: Record<LoginNoticeReason, string> = {
   challenge_expired: 'Your verification step expired. Sign in again to get a new code prompt.',
   session_expired: 'Your session has ended. Please sign in again.',
   signed_out: 'You have been signed out.',
+  invitation_accepted:
+    'Your account is ready. Sign in with your email and password, then enroll your authenticator app.',
 };
 
 export function parseLoginNotice(value: unknown): LoginNoticeReason | null {

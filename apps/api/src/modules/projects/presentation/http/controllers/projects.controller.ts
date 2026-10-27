@@ -38,6 +38,10 @@ import {
   CrmOrganizationGuard,
   type CrmRequestContext,
 } from '../../../../crm/index.js';
+import {
+  RequirePermissions,
+  RequirePermissionsGuard,
+} from '../../../../org-access/index.js';
 import { ChangeProjectStatusHandler } from '../../../application/change-project-status/change-project-status.handler.js';
 import { CreateProjectHandler } from '../../../application/create-project/create-project.handler.js';
 import { DeleteProjectHandler } from '../../../application/delete-project/delete-project.handler.js';
@@ -82,7 +86,7 @@ const clientQuotationsResponseSchema = z.object({
 @ApiTags('Projects')
 @ApiBearerAuth()
 @Controller('projects')
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(ProjectExceptionFilter)
 export class ProjectsController {
   constructor(
@@ -105,6 +109,7 @@ export class ProjectsController {
     @Inject(CompleteProjectHandler) private readonly completeProject: CompleteProjectHandler,
   ) {}
 
+  @RequirePermissions('projects.read')
   @Get()
   @ApiOperation({ summary: 'List projects' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectListResponseSchema) })
@@ -123,6 +128,7 @@ export class ProjectsController {
     };
   }
 
+  @RequirePermissions('projects.read')
   @Get('number-preview')
   @ApiOperation({ summary: 'Preview next project number' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectNumberPreviewResponseSchema) })
@@ -131,6 +137,7 @@ export class ProjectsController {
     return { projectNumber: result.projectNumber, isPreview: true };
   }
 
+  @RequirePermissions('projects.read')
   @Get('managers')
   @ApiOperation({ summary: 'List project managers' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectManagersResponseSchema) })
@@ -139,6 +146,7 @@ export class ProjectsController {
     return { managers: result.managers.map(toProjectManagerOption) };
   }
 
+  @RequirePermissions('projects.read')
   @Get('clients/:clientId/quotations')
   @ApiOperation({ summary: 'List quotations for a client' })
   @ApiOkResponse({ schema: toOpenApiSchema(clientQuotationsResponseSchema) })
@@ -153,6 +161,7 @@ export class ProjectsController {
     return toClientQuotationListResponse(result.quotations);
   }
 
+  @RequirePermissions('projects.read')
   @Get(':id')
   @ApiOperation({ summary: 'Get project' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectDetailResponseSchema) })
@@ -164,6 +173,7 @@ export class ProjectsController {
     return toProjectDetail(project);
   }
 
+  @RequirePermissions('projects.create')
   @Post()
   @ApiOperation({ summary: 'Create project' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectDetailResponseSchema) })
@@ -179,6 +189,7 @@ export class ProjectsController {
     return toProjectDetail(project);
   }
 
+  @RequirePermissions('projects.update')
   @Patch(':id')
   @ApiOperation({ summary: 'Update project' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectDetailResponseSchema) })
@@ -196,6 +207,7 @@ export class ProjectsController {
     return toProjectDetail(project);
   }
 
+  @RequirePermissions('projects.update')
   @Post(':id/plan')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Save project execution plan' })
@@ -210,6 +222,7 @@ export class ProjectsController {
     return toProjectDetail(project);
   }
 
+  @RequirePermissions('projects.update')
   @Post(':id/start-production')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Start project production' })
@@ -222,6 +235,7 @@ export class ProjectsController {
     return toProjectDetail(project);
   }
 
+  @RequirePermissions('projects.update')
   @Post(':id/complete')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Complete project' })
@@ -234,6 +248,7 @@ export class ProjectsController {
     return toProjectDetail(project);
   }
 
+  @RequirePermissions('projects.update')
   @Post(':id/status')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change project status' })
@@ -252,6 +267,7 @@ export class ProjectsController {
     return toProjectDetail(project);
   }
 
+  @RequirePermissions('projects.delete')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete project' })

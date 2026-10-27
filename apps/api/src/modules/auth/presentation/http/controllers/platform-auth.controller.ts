@@ -106,7 +106,7 @@ export class PlatformAuthController {
   @ApiOperation({
     summary: 'Verify email and password',
     description:
-      'Starts a short-lived TOTP challenge stored in an HttpOnly cookie. No session is created yet.',
+      'Super Admin accounts receive a TOTP challenge cookie. Other roles receive a session immediately when credentials are valid.',
   })
   @ApiOkResponse({ schema: toOpenApiSchema(platformLoginResponseSchema) })
   @ApiResponse({ status: 401, description: 'INVALID_CREDENTIALS', schema: errorSchema })
@@ -117,6 +117,11 @@ export class PlatformAuthController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<PlatformLoginResponse> {
     const result = await this.loginWithPassword.execute({ ...body, ...client });
+    if (result.kind === 'session') {
+      this.cookies.clearChallenge(response);
+      this.cookies.setSession(response, result);
+      return toPlatformLoginResponse(result);
+    }
     this.cookies.setChallenge(response, result.challengeToken, result.challengeExpiresAt);
     return toPlatformLoginResponse(result);
   }

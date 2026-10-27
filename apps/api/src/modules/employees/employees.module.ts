@@ -2,6 +2,7 @@ import { Module, type Provider } from '@nestjs/common';
 import { DatabaseModule } from '../../infrastructure/database/database.module.js';
 import { AuthModule } from '../auth/index.js';
 import { CrmModule } from '../crm/index.js';
+import { OrgAccessModule } from '../org-access/index.js';
 import { ChangeEmployeeStatusHandler } from './application/change-employee-status/change-employee-status.handler.js';
 import { CreateEmployeeHandler } from './application/create-employee/create-employee.handler.js';
 import { DeleteEmployeeHandler } from './application/delete-employee/delete-employee.handler.js';
@@ -20,7 +21,7 @@ export const employeePersistenceProviders: Provider[] = [
 ];
 
 @Module({
-  imports: [DatabaseModule, AuthModule, CrmModule],
+  imports: [DatabaseModule, AuthModule, CrmModule, OrgAccessModule],
   controllers: [EmployeesController],
   providers: [
     ...employeePersistenceProviders,

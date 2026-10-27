@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useRef, useState } from 'react';
+import { finalizePlatformSignIn } from '../api/finalize-platform-sign-in';
 import { verifyTotp } from '../api/verify-totp';
 import { TOTP_CODE_LENGTH, totpSchema } from '../schemas/totp.schema';
 import { describeAuthError, isChallengeExpired, loginPath } from '../utils/auth-errors';
@@ -27,7 +28,8 @@ export function useTotpVerification() {
       setIsVerifying(true);
       setError(null);
       try {
-        await verifyTotp(parsed.data);
+        const session = await verifyTotp(parsed.data);
+        await finalizePlatformSignIn(session);
         setIsComplete(true);
         router.replace('/admin/dashboard');
       } catch (failure) {

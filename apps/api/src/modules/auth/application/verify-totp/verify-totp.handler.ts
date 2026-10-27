@@ -1,10 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  ACCESS_TOKEN_SIGNER,
   OPAQUE_TOKEN_SERVICE,
   RATE_LIMITER,
   TOTP_CODE_VERIFIER,
-  type AccessTokenSigner,
   type OpaqueTokenService,
   type RateLimitPolicy,
   type RateLimiter,
@@ -12,7 +10,6 @@ import {
 } from '../../../../infrastructure/security/security.contracts.js';
 import type { PlatformAdmin } from '../../domain/entities/platform-admin.entity.js';
 import type { PlatformAuthChallenge } from '../../domain/entities/platform-auth-challenge.entity.js';
-import { PlatformSession } from '../../domain/entities/platform-session.entity.js';
 import {
   AuthAttemptsThrottledError,
   AuthChallengeExpiredError,
@@ -23,12 +20,13 @@ import {
   type PlatformAuthRepository,
 } from '../../domain/repositories/platform-auth.repository.js';
 import { PlatformSessionPolicy } from '../../domain/services/platform-session-policy.js';
+import { requiresTotpForLogin } from '../../domain/services/platform-totp-policy.js';
 import {
   PLATFORM_TOTP_SECRET_PROTECTOR,
   type PlatformTotpSecretProtector,
 } from '../../domain/services/platform-totp-secret-protector.js';
-import { PlatformSessionId } from '../../domain/value-objects/platform-session-id.js';
 import { toPlatformAdminView } from '../get-current-session/get-current-session.result.js';
+import { StartPlatformSessionHandler } from '../start-platform-session/start-platform-session.handler.js';
 import type { VerifyTotpCommand } from './verify-totp.command.js';
 import type { VerifyTotpResult } from './verify-totp.result.js';
 
@@ -46,8 +44,9 @@ export class VerifyTotpHandler {
     @Inject(PLATFORM_TOTP_SECRET_PROTECTOR)
     private readonly secretProtector: PlatformTotpSecretProtector,
     @Inject(OPAQUE_TOKEN_SERVICE) private readonly tokens: OpaqueTokenService,
-    @Inject(ACCESS_TOKEN_SIGNER) private readonly accessTokens: AccessTokenSigner,
     @Inject(RATE_LIMITER) private readonly rateLimiter: RateLimiter,
+    @Inject(StartPlatformSessionHandler)
+    private readonly startSession: StartPlatformSessionHandler,
   ) {}
 
   async execute(command: VerifyTotpCommand): Promise<VerifyTotpResult> {
@@ -68,6 +67,10 @@ export class VerifyTotpHandler {
     const admin = await this.repository.findAdminById(challenge.adminId);
     if (!admin) throw new AuthChallengeExpiredError();
     admin.ensureCanAuthenticate();
+    if (!requiresTotpForLogin(admin)) {
+      await this.repository.consumeChallenge(challenge.id, now);
+      throw new AuthChallengeExpiredError();
+    }
 
     const { secret, requiresReprotection } = this.secretProtector.reveal(
       admin.id,
@@ -96,7 +99,12 @@ export class VerifyTotpHandler {
       );
     }
 
-    const issued = await this.startSession(admin, command, now);
+    const issued = await this.startSession.execute({
+      admin,
+      ipAddress: command.ipAddress,
+      userAgent: command.userAgent,
+      now,
+    });
     await this.repository.recordAuditEvent({
       type: 'SESSION_CREATED',
       adminId: admin.id,
@@ -131,40 +139,4 @@ export class VerifyTotpHandler {
     throw new InvalidTotpCodeError(remainingAttempts);
   }
 
-  private async startSession(admin: PlatformAdmin, command: VerifyTotpCommand, now: Date) {
-    const refreshToken = this.tokens.generate();
-    const csrfToken = this.tokens.generate();
-    const refreshTokenExpiresAt = PlatformSessionPolicy.refreshTokenExpiry(now);
-    const accessTokenExpiresAt = PlatformSessionPolicy.accessTokenExpiry(now);
-
-    const session = PlatformSession.start({
-      id: PlatformSessionId.generate(),
-      adminId: admin.id,
-      csrfTokenHash: this.tokens.hash(csrfToken),
-      ipAddress: command.ipAddress,
-      userAgent: command.userAgent,
-      now,
-      expiresAt: refreshTokenExpiresAt,
-    });
-    await this.repository.createSession(session, {
-      id: crypto.randomUUID(),
-      tokenHash: this.tokens.hash(refreshToken),
-      expiresAt: refreshTokenExpiresAt,
-    });
-
-    const accessToken = await this.accessTokens.sign(
-      { subject: admin.id, sessionId: session.id.value, role: admin.role },
-      accessTokenExpiresAt,
-    );
-
-    return {
-      sessionId: session.id.value,
-      sessionExpiresAt: session.expiresAt,
-      accessToken,
-      accessTokenExpiresAt,
-      refreshToken,
-      refreshTokenExpiresAt,
-      csrfToken,
-    };
-  }
 }

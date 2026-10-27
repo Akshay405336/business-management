@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { finalizePlatformSignIn } from '../api/finalize-platform-sign-in';
 import { loginWithPassword } from '../api/login-with-password';
 import { loginSchema, type LoginFormInput, type LoginFormValues } from '../schemas/login.schema';
 import { describeAuthError } from '../utils/auth-errors';
@@ -22,6 +23,11 @@ export function useAdminLogin() {
     setFormError(null);
     try {
       const result = await loginWithPassword(values);
+      if (result.status === 'authenticated') {
+        await finalizePlatformSignIn(result);
+        router.replace('/admin/dashboard');
+        return;
+      }
       router.push(result.enrollmentPending ? '/admin/verify-totp?setup=1' : '/admin/verify-totp');
     } catch (error) {
       form.resetField('password', { keepError: false });

@@ -2,6 +2,10 @@ import { API_ERROR_CODES, type ApiErrorCode } from '@techwin/contracts';
 import { readCookie } from '@/shared/lib/cookies';
 import { apiConfig } from './api-config';
 import { ApiError } from './api-error';
+import { accessTokenStore } from './access-token-store';
+import { shouldNotifySessionEnded, shouldSuppressSessionEnded } from './session-ended';
+
+export { accessTokenStore } from './access-token-store';
 
 /**
  * The single HTTP entry point of the web app.
@@ -34,20 +38,9 @@ const REFRESHABLE_CODES: ReadonlySet<ApiErrorCode | null> = new Set([
   API_ERROR_CODES.UNAUTHENTICATED,
 ]);
 
-let accessToken: string | null = null;
 let sessionRefresher: SessionRefresher | null = null;
 let refreshInFlight: Promise<RefreshOutcome> | null = null;
 const sessionEndedListeners = new Set<SessionEndedListener>();
-
-export const accessTokenStore = {
-  get: (): string | null => accessToken,
-  set: (token: string): void => {
-    accessToken = token;
-  },
-  clear: (): void => {
-    accessToken = null;
-  },
-};
 
 export function hasCsrfCookie(): boolean {
   return readCookie(apiConfig.csrfCookie) !== null;
@@ -65,6 +58,7 @@ export function onSessionEnded(listener: SessionEndedListener): () => void {
 }
 
 function notifySessionEnded(): void {
+  if (shouldSuppressSessionEnded()) return;
   accessTokenStore.clear();
   for (const listener of sessionEndedListeners) listener();
 }
@@ -94,7 +88,8 @@ export function refreshAccessToken(): Promise<RefreshOutcome> {
 async function send(path: string, options: ApiRequestOptions): Promise<Response> {
   const headers = new Headers({ Accept: 'application/json' });
   if (options.body !== undefined) headers.set('Content-Type', 'application/json');
-  if (options.auth && accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  const token = accessTokenStore.get();
+  if (options.auth && token) headers.set('Authorization', `Bearer ${token}`);
   if (options.csrf) {
     const csrfToken = readCookie(apiConfig.csrfCookie);
     if (csrfToken) headers.set(apiConfig.csrfHeader, csrfToken);
@@ -128,7 +123,7 @@ async function parse<T>(response: Response): Promise<T> {
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   // No token in memory (e.g. after a reload): restore it before the first call.
-  if (options.auth && !accessToken && sessionRefresher) {
+  if (options.auth && !accessTokenStore.get() && sessionRefresher) {
     const outcome = await refreshAccessToken();
     if (outcome === 'unauthenticated') {
       throw new ApiError('http', 'Your session has ended.', 401, API_ERROR_CODES.SESSION_EXPIRED);
@@ -140,16 +135,19 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
 
   const error = await ApiError.fromResponse(response);
   if (!(options.auth && response.status === 401 && REFRESHABLE_CODES.has(error.code))) {
-    if (options.auth && error.code === API_ERROR_CODES.SESSION_EXPIRED) notifySessionEnded();
+    if (options.auth && shouldNotifySessionEnded(error)) notifySessionEnded();
     throw error;
   }
 
   const outcome = await refreshAccessToken();
-  if (outcome === 'unauthenticated') throw error;
+  if (outcome === 'unauthenticated') {
+    if (shouldNotifySessionEnded(error)) notifySessionEnded();
+    throw error;
+  }
 
   const retried = await send(path, options);
   if (retried.ok) return parse<T>(retried);
   const retryError = await ApiError.fromResponse(retried);
-  if (retried.status === 401) notifySessionEnded();
+  if (retried.status === 401 && shouldNotifySessionEnded(retryError)) notifySessionEnded();
   throw retryError;
 }

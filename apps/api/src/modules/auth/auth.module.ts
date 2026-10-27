@@ -11,6 +11,7 @@ import { SynchronizeSuperAdminHandler } from './application/synchronize-super-ad
 import { GetCurrentSessionHandler } from './application/get-current-session/get-current-session.handler.js';
 import { ListSessionsHandler } from './application/list-sessions/list-sessions.handler.js';
 import { LoginWithPasswordHandler } from './application/login-with-password/login-with-password.handler.js';
+import { StartPlatformSessionHandler } from './application/start-platform-session/start-platform-session.handler.js';
 import { LogoutAllDevicesHandler } from './application/logout-all-devices/logout-all-devices.handler.js';
 import { LogoutHandler } from './application/logout/logout.handler.js';
 import { RefreshSessionHandler } from './application/refresh-session/refresh-session.handler.js';
@@ -48,6 +49,7 @@ export const platformAuthPersistenceProviders: Provider[] = [
     { provide: RATE_LIMITER, useClass: PlatformRateLimiterAdapter },
     BootstrapSuperAdminHandler,
     SynchronizeSuperAdminHandler,
+    StartPlatformSessionHandler,
     LoginWithPasswordHandler,
     VerifyTotpHandler,
     RefreshSessionHandler,

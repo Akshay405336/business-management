@@ -5,18 +5,47 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { hasCsrfCookie, onSessionEnded, registerSessionRefresher } from '@/shared/api/api-client';
-import { isApiError } from '@/shared/api/api-error';
+import {
+  accessTokenStore,
+  hasCsrfCookie,
+  onSessionEnded,
+  registerSessionRefresher,
+} from '@/shared/api/api-client';
+import { API_ERROR_CODES } from '@techwin/contracts';
+import { ApiError, isApiError } from '@/shared/api/api-error';
+import {
+  isDefinitiveSessionEnd,
+  shouldSuppressSessionEnded,
+} from '@/shared/api/session-ended';
+import { invalidateMyPermissionsCache } from '@/features/admin/org-access/hooks/use-my-permissions';
 import { getCurrentSession } from '../api/get-current-session';
 import { logout, logoutAllDevices } from '../api/logout';
 import { refreshSession } from '../api/refresh-session';
 import type { AdminSessionState } from '../types/auth.types';
 import { describeAuthError, loginPath } from '../utils/auth-errors';
 import { AdminSessionContext, type AdminSessionContextValue } from '../hooks/use-admin-session';
+import {
+  clearPostAuthBootstrap,
+  hydrateAccessTokenFromBootstrap,
+  readPostAuthBootstrap,
+} from '../utils/post-auth-bootstrap';
+
+function createInitialSessionState(): AdminSessionState {
+  hydrateAccessTokenFromBootstrap();
+  const bootstrap = readPostAuthBootstrap();
+  if (bootstrap) {
+    return {
+      status: 'authenticated',
+      admin: bootstrap.admin,
+      session: bootstrap.session,
+    };
+  }
+  return { status: 'loading' };
+}
 
 export function AdminSessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [state, setState] = useState<AdminSessionState>({ status: 'loading' });
+  const [state, setState] = useState<AdminSessionState>(createInitialSessionState);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -29,7 +58,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
   useEffect(
     () =>
       onSessionEnded(() => {
-        if (leaveIntentionally.current) return;
+        if (leaveIntentionally.current || shouldSuppressSessionEnded()) return;
         setState({ status: 'unauthenticated' });
         router.replace(loginPath('session_expired'));
       }),
@@ -40,14 +69,17 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     const controller = new AbortController();
 
     void (async () => {
+      hydrateAccessTokenFromBootstrap();
+      const hadBootstrap = readPostAuthBootstrap() !== null;
       try {
-        if (!hasCsrfCookie()) {
+        if (!hasCsrfCookie() && !accessTokenStore.get()) {
           setState({ status: 'unauthenticated' });
           router.replace(loginPath());
           return;
         }
         const current = await getCurrentSession(controller.signal);
         if (controller.signal.aborted) return;
+        clearPostAuthBootstrap();
         setState({
           status: 'authenticated',
           admin: current.admin,
@@ -56,9 +88,34 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
       } catch (error) {
         if (controller.signal.aborted) return;
         if (isApiError(error) && error.isTransient) {
+          if (hadBootstrap) return;
           setState({ status: 'error', error });
           return;
         }
+        if (hadBootstrap && !isDefinitiveSessionEnd(error)) {
+          return;
+        }
+        if (!isDefinitiveSessionEnd(error)) {
+          if (
+            isApiError(error) &&
+            (error.code === API_ERROR_CODES.UNAUTHENTICATED ||
+              error.code === API_ERROR_CODES.ACCESS_TOKEN_INVALID) &&
+            !accessTokenStore.get() &&
+            !hadBootstrap
+          ) {
+            setState({ status: 'unauthenticated' });
+            router.replace(loginPath());
+            return;
+          }
+          setState({
+            status: 'error',
+            error: isApiError(error)
+              ? error
+              : new ApiError('network', 'Unable to restore your session.'),
+          });
+          return;
+        }
+        clearPostAuthBootstrap();
         setState({ status: 'unauthenticated' });
         router.replace(loginPath('session_expired'));
       }
@@ -80,6 +137,8 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
       leaveIntentionally.current = true;
       try {
         await action();
+        invalidateMyPermissionsCache();
+        clearPostAuthBootstrap();
         setState({ status: 'unauthenticated' });
         router.replace(loginPath(reason));
       } catch (error) {

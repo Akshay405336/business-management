@@ -35,6 +35,10 @@ import {
   CrmOrganizationGuard,
   type CrmRequestContext,
 } from '../../../../crm/index.js';
+import {
+  RequirePermissions,
+  RequirePermissionsGuard,
+} from '../../../../org-access/index.js';
 import { CreateProjectTaskHandler } from '../../../application/create-project-task/create-project-task.handler.js';
 import { DeleteProjectTaskHandler } from '../../../application/delete-project-task/delete-project-task.handler.js';
 import { GetProjectTaskBoardHandler } from '../../../application/get-project-task-board/get-project-task-board.handler.js';
@@ -56,7 +60,7 @@ import {
 
 @ApiTags('Project Tasks')
 @ApiBearerAuth()
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(ProjectExceptionFilter)
 @Controller('project-tasks')
 export class ProjectTasksController {
@@ -70,6 +74,7 @@ export class ProjectTasksController {
     @Inject(DeleteProjectTaskHandler) private readonly deleteTask: DeleteProjectTaskHandler,
   ) {}
 
+  @RequirePermissions('tasks.read')
   @Get('projects')
   @ApiOperation({ summary: 'List projects for task management' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectTaskSummaryListResponseSchema) })
@@ -85,6 +90,7 @@ export class ProjectTasksController {
     return toProjectTaskSummaryListResponse(result);
   }
 
+  @RequirePermissions('tasks.read')
   @Get('projects/:projectId/board')
   @ApiOperation({ summary: 'Get project task board' })
   @ApiOkResponse({ schema: toOpenApiSchema(projectTaskBoardResponseSchema) })
@@ -99,6 +105,7 @@ export class ProjectTasksController {
     return toProjectTaskBoardResponse(board);
   }
 
+  @RequirePermissions('tasks.update')
   @Post('projects/:projectId/tasks')
   @ApiOperation({ summary: 'Create project task' })
   async create(
@@ -111,6 +118,7 @@ export class ProjectTasksController {
     return toProjectTask(task);
   }
 
+  @RequirePermissions('tasks.update')
   @Patch('projects/:projectId/tasks/:taskId')
   @ApiOperation({ summary: 'Update project task' })
   async update(
@@ -124,6 +132,7 @@ export class ProjectTasksController {
     return toProjectTask(task);
   }
 
+  @RequirePermissions('tasks.update')
   @Patch('projects/:projectId/tasks/:taskId/move')
   @ApiOperation({ summary: 'Move or reorder project task' })
   async move(
@@ -137,6 +146,7 @@ export class ProjectTasksController {
     return toProjectTask(task);
   }
 
+  @RequirePermissions('tasks.delete')
   @Delete('projects/:projectId/tasks/:taskId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete project task' })

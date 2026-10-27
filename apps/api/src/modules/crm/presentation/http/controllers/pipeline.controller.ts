@@ -47,16 +47,21 @@ import { CrmExceptionFilter } from '../filters/crm-exception.filter.js';
 import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
+import {
+  RequirePermissions,
+  RequirePermissionsGuard,
+} from '../../../../org-access/index.js';
 import { toCrmPipeline, toCrmPipelineStage } from '../mappers/crm-response.mapper.js';
 
 @ApiTags('CRM pipelines')
 @ApiBearerAuth()
 @Controller('crm/pipelines')
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(CrmExceptionFilter)
 export class PipelineController {
   constructor(@Inject(CrmUseCases) private readonly crm: CrmUseCases) {}
 
+  @RequirePermissions('leads.read')
   @Get()
   @ApiOperation({ summary: 'List pipelines for the current organization' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineListResponseSchema) })
@@ -72,6 +77,7 @@ export class PipelineController {
     return { pipelines: pipelines.map(toCrmPipeline) };
   }
 
+  @RequirePermissions('leads.read')
   @Get('default')
   @ApiOperation({ summary: 'Get the organization default pipeline with stages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineResponseSchema) })
@@ -80,6 +86,7 @@ export class PipelineController {
     return toCrmPipeline(pipeline);
   }
 
+  @RequirePermissions('leads.read')
   @Get(':pipelineId')
   @ApiOperation({ summary: 'Get a pipeline with stages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineResponseSchema) })
@@ -91,6 +98,7 @@ export class PipelineController {
     return toCrmPipeline(pipeline);
   }
 
+  @RequirePermissions('leads.update')
   @Post()
   @ApiOperation({ summary: 'Create a pipeline with default stages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineResponseSchema) })
@@ -103,6 +111,7 @@ export class PipelineController {
     return toCrmPipeline(pipeline);
   }
 
+  @RequirePermissions('leads.update')
   @Patch(':pipelineId')
   @ApiOperation({ summary: 'Update pipeline details and stages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineResponseSchema) })
@@ -116,6 +125,7 @@ export class PipelineController {
     return toCrmPipeline(pipeline);
   }
 
+  @RequirePermissions('leads.update')
   @Delete(':pipelineId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an empty pipeline' })
@@ -127,6 +137,7 @@ export class PipelineController {
     await this.crm.deletePipeline(ctx, pipelineId);
   }
 
+  @RequirePermissions('leads.update')
   @Post(':pipelineId/stages/reorder')
   @ApiOperation({ summary: 'Reorder stages within a pipeline' })
   @ApiOkResponse({ schema: toOpenApiSchema(z.array(crmPipelineStageResponseSchema)) })
@@ -139,6 +150,7 @@ export class PipelineController {
     return stages.map(toCrmPipelineStage);
   }
 
+  @RequirePermissions('leads.update')
   @Post(':pipelineId/stages')
   @ApiOperation({ summary: 'Add a pipeline stage' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineStageResponseSchema) })
@@ -151,6 +163,7 @@ export class PipelineController {
     return toCrmPipelineStage(stage);
   }
 
+  @RequirePermissions('leads.update')
   @Patch(':pipelineId/stages/:stageId')
   @ApiOperation({ summary: 'Update a pipeline stage' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineStageResponseSchema) })
@@ -164,6 +177,7 @@ export class PipelineController {
     return toCrmPipelineStage(stage);
   }
 
+  @RequirePermissions('leads.update')
   @Post(':pipelineId/stages/:stageId/activate')
   @ApiOperation({ summary: 'Activate a pipeline stage (appends to end of active order)' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineStageResponseSchema) })
@@ -176,6 +190,7 @@ export class PipelineController {
     return toCrmPipelineStage(stage);
   }
 
+  @RequirePermissions('leads.update')
   @Post(':pipelineId/stages/:stageId/deactivate')
   @ApiOperation({ summary: 'Deactivate a pipeline stage (reassign leads when required)' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineStageResponseSchema) })
@@ -189,6 +204,7 @@ export class PipelineController {
     return toCrmPipelineStage(stage);
   }
 
+  @RequirePermissions('leads.update')
   @Delete(':pipelineId/stages/:stageId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Permanently delete a stage (reassign leads when required)' })

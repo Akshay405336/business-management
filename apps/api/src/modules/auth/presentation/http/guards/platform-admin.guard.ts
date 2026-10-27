@@ -59,7 +59,7 @@ export class PlatformAdminGuard implements CanActivate {
         'The access token is invalid or has expired.',
       );
     }
-    if (claims.role !== 'SUPER_ADMIN') {
+    if (claims.role !== 'SUPER_ADMIN' && claims.role !== 'ORGANIZATION_MEMBER') {
       throw new ApiException(HttpStatus.FORBIDDEN, API_ERROR_CODES.FORBIDDEN, 'Access denied.');
     }
 

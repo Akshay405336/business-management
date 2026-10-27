@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { TotpVerificationForm } from '@/features/admin/auth/components/totp-verification-form';
+import { VerifyTotpGate } from '@/features/admin/auth/components/verify-totp-gate';
 
 export const metadata: Metadata = {
   title: 'Verify your identity',
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
 export default function AdminVerifyTotpPage() {
   return (
     <Suspense>
-      <TotpVerificationForm />
+      <VerifyTotpGate>
+        <TotpVerificationForm />
+      </VerifyTotpGate>
     </Suspense>
   );
 }

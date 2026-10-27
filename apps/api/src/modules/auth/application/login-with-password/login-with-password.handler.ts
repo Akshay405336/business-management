@@ -19,7 +19,10 @@ import {
   type PlatformAuthRepository,
 } from '../../domain/repositories/platform-auth.repository.js';
 import { PlatformSessionPolicy } from '../../domain/services/platform-session-policy.js';
+import { requiresTotpForLogin } from '../../domain/services/platform-totp-policy.js';
 import { PlatformEmail } from '../../domain/value-objects/platform-email.js';
+import { toPlatformAdminView } from '../get-current-session/get-current-session.result.js';
+import { StartPlatformSessionHandler } from '../start-platform-session/start-platform-session.handler.js';
 import type { LoginWithPasswordCommand } from './login-with-password.command.js';
 import type { LoginWithPasswordResult } from './login-with-password.result.js';
 
@@ -41,6 +44,8 @@ export class LoginWithPasswordHandler {
     @Inject(PASSWORD_HASHER) private readonly passwordHasher: PasswordHasher,
     @Inject(OPAQUE_TOKEN_SERVICE) private readonly tokens: OpaqueTokenService,
     @Inject(RATE_LIMITER) private readonly rateLimiter: RateLimiter,
+    @Inject(StartPlatformSessionHandler)
+    private readonly startSession: StartPlatformSessionHandler,
   ) {}
 
   async execute(command: LoginWithPasswordCommand): Promise<LoginWithPasswordResult> {
@@ -71,7 +76,38 @@ export class LoginWithPasswordHandler {
 
     const now = new Date();
     await this.repository.deleteStaleChallenges(admin.id, now);
+    await this.rateLimiter.reset(LOGIN_BY_ACCOUNT_POLICY, email.value);
+    await this.repository.recordAuditEvent({
+      type: 'PASSWORD_VERIFIED',
+      adminId: admin.id,
+      ipAddress: command.ipAddress,
+      userAgent: command.userAgent,
+    });
 
+    if (!requiresTotpForLogin(admin)) {
+      await this.repository.consumeAllPendingChallenges(admin.id, now);
+      const issued = await this.startSession.execute({
+        admin,
+        ipAddress: command.ipAddress,
+        userAgent: command.userAgent,
+        now,
+      });
+      await this.repository.recordSuccessfulLogin(admin.id, now);
+      await this.repository.recordAuditEvent({
+        type: 'SESSION_CREATED',
+        adminId: admin.id,
+        ipAddress: command.ipAddress,
+        userAgent: command.userAgent,
+        metadata: { sessionId: issued.sessionId, totpRequired: false },
+      });
+      return {
+        kind: 'session',
+        ...issued,
+        admin: { ...toPlatformAdminView(admin), lastLoginAt: now },
+      };
+    }
+
+    await this.repository.consumeAllPendingChallenges(admin.id, now);
     const challengeToken = this.tokens.generate();
     const challenge = PlatformAuthChallenge.issue({
       adminId: admin.id,
@@ -82,15 +118,9 @@ export class LoginWithPasswordHandler {
       now,
     });
     await this.repository.createChallenge(challenge);
-    await this.rateLimiter.reset(LOGIN_BY_ACCOUNT_POLICY, email.value);
-    await this.repository.recordAuditEvent({
-      type: 'PASSWORD_VERIFIED',
-      adminId: admin.id,
-      ipAddress: command.ipAddress,
-      userAgent: command.userAgent,
-    });
 
     return {
+      kind: 'totp_required',
       challengeToken,
       challengeExpiresAt: challenge.expiresAt,
       enrollmentPending: !admin.isTotpEnrolled,

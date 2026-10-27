@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const LEAD_EMAIL_REQUIRED = 'Email is required.' as const;
 export const LEAD_EMAIL_INVALID = 'Enter a valid email address.' as const;
 export const LEAD_PHONE_REQUIRED = 'Phone number is required.' as const;
-export const LEAD_PHONE_INVALID = 'Enter a valid 10-digit Indian mobile number.' as const;
+export const LEAD_PHONE_INVALID = 'Enter a valid phone number.' as const;
 
 /** Strip +91 / leading 0 and non-digits for Indian mobile validation. */
 export function normalizeIndianMobileInput(input: string): string {
@@ -29,6 +29,27 @@ export const leadPhoneSchema = z
   .min(1, LEAD_PHONE_REQUIRED)
   .transform(normalizeIndianMobileInput)
   .pipe(z.string().regex(/^[6-9]\d{9}$/, LEAD_PHONE_INVALID));
+
+/** Validates phone when present; empty input is allowed (optional contact fields). */
+export const optionalLeadPhoneInputSchema = z.string().superRefine((value, ctx) => {
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  const parsed = leadPhoneSchema.safeParse(trimmed);
+  if (parsed.success) return;
+  for (const issue of parsed.error.issues) {
+    ctx.addIssue({ ...issue, path: [] });
+  }
+});
+
+/** Optional phone on API payloads: omit, null, or a valid stored mobile (coalesce blanks in parse helpers). */
+export const optionalStoredPhoneSchema = z.union([z.null(), leadPhoneSchema]).optional();
+
+export function coalesceOptionalPhoneField(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  return value;
+}
 
 /** Canonical 10-digit mobile for persistence and duplicate checks. */
 export function normalizedLeadPhoneForStorage(phone: string): string {

@@ -28,16 +28,21 @@ import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
 import { toCrmClient, toCrmLead } from '../mappers/crm-response.mapper.js';
+import {
+  RequirePermissions,
+  RequirePermissionsGuard,
+} from '../../../../org-access/index.js';
 
 @ApiTags('CRM clients')
 @ApiBearerAuth()
 @Controller('crm/clients')
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(CrmExceptionFilter)
 export class ClientsController {
   constructor(@Inject(CrmUseCases) private readonly crm: CrmUseCases) {}
 
   @Get()
+  @RequirePermissions('clients.read')
   @ApiOperation({ summary: 'List clients' })
   @ApiOkResponse({
     schema: toOpenApiSchema(z.object({ clients: z.array(crmClientResponseSchema) })),
@@ -48,6 +53,7 @@ export class ClientsController {
   }
 
   @Post('from-lead/:leadId')
+  @RequirePermissions('clients.create', 'leads.update')
   @ApiOperation({ summary: 'Convert a lead into a client' })
   @ApiOkResponse({
     schema: toOpenApiSchema(
@@ -63,6 +69,7 @@ export class ClientsController {
   }
 
   @Get('reference-preview')
+  @RequirePermissions('clients.create')
   @ApiOperation({ summary: 'Preview the next client reference number (not reserved until create)' })
   @ApiOkResponse({
     schema: toOpenApiSchema(
@@ -75,6 +82,7 @@ export class ClientsController {
   }
 
   @Get(':clientId')
+  @RequirePermissions('clients.read')
   @ApiOperation({ summary: 'Get a client' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmClientResponseSchema) })
   async get(
@@ -86,6 +94,7 @@ export class ClientsController {
   }
 
   @Post()
+  @RequirePermissions('clients.create')
   @ApiOperation({ summary: 'Create a client' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmClientResponseSchema) })
   async create(
@@ -97,6 +106,7 @@ export class ClientsController {
   }
 
   @Patch(':clientId')
+  @RequirePermissions('clients.update')
   @ApiOperation({ summary: 'Update a client' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmClientResponseSchema) })
   async update(
@@ -109,6 +119,7 @@ export class ClientsController {
   }
 
   @Delete(':clientId')
+  @RequirePermissions('clients.delete')
   @ApiOperation({ summary: 'Permanently delete a client' })
   async delete(
     @CrmContext() ctx: CrmRequestContext,

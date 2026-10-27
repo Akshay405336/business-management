@@ -18,7 +18,7 @@ export const platformAdminProfileSchema = z.object({
   id: z.uuid(),
   email: z.email(),
   displayName: z.string(),
-  role: z.literal('SUPER_ADMIN'),
+  role: z.enum(['SUPER_ADMIN', 'ORGANIZATION_MEMBER']),
   lastLoginAt: isoDateTime.nullable(),
 });
 
@@ -32,12 +32,6 @@ export const platformSessionSummarySchema = z.object({
   current: z.boolean(),
 });
 
-export const platformLoginResponseSchema = z.object({
-  status: z.literal('totp_required'),
-  challengeExpiresAt: isoDateTime,
-  enrollmentPending: z.boolean(),
-});
-
 export const platformAccessTokenResponseSchema = z.object({
   tokenType: z.literal('Bearer'),
   accessToken: z.string(),
@@ -49,6 +43,21 @@ export const platformAccessTokenResponseSchema = z.object({
 export const platformVerifyTotpResponseSchema = platformAccessTokenResponseSchema.extend({
   admin: platformAdminProfileSchema,
 });
+
+export const platformLoginTotpRequiredResponseSchema = z.object({
+  status: z.literal('totp_required'),
+  challengeExpiresAt: isoDateTime,
+  enrollmentPending: z.boolean(),
+});
+
+export const platformLoginAuthenticatedResponseSchema = platformVerifyTotpResponseSchema.extend({
+  status: z.literal('authenticated'),
+});
+
+export const platformLoginResponseSchema = z.union([
+  platformLoginTotpRequiredResponseSchema,
+  platformLoginAuthenticatedResponseSchema,
+]);
 
 export const platformCurrentSessionResponseSchema = z.object({
   admin: platformAdminProfileSchema,

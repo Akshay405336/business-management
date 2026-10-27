@@ -1,7 +1,7 @@
 import { AccountDisabledError } from '../errors/platform-auth.errors.js';
 import type { PlatformEmail } from '../value-objects/platform-email.js';
 
-export type PlatformAdminRole = 'SUPER_ADMIN';
+export type PlatformAdminRole = 'SUPER_ADMIN' | 'ORGANIZATION_MEMBER';
 export type PlatformAdminStatus = 'ACTIVE' | 'DISABLED';
 
 export interface PlatformAdminProps {

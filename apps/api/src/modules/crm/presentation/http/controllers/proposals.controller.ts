@@ -43,6 +43,10 @@ import { CrmExceptionFilter } from '../filters/crm-exception.filter.js';
 import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
+import {
+  RequirePermissions,
+  RequirePermissionsGuard,
+} from '../../../../org-access/index.js';
 import { toCrmProposal, toCrmProposalPrint } from '../mappers/crm-response.mapper.js';
 import {
   toCreateProposalInput,
@@ -59,11 +63,12 @@ const crmProposalListResponseSchema = z.object({
 @ApiTags('CRM proposals')
 @ApiBearerAuth()
 @Controller('crm/proposals')
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(CrmExceptionFilter)
 export class ProposalsController {
   constructor(@Inject(CrmUseCases) private readonly crm: CrmUseCases) {}
 
+  @RequirePermissions('leads.read')
   @Get()
   @ApiOperation({ summary: 'List proposals and quotations' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmProposalListResponseSchema) })
@@ -81,6 +86,7 @@ export class ProposalsController {
     };
   }
 
+  @RequirePermissions('leads.read')
   @Get('code-preview')
   @ApiOperation({ summary: 'Preview next document number (not reserved until create)' })
   @ApiOkResponse({
@@ -101,6 +107,7 @@ export class ProposalsController {
     return { documentNumber, type, isPreview: true };
   }
 
+  @RequirePermissions('leads.read')
   @Get(':proposalId')
   @ApiOperation({ summary: 'Get a proposal' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmProposalResponseSchema) })
@@ -112,6 +119,7 @@ export class ProposalsController {
     return toCrmProposal(proposal);
   }
 
+  @RequirePermissions('leads.create')
   @Post()
   @ApiOperation({ summary: 'Create a proposal or quotation' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmProposalResponseSchema) })
@@ -126,6 +134,7 @@ export class ProposalsController {
     return toCrmProposal(proposal);
   }
 
+  @RequirePermissions('leads.update')
   @Patch(':proposalId')
   @ApiOperation({ summary: 'Update a draft proposal' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmProposalResponseSchema) })
@@ -142,6 +151,7 @@ export class ProposalsController {
     return toCrmProposal(proposal);
   }
 
+  @RequirePermissions('leads.delete')
   @Delete(':proposalId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Permanently delete a draft proposal' })
@@ -152,6 +162,7 @@ export class ProposalsController {
     await this.crm.deleteProposal(ctx, proposalId);
   }
 
+  @RequirePermissions('leads.update')
   @Post(':proposalId/status')
   @ApiOperation({ summary: 'Transition proposal status' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmProposalResponseSchema) })
@@ -169,6 +180,7 @@ export class ProposalsController {
     return toCrmProposal(proposal);
   }
 
+  @RequirePermissions('leads.read')
   @Get(':proposalId/print')
   @ApiOperation({ summary: 'Print-ready proposal payload' })
   @ApiOkResponse({

@@ -127,6 +127,13 @@ export class PrismaPlatformAuthRepository implements PlatformAuthRepository {
     await this.prisma.platformAdmin.update({ where: { id: adminId }, data: { passwordHash } });
   }
 
+  async recordSuccessfulLogin(adminId: string, now: Date): Promise<void> {
+    await this.prisma.platformAdmin.update({
+      where: { id: adminId },
+      data: { lastLoginAt: now, updatedAt: now },
+    });
+  }
+
   async updateTotpSecretCiphertext(adminId: string, ciphertext: string): Promise<void> {
     await this.prisma.platformAdmin.update({
       where: { id: adminId },
@@ -173,6 +180,13 @@ export class PrismaPlatformAuthRepository implements PlatformAuthRepository {
       data: { consumedAt: now },
     });
     return count === 1;
+  }
+
+  async consumeAllPendingChallenges(adminId: string, now: Date): Promise<void> {
+    await this.prisma.platformAuthChallenge.updateMany({
+      where: { adminId, consumedAt: null },
+      data: { consumedAt: now },
+    });
   }
 
   async deleteStaleChallenges(adminId: string, now: Date): Promise<void> {

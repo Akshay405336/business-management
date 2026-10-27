@@ -2,6 +2,7 @@ import { Module, type Provider } from '@nestjs/common';
 import { DatabaseModule } from '../../infrastructure/database/database.module.js';
 import { AuthModule } from '../auth/index.js';
 import { CrmModule } from '../crm/index.js';
+import { OrgAccessModule } from '../org-access/index.js';
 import { ChangeProjectStatusHandler } from './application/change-project-status/change-project-status.handler.js';
 import { CreateProjectHandler } from './application/create-project/create-project.handler.js';
 import { DeleteProjectHandler } from './application/delete-project/delete-project.handler.js';
@@ -34,7 +35,7 @@ export const projectPersistenceProviders: Provider[] = [
 ];
 
 @Module({
-  imports: [DatabaseModule, AuthModule, CrmModule],
+  imports: [DatabaseModule, AuthModule, CrmModule, OrgAccessModule],
   controllers: [ProjectsController, ProjectTasksController],
   providers: [
     ...projectPersistenceProviders,

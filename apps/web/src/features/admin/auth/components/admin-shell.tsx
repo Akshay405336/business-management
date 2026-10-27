@@ -12,13 +12,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import {
-  ADMIN_NAV_GROUPS,
-  adminPageTitle,
-  isNavGroupActive,
-  isNavItemActive,
-  type AdminNavGroup,
-} from '@/features/admin/navigation/admin-nav-config';
+import { adminPageTitle, isNavGroupActive, isNavItemActive, type AdminNavGroup } from '@/features/admin/navigation/admin-nav-config';
+import { useAdminAccess } from './admin-access-provider';
 import { TechwinLogo, TechwinMark } from '@/shared/components/techwin-logo';
 import { cn } from '@/shared/lib/utils';
 import { initialsOf } from '@/shared/lib/format';
@@ -107,9 +102,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
 }
 
 function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const { navGroups } = useAdminAccess();
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
-    for (const group of ADMIN_NAV_GROUPS) {
+    for (const group of navGroups) {
       initial[group.id] = isNavGroupActive(pathname, group);
     }
     return initial;
@@ -128,7 +124,7 @@ function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: (
       className="max-h-[calc(100dvh-7rem)] overflow-y-auto p-2 lg:max-h-[calc(100dvh-8rem)]"
     >
       <div className="grid gap-0.5">
-        {ADMIN_NAV_GROUPS.map((group) => {
+        {navGroups.map((group) => {
           const groupActive = isNavGroupActive(pathname, group);
           const isOpen = expanded[group.id] ?? groupActive;
           const singleLink =

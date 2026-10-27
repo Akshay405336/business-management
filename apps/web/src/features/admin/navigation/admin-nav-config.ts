@@ -1,3 +1,4 @@
+import type { PermissionKey } from '@techwin/contracts';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
@@ -26,12 +27,14 @@ export type AdminNavLink = {
   href: string;
   label: string;
   icon: LucideIcon;
+  requiredPermissions: readonly PermissionKey[];
 };
 
 export type AdminNavSoon = {
   kind: 'soon';
   label: string;
   icon: LucideIcon;
+  requiredPermissions: readonly PermissionKey[];
 };
 
 export type AdminNavItem = AdminNavLink | AdminNavSoon;
@@ -48,18 +51,56 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     id: 'overview',
     label: 'Overview',
     icon: LayoutDashboard,
-    items: [{ kind: 'link', href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+    items: [
+      {
+        kind: 'link',
+        href: '/admin/dashboard',
+        label: 'Dashboard',
+        icon: LayoutDashboard,
+        requiredPermissions: [],
+      },
+    ],
   },
   {
     id: 'crm',
     label: 'CRM',
     icon: Users,
     items: [
-      { kind: 'link', href: '/admin/pipeline', label: 'Pipeline', icon: GitBranch },
-      { kind: 'link', href: '/admin/leads', label: 'Leads', icon: Users },
-      { kind: 'link', href: '/admin/packages', label: 'Service Packages', icon: Package },
-      { kind: 'link', href: '/admin/proposals', label: 'Proposals & Quotations', icon: FileText },
-      { kind: 'link', href: '/admin/clients', label: 'Clients', icon: UserCircle2 },
+      {
+        kind: 'link',
+        href: '/admin/pipeline',
+        label: 'Pipeline',
+        icon: GitBranch,
+        requiredPermissions: ['leads.read'],
+      },
+      {
+        kind: 'link',
+        href: '/admin/leads',
+        label: 'Leads',
+        icon: Users,
+        requiredPermissions: ['leads.read'],
+      },
+      {
+        kind: 'link',
+        href: '/admin/packages',
+        label: 'Service Packages',
+        icon: Package,
+        requiredPermissions: ['settings.read'],
+      },
+      {
+        kind: 'link',
+        href: '/admin/proposals',
+        label: 'Proposals & Quotations',
+        icon: FileText,
+        requiredPermissions: ['leads.read'],
+      },
+      {
+        kind: 'link',
+        href: '/admin/clients',
+        label: 'Clients',
+        icon: UserCircle2,
+        requiredPermissions: ['clients.read'],
+      },
     ],
   },
   {
@@ -67,10 +108,16 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     label: 'Project Management',
     icon: FolderKanban,
     items: [
-      { kind: 'link', href: '/admin/project-tasks', label: 'Project Management', icon: FolderKanban },
-      { kind: 'soon', label: 'Milestones', icon: Target },
-      { kind: 'soon', label: 'Team Assignments', icon: Users },
-      { kind: 'soon', label: 'Project Reports', icon: BarChart3 },
+      {
+        kind: 'link',
+        href: '/admin/project-tasks',
+        label: 'Project Management',
+        icon: FolderKanban,
+        requiredPermissions: ['tasks.read', 'projects.read'],
+      },
+      { kind: 'soon', label: 'Milestones', icon: Target, requiredPermissions: ['projects.read'] },
+      { kind: 'soon', label: 'Team Assignments', icon: Users, requiredPermissions: ['projects.read'] },
+      { kind: 'soon', label: 'Project Reports', icon: BarChart3, requiredPermissions: ['projects.read'] },
     ],
   },
   {
@@ -78,12 +125,12 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     label: 'Finance & Expenses',
     icon: Wallet,
     items: [
-      { kind: 'soon', label: 'Finance Dashboard', icon: WalletCards },
-      { kind: 'soon', label: 'Invoices', icon: Receipt },
-      { kind: 'soon', label: 'Payments', icon: CreditCard },
-      { kind: 'soon', label: 'Expenses', icon: Wallet },
-      { kind: 'soon', label: 'Budgets', icon: BarChart3 },
-      { kind: 'soon', label: 'Financial Reports', icon: FileText },
+      { kind: 'soon', label: 'Finance Dashboard', icon: WalletCards, requiredPermissions: ['finance.read'] },
+      { kind: 'soon', label: 'Invoices', icon: Receipt, requiredPermissions: ['finance.read'] },
+      { kind: 'soon', label: 'Payments', icon: CreditCard, requiredPermissions: ['finance.read'] },
+      { kind: 'soon', label: 'Expenses', icon: Wallet, requiredPermissions: ['expenses.read'] },
+      { kind: 'soon', label: 'Budgets', icon: BarChart3, requiredPermissions: ['finance.manage'] },
+      { kind: 'soon', label: 'Financial Reports', icon: FileText, requiredPermissions: ['finance.read'] },
     ],
   },
   {
@@ -91,12 +138,18 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     label: 'Human Resources',
     icon: Briefcase,
     items: [
-      { kind: 'link', href: '/admin/employees', label: 'Employees', icon: Users },
-      { kind: 'soon', label: 'Departments', icon: Building2 },
-      { kind: 'soon', label: 'Attendance', icon: CalendarDays },
-      { kind: 'soon', label: 'Leave Management', icon: CalendarDays },
-      { kind: 'soon', label: 'Payroll', icon: Wallet },
-      { kind: 'soon', label: 'Performance', icon: BarChart3 },
+      {
+        kind: 'link',
+        href: '/admin/employees',
+        label: 'Employees',
+        icon: Users,
+        requiredPermissions: ['employees.read'],
+      },
+      { kind: 'soon', label: 'Departments', icon: Building2, requiredPermissions: ['employees.read'] },
+      { kind: 'soon', label: 'Attendance', icon: CalendarDays, requiredPermissions: ['employees.read'] },
+      { kind: 'soon', label: 'Leave Management', icon: CalendarDays, requiredPermissions: ['employees.read'] },
+      { kind: 'soon', label: 'Payroll', icon: Wallet, requiredPermissions: ['employees.read'] },
+      { kind: 'soon', label: 'Performance', icon: BarChart3, requiredPermissions: ['employees.read'] },
     ],
   },
   {
@@ -104,10 +157,22 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     label: 'Organization',
     icon: Building2,
     items: [
-      { kind: 'soon', label: 'Team Management', icon: Users },
-      { kind: 'soon', label: 'Roles & Permissions', icon: Shield },
-      { kind: 'soon', label: 'Audit Logs', icon: ClipboardList },
-      { kind: 'soon', label: 'Settings', icon: Settings },
+      {
+        kind: 'link',
+        href: '/admin/users',
+        label: 'Users',
+        icon: Users,
+        requiredPermissions: ['users.read'],
+      },
+      {
+        kind: 'link',
+        href: '/admin/roles',
+        label: 'Roles & Permissions',
+        icon: Shield,
+        requiredPermissions: ['roles.read'],
+      },
+      { kind: 'soon', label: 'Audit Logs', icon: ClipboardList, requiredPermissions: ['settings.read'] },
+      { kind: 'soon', label: 'Settings', icon: Settings, requiredPermissions: ['settings.read'] },
     ],
   },
 ] as const;

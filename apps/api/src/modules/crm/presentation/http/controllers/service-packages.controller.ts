@@ -41,6 +41,10 @@ import { CrmExceptionFilter } from '../filters/crm-exception.filter.js';
 import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
+import {
+  RequirePermissions,
+  RequirePermissionsGuard,
+} from '../../../../org-access/index.js';
 import { toCrmServicePackage } from '../mappers/crm-response.mapper.js';
 import {
   toCreateServicePackageInput,
@@ -50,11 +54,12 @@ import {
 @ApiTags('CRM service packages')
 @ApiBearerAuth()
 @Controller('crm/service-packages')
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(CrmExceptionFilter)
 export class ServicePackagesController {
   constructor(@Inject(CrmUseCases) private readonly crm: CrmUseCases) {}
 
+  @RequirePermissions('settings.read')
   @Get()
   @ApiOperation({ summary: 'List service packages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmServicePackageListResponseSchema) })
@@ -63,6 +68,7 @@ export class ServicePackagesController {
     return { packages: packages.map(toCrmServicePackage) };
   }
 
+  @RequirePermissions('settings.read')
   @Get('code-preview')
   @ApiOperation({ summary: 'Preview the next TECH-PKG package code (not reserved until create)' })
   @ApiOkResponse({ schema: toOpenApiSchema(servicePackageCodePreviewResponseSchema) })
@@ -71,6 +77,7 @@ export class ServicePackagesController {
     return { code, isPreview: true };
   }
 
+  @RequirePermissions('settings.read')
   @Get(':packageId')
   @ApiOperation({ summary: 'Get a service package' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmServicePackageResponseSchema) })
@@ -82,6 +89,7 @@ export class ServicePackagesController {
     return toCrmServicePackage(pkg);
   }
 
+  @RequirePermissions('settings.manage')
   @Post()
   @ApiOperation({ summary: 'Create a service package' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmServicePackageResponseSchema) })
@@ -96,6 +104,7 @@ export class ServicePackagesController {
     return toCrmServicePackage(pkg);
   }
 
+  @RequirePermissions('settings.manage')
   @Patch(':packageId/status')
   @ApiOperation({ summary: 'Activate or deactivate a service package' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmServicePackageResponseSchema) })
@@ -109,6 +118,7 @@ export class ServicePackagesController {
     return toCrmServicePackage(pkg);
   }
 
+  @RequirePermissions('settings.manage')
   @Delete(':packageId')
   @ApiOperation({ summary: 'Permanently delete a service package' })
   async delete(
@@ -118,6 +128,7 @@ export class ServicePackagesController {
     await this.crm.deleteServicePackage(ctx, packageId);
   }
 
+  @RequirePermissions('settings.manage')
   @Patch(':packageId')
   @ApiOperation({ summary: 'Update a service package' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmServicePackageResponseSchema) })

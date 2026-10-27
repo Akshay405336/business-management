@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '../../infrastructure/database/database.module.js';
 import { AuthModule } from '../auth/index.js';
+import { OrgAccessModule } from '../org-access/org-access.module.js';
 import { CrmUseCases } from './application/crm-use-cases.js';
 import { CRM_REPOSITORY } from './domain/repositories/crm.repository.js';
 import { PrismaCrmRepository } from './infrastructure/persistence/prisma/prisma-crm.repository.js';
@@ -13,7 +14,7 @@ import { CrmExceptionFilter } from './presentation/http/filters/crm-exception.fi
 import { CrmOrganizationGuard } from './presentation/http/guards/crm-organization.guard.js';
 
 @Module({
-  imports: [DatabaseModule, AuthModule],
+  imports: [DatabaseModule, AuthModule, forwardRef(() => OrgAccessModule)],
   controllers: [
     PipelineController,
     LeadsController,

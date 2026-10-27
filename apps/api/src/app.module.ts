@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/index.js';
 import { CrmModule } from './modules/crm/index.js';
 import { ProjectsModule } from './modules/projects/index.js';
 import { EmployeesModule } from './modules/employees/index.js';
+import { OrgAccessModule } from './modules/org-access/index.js';
 import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
@@ -20,6 +21,7 @@ import { HealthModule } from './modules/health/health.module.js';
     CrmModule,
     ProjectsModule,
     EmployeesModule,
+    OrgAccessModule,
   ],
 })
 export class AppModule implements NestModule {

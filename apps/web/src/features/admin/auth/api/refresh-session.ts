@@ -15,8 +15,8 @@ import type { PlatformRefreshResponse } from '../types/auth.types';
 export async function refreshSession(): Promise<RefreshOutcome> {
   // Without the CSRF cookie the refresh cannot succeed; skip the round trip.
   if (!hasCsrfCookie()) {
-    accessTokenStore.clear();
-    return 'unauthenticated';
+    // Missing CSRF prevents refresh rotation; keep a valid in-memory access token for bearer requests.
+    return accessTokenStore.get() ? 'refreshed' : 'unauthenticated';
   }
   try {
     const response = await apiRequest<PlatformRefreshResponse>(PLATFORM_AUTH_ROUTES.refresh, {

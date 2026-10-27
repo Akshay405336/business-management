@@ -36,7 +36,10 @@ export const envSchema = z
       .string()
       .regex(/^postgres(ql)?:\/\//, 'must be a postgresql:// connection string'),
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
-    REDIS_URL: z.string().regex(/^rediss?:\/\//, 'must be a redis:// or rediss:// URL'),
+    REDIS_URL: z
+      .string()
+      .trim()
+      .regex(/^rediss?:\/\//, 'must be a redis:// or rediss:// URL'),
 
     WEB_ORIGIN: httpOrigin,
     CORS_ALLOWED_ORIGINS: commaSeparated.pipe(z.array(httpOrigin)).optional(),

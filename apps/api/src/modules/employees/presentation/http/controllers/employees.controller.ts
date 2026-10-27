@@ -58,11 +58,15 @@ import {
   toUpdateEmployeeInput,
 } from '../mappers/employee-request.mapper.js';
 import { toEmployeeDetail, toEmployeeListItem } from '../mappers/employee-response.mapper.js';
+import {
+  RequirePermissions,
+  RequirePermissionsGuard,
+} from '../../../../org-access/index.js';
 
 @ApiTags('Employees')
 @ApiBearerAuth()
 @Controller('employees')
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(EmployeeExceptionFilter)
 export class EmployeesController {
   constructor(
@@ -80,6 +84,7 @@ export class EmployeesController {
   ) {}
 
   @Get()
+  @RequirePermissions('employees.read')
   @ApiOperation({ summary: 'List employees' })
   @ApiOkResponse({ schema: toOpenApiSchema(employeeListResponseSchema) })
   async list(
@@ -100,6 +105,7 @@ export class EmployeesController {
   }
 
   @Get('code-preview')
+  @RequirePermissions('employees.create')
   @ApiOperation({ summary: 'Preview next employee code' })
   @ApiOkResponse({ schema: toOpenApiSchema(employeeCodePreviewResponseSchema) })
   async previewCode(@CrmContext() ctx: CrmRequestContext): Promise<EmployeeCodePreviewResponse> {
@@ -108,6 +114,7 @@ export class EmployeesController {
   }
 
   @Get('manager-options')
+  @RequirePermissions('employees.read')
   @ApiOperation({ summary: 'List reporting manager options' })
   @ApiOkResponse({ schema: toOpenApiSchema(employeeManagerOptionsResponseSchema) })
   async managerOptions(
@@ -122,6 +129,7 @@ export class EmployeesController {
   }
 
   @Get(':id')
+  @RequirePermissions('employees.read')
   @ApiOperation({ summary: 'Get employee' })
   @ApiOkResponse({ schema: toOpenApiSchema(employeeDetailResponseSchema) })
   async get(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<EmployeeDetail> {
@@ -133,6 +141,7 @@ export class EmployeesController {
   }
 
   @Post()
+  @RequirePermissions('employees.create')
   @ApiOperation({ summary: 'Create employee' })
   @ApiOkResponse({ schema: toOpenApiSchema(employeeDetailResponseSchema) })
   async create(
@@ -148,6 +157,7 @@ export class EmployeesController {
   }
 
   @Patch(':id')
+  @RequirePermissions('employees.update')
   @ApiOperation({ summary: 'Update employee' })
   @ApiOkResponse({ schema: toOpenApiSchema(employeeDetailResponseSchema) })
   async update(
@@ -165,6 +175,7 @@ export class EmployeesController {
   }
 
   @Patch(':id/status')
+  @RequirePermissions('employees.update')
   @ApiOperation({ summary: 'Change employee employment status' })
   @ApiOkResponse({ schema: toOpenApiSchema(employeeDetailResponseSchema) })
   async changeStatus(
@@ -182,6 +193,7 @@ export class EmployeesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('employees.update')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete employee' })
   async remove(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<void> {

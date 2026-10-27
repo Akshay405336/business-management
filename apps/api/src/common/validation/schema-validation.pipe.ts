@@ -3,11 +3,16 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { API_ERROR_CODES, type ApiErrorDetail } from '@techwin/contracts';
 import { ApiException } from '../filters/api-error.response.js';
 
+const UNRECOGNIZED_KEY = /^Unrecognized key: "([^"]+)"/;
+
 function issuePath(issue: StandardSchemaV1.Issue): string {
-  return (issue.path ?? [])
+  const joined = (issue.path ?? [])
     .map((segment) => (typeof segment === 'object' ? segment.key : segment))
     .map(String)
     .join('.');
+  if (joined) return joined;
+  const match = UNRECOGNIZED_KEY.exec(issue.message ?? '');
+  return match?.[1]?.trim() ?? joined;
 }
 
 /**

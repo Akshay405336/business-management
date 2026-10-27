@@ -99,7 +99,7 @@ export interface ProjectTaskBoardPhase {
   readonly id: string;
   readonly name: string;
   readonly description: string;
-  readonly status: import('./projects.js').ProjectPhaseStatus;
+  readonly status: ProjectPhaseStatus;
   readonly startDate: string;
   readonly expectedEndDate: string;
   readonly actualStartedAt: string | null;

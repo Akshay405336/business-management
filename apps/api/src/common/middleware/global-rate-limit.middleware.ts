@@ -2,6 +2,7 @@ import { HttpStatus, Inject, Injectable, Logger, type NestMiddleware } from '@ne
 import { API_ERROR_CODES } from '@techwin/contracts';
 import type { NextFunction, Request, Response } from 'express';
 import { APP_CONFIG, type AppConfig } from '../../config/app-config.js';
+import { isRedisInfrastructureError } from '../../infrastructure/cache/redis.errors.js';
 import { RedisRateLimiter } from '../../infrastructure/cache/redis-rate-limiter.js';
 import type { RateLimitPolicy } from '../../infrastructure/security/security.contracts.js';
 import { sendApiError } from '../filters/api-error.response.js';
@@ -38,7 +39,10 @@ export class GlobalRateLimitMiddleware implements NestMiddleware {
         return;
       }
     } catch (error) {
-      this.logger.warn(`Global rate limiter unavailable: ${(error as Error).message}`);
+      const code = isRedisInfrastructureError(error) ? error.code : undefined;
+      this.logger.warn(
+        `Global rate limiter unavailable${code ? ` redisCode=${code}` : ''}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
     next();
   }
