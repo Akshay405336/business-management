@@ -840,6 +840,7 @@ export class PrismaCrmRepository implements CrmRepository {
       const lead = await tx.lead.update({
         where: { id: leadId },
         data: {
+          subject: input.subject !== undefined ? input.subject.trim() : undefined,
           fullName: input.fullName,
           companyName: input.companyName,
           email,
@@ -1756,6 +1757,7 @@ export class PrismaCrmRepository implements CrmRepository {
     id: string;
     organizationId: string;
     referenceNumber: string;
+    subject: string;
     fullName: string;
     companyName: string;
     email: string | null;

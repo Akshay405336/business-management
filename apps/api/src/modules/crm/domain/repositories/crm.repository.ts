@@ -248,6 +248,7 @@ export interface UpdateStageInput {
 }
 
 export interface CreateLeadInput {
+  readonly subject?: string;
   readonly fullName: string;
   readonly companyName?: string;
   readonly email?: string | null;
@@ -268,6 +269,7 @@ export interface CreateLeadInput {
 }
 
 export interface UpdateLeadInput {
+  readonly subject?: string;
   readonly fullName?: string;
   readonly companyName?: string;
   readonly email?: string | null;
