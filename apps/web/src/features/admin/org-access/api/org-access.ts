@@ -18,6 +18,7 @@ import type {
   OrgMemberListItem,
   OrgMemberListQuery,
   OrgMemberListResponse,
+  OrgRoleDetail,
   OrgRoleListItem,
   OrgRoleListResponse,
   PermissionCatalogResponse,
@@ -130,6 +131,10 @@ export function assignOrgMemberRoles(
 
 export function listOrgRoles(signal?: AbortSignal): Promise<OrgRoleListResponse> {
   return apiRequest<OrgRoleListResponse>(ORG_ACCESS_ROUTES.roles, { auth: true, signal });
+}
+
+export function getOrgRole(id: string, signal?: AbortSignal): Promise<OrgRoleDetail> {
+  return apiRequest<OrgRoleDetail>(ORG_ACCESS_ROUTES.role(id), { auth: true, signal });
 }
 
 export function createOrgRole(body: CreateRoleRequest): Promise<OrgRoleListItem> {

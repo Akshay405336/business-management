@@ -56,7 +56,7 @@ import { ProjectViewSwitcher } from './project-view-switcher';
 const SEARCH_DEBOUNCE_MS = 400;
 const DEFAULT_PAGE_SIZE = 12;
 
-const CONTROL_H = 'h-11';
+const CONTROL_H = 'h-9';
 
 const FILTER_TRIGGER_CLASS = cn(
   CONTROL_H,

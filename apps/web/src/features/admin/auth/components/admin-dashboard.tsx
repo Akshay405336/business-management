@@ -22,7 +22,7 @@ export function AdminDashboard() {
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-6">
       <header className="grid min-w-0 gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <h1 className="type-page-title">Dashboard</h1>
         <p className="text-muted-foreground text-sm">
           Signed in as {admin.displayName}. Sessions are restored on reload and expire after seven
           days of inactivity.

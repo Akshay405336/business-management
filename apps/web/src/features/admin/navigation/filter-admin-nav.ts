@@ -24,6 +24,7 @@ export function filterAdminNav(
   for (const group of ADMIN_NAV_GROUPS) {
     const items: AdminNavItem[] = [];
     for (const item of group.items) {
+      if (item.kind === 'soon') continue;
       if (itemAllowed(item.requiredPermissions, granted)) items.push(item);
     }
     if (items.length > 0) {

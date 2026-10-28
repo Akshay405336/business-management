@@ -82,7 +82,7 @@ export function DataTableSkeleton({
   columns,
   rowCount = 6,
   header,
-  headerVariant = 'gradient',
+  headerVariant = 'default',
   className,
 }: {
   columns: readonly DataTableSkeletonColumn[];

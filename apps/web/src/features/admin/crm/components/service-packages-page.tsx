@@ -878,7 +878,7 @@ export function ServicePackagesPage() {
                       }))
                     }
                   >
-                    <SelectTrigger className="h-11 w-[7.5rem]" aria-label="Delivery duration unit">
+                    <SelectTrigger className="h-9 w-[7.5rem]" aria-label="Delivery duration unit">
                       <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.selectDurationUnit} />
                     </SelectTrigger>
                     <SelectContent>

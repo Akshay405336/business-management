@@ -82,12 +82,11 @@ export interface OrgRoleListItem {
   readonly status: OrganizationRoleStatus;
   readonly memberCount: number;
   readonly permissionKeys: readonly PermissionKey[];
-}
-
-export interface OrgRoleDetail extends OrgRoleListItem {
   readonly createdAt: string;
   readonly updatedAt: string;
 }
+
+export type OrgRoleDetail = OrgRoleListItem;
 
 export interface OrgRoleListResponse {
   readonly items: readonly OrgRoleListItem[];

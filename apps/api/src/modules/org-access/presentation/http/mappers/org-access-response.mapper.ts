@@ -1,6 +1,7 @@
 import type {
   OrgMemberDetail,
   OrgMemberListItem,
+  OrgRoleDetail,
   OrgRoleListItem,
   PermissionKey,
 } from '@techwin/contracts';
@@ -51,5 +52,11 @@ export function toOrgRoleListItem(record: OrgRoleRecord): OrgRoleListItem {
     status: record.status,
     memberCount: record.memberCount,
     permissionKeys: [...record.permissionKeys],
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
   };
+}
+
+export function toOrgRoleDetail(record: OrgRoleRecord): OrgRoleDetail {
+  return toOrgRoleListItem(record);
 }

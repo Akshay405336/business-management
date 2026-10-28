@@ -15,16 +15,26 @@ export function DataTableFrame({
   children,
   footer,
   className,
+  frame = 'surface',
 }: {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  /** `flush`: no outer card; use inside a parent surface. */
+  frame?: 'surface' | 'flush';
 }) {
+  const tableBlock =
+    frame === 'flush' ? (
+      <div className="max-w-full min-h-[8rem] min-w-0 bg-card">{children}</div>
+    ) : (
+      <div className="workspace-surface max-w-full min-h-[8rem] min-w-0">
+        <div className="overflow-hidden rounded-lg">{children}</div>
+      </div>
+    );
+
   return (
     <div className={cn('grid min-w-0 max-w-full gap-3', className)}>
-      <div className="bg-card max-w-full min-h-[8rem] min-w-0 overflow-hidden rounded-xl shadow-md">
-        {children}
-      </div>
+      {tableBlock}
       {footer ? <div>{footer}</div> : null}
     </div>
   );
@@ -34,7 +44,7 @@ export function DataTable({
   phase,
   colSpan,
   header,
-  headerVariant = 'gradient',
+  headerVariant = 'default',
   skeletonColumns,
   skeletonRows = 6,
   empty,
@@ -45,11 +55,14 @@ export function DataTable({
   children,
   className,
   tableClassName,
+  tableBodyClassName,
+  frame = 'surface',
 }: {
   phase: DataTablePhase;
   colSpan: number;
   header: ReactNode;
-  headerVariant?: 'default' | 'gradient';
+  headerVariant?: 'default' | 'gradient' | 'plain';
+  frame?: 'surface' | 'flush';
   skeletonColumns: readonly DataTableSkeletonColumn[];
   skeletonRows?: number;
   empty?: DataTableEmptyStateContent;
@@ -60,16 +73,17 @@ export function DataTable({
   children?: ReactNode;
   className?: string;
   tableClassName?: string;
+  tableBodyClassName?: string;
 }) {
   const showFooter =
     footer && (phase === 'success' || phase === 'initial-loading' || phase === 'empty');
 
   return (
-    <DataTableFrame footer={showFooter ? footer : undefined} className={className}>
+    <DataTableFrame footer={showFooter ? footer : undefined} className={className} frame={frame}>
       <DataTableBodyRefreshOverlay active={refreshing && phase === 'success'}>
         <Table className={cn('bg-card', tableClassName)}>
           <TableHeader variant={headerVariant}>{header}</TableHeader>
-          <TableBody className="bg-card">
+          <TableBody className={cn('bg-card', tableBodyClassName)}>
             {phase === 'initial-loading' ? (
               <DataTableSkeletonBody columns={skeletonColumns} rowCount={skeletonRows} />
             ) : null}

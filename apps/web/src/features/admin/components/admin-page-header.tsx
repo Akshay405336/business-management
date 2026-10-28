@@ -14,7 +14,7 @@ export function AdminBreadcrumb({
   if (breadcrumbs.length === 0) return null;
 
   return (
-    <nav aria-label="Breadcrumb" className={cn('text-muted-foreground text-xs', className)}>
+    <nav aria-label="Breadcrumb" className={cn('type-meta', className)}>
       <ol className="flex flex-wrap items-center gap-1">
         {breadcrumbs.map((crumb, index) => (
           <li key={`${crumb.label}-${index}`} className="flex items-center gap-1">
@@ -49,7 +49,7 @@ export function AdminPageHeader({
   return (
     <header
       className={cn(
-        'border-border/60 bg-card/40 -mx-1 mb-1 rounded-lg border px-4 py-4 sm:px-5',
+        'workspace-toolbar -mx-1 mb-1 py-3.5',
         className,
       )}
     >
@@ -58,9 +58,7 @@ export function AdminPageHeader({
       ) : null}
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="grid min-w-0 gap-1">
-          <h1 className="text-foreground text-xl font-semibold tracking-tight sm:text-2xl">
-            {title}
-          </h1>
+          <h1 className="type-page-title">{title}</h1>
           {description ? (
             <p className="text-muted-foreground max-w-2xl text-sm">{description}</p>
           ) : null}

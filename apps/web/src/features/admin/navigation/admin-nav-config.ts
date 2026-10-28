@@ -177,8 +177,56 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
   },
 ] as const;
 
-export function isNavItemActive(pathname: string, item: AdminNavLink): boolean {
-  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+export const ADMIN_DASHBOARD_HREF = '/admin/dashboard';
+
+function normalizePath(path: string): string {
+  if (path.length <= 1) return path;
+  return path.endsWith('/') ? path.slice(0, -1) : path;
+}
+
+function effectivePathname(pathname: string): string {
+  const current = normalizePath(pathname);
+  return current === '/admin' ? ADMIN_DASHBOARD_HREF : current;
+}
+
+function hrefMatchesPath(href: string, current: string): boolean {
+  if (href === ADMIN_DASHBOARD_HREF) {
+    return current === ADMIN_DASHBOARD_HREF;
+  }
+  return current === href || current.startsWith(`${href}/`);
+}
+
+/** Longest matching href wins so only one nav item is active. Dashboard is exact-match only. */
+export function resolveActiveNavHref(
+  pathname: string,
+  links: readonly AdminNavLink[],
+): string | null {
+  const current = effectivePathname(pathname);
+  let best: { href: string; length: number } | null = null;
+
+  for (const item of links) {
+    const href = normalizePath(item.href);
+    if (!hrefMatchesPath(href, current)) continue;
+    if (!best || href.length > best.length) {
+      best = { href, length: href.length };
+    }
+  }
+
+  return best?.href ?? null;
+}
+
+export function isNavItemActive(
+  pathname: string,
+  item: AdminNavLink,
+  links?: readonly AdminNavLink[],
+): boolean {
+  const href = normalizePath(item.href);
+  if (links) {
+    const activeHref = resolveActiveNavHref(pathname, links);
+    return activeHref !== null && href === activeHref;
+  }
+  const current = effectivePathname(pathname);
+  return hrefMatchesPath(href, current);
 }
 
 export function isNavGroupActive(pathname: string, group: AdminNavGroup): boolean {

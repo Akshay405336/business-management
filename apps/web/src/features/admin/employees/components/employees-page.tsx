@@ -450,7 +450,7 @@ export function EmployeesPage() {
             >
               <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 w-full">
                 <Input
-                  className={cn('h-11', inputGroupPaddingClass({ leading: true }))}
+                  className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
                   value={searchDraft}
                   onChange={(event) => setSearchDraft(event.target.value)}
                   placeholder="Search by name, code, email, or phone"
@@ -462,7 +462,7 @@ export function EmployeesPage() {
               value={statusFilter}
               onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
             >
-              <SelectTrigger className="h-11 w-full min-w-[9rem] sm:w-[9rem]" aria-label="Filter by status">
+              <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[9rem]" aria-label="Filter by status">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -475,7 +475,7 @@ export function EmployeesPage() {
               </SelectContent>
             </Select>
             <Input
-              className="h-11 w-full min-w-[9rem] sm:w-[10rem]"
+              className="h-9 w-full min-w-[9rem] sm:w-[10rem]"
               value={departmentFilter}
               onChange={(event) => setDepartmentFilter(event.target.value)}
               placeholder="Department"
@@ -485,7 +485,7 @@ export function EmployeesPage() {
               value={employmentTypeFilter}
               onValueChange={(value) => setEmploymentTypeFilter(value as typeof employmentTypeFilter)}
             >
-              <SelectTrigger className="h-11 w-full min-w-[9rem] sm:w-[10rem]" aria-label="Filter by employment type">
+              <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[10rem]" aria-label="Filter by employment type">
                 <SelectValue placeholder="Employment type" />
               </SelectTrigger>
               <SelectContent>
@@ -497,7 +497,7 @@ export function EmployeesPage() {
                 ))}
               </SelectContent>
             </Select>
-            <Button type="button" className="h-11 shrink-0" onClick={openCreate}>
+            <Button type="button" className="h-9 shrink-0" onClick={openCreate}>
               <Plus aria-hidden="true" />
               Add Employee
             </Button>

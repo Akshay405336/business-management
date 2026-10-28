@@ -336,7 +336,7 @@ export function UsersPage() {
                 >
                   <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 w-full">
                     <Input
-                      className={cn('h-11', inputGroupPaddingClass({ leading: true }))}
+                      className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
                       value={searchDraft}
                       onChange={(event) => setSearchDraft(event.target.value)}
                       placeholder="Search by name or email"
@@ -348,7 +348,7 @@ export function UsersPage() {
                   value={statusFilter}
                   onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
                 >
-                  <SelectTrigger className="h-11 w-full min-w-[9rem] sm:w-[9rem]" aria-label="Filter by status">
+                  <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[9rem]" aria-label="Filter by status">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -361,7 +361,7 @@ export function UsersPage() {
                   </SelectContent>
                 </Select>
                 <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="h-11 w-full min-w-[9rem] sm:w-[10rem]" aria-label="Filter by role">
+                  <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[10rem]" aria-label="Filter by role">
                     <SelectValue placeholder="Role" />
                   </SelectTrigger>
                   <SelectContent>
@@ -376,7 +376,7 @@ export function UsersPage() {
                 {canProvision ? (
                   <Button
                     type="button"
-                    className="h-11 shrink-0"
+                    className="h-9 shrink-0"
                     onClick={() => {
                       setCreateAccountApiErrors({});
                       setCreateAccountOpen(true);

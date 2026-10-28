@@ -19,7 +19,7 @@ export function AdminLoginForm() {
   return (
     <div className="grid gap-8">
       <header className="grid gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Sign in to Techwin</h1>
+        <h1 className="type-page-title">Sign in to Techwin</h1>
         <p className="text-muted-foreground text-sm">
           Sign in with your email and password. Super Admin accounts also confirm with an
           authenticator app.

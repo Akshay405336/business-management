@@ -48,7 +48,7 @@ export function CrmToolbarHeader({
         titleSectionClassName,
       )}
     >
-      <h1 className="text-foreground text-lg font-semibold tracking-tight sm:text-xl">{title}</h1>
+      <h1 className="type-page-title">{title}</h1>
       <p
         className={cn('text-muted-foreground mt-0.5 text-sm leading-snug', descriptionClassName)}
       >
@@ -97,7 +97,7 @@ export function CrmToolbarHeader({
   return (
     <header
       className={cn(
-        'border-border/60 bg-card/40 max-w-full min-w-0 rounded-lg border px-4 py-3 sm:px-5',
+        'workspace-toolbar',
         className,
       )}
     >

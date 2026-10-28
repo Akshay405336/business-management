@@ -22,6 +22,7 @@ import {
   type OrgAccessSummaryResponse,
   type OrgMemberDetail,
   type OrgMemberListResponse,
+  type OrgRoleDetail,
   type OrgRoleListResponse,
   type PermissionCatalogResponse,
 } from '@techwin/contracts';
@@ -63,6 +64,7 @@ import { toOrgAccessActor } from '../mappers/org-access-actor.mapper.js';
 import {
   toOrgMemberDetail,
   toOrgMemberListItem,
+  toOrgRoleDetail,
   toOrgRoleListItem,
 } from '../mappers/org-access-response.mapper.js';
 
@@ -296,6 +298,16 @@ export class OrgAccessController {
   async listRoles(@CrmContext() ctx: CrmRequestContext): Promise<OrgRoleListResponse> {
     const roles = await this.repository.listRoles(ctx.organizationId);
     return { items: roles.map(toOrgRoleListItem) };
+  }
+
+  @Get('roles/:id')
+  @ApiBearerAuth()
+  @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
+  @RequirePermissions('roles.read')
+  async getRole(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<OrgRoleDetail> {
+    const role = await this.repository.getRole(ctx.organizationId, id);
+    if (!role) throw new OrgAccessNotFoundError('Role');
+    return toOrgRoleDetail(role);
   }
 
   @Post('roles')

@@ -12,6 +12,12 @@ import { cn } from '@/shared/lib/utils';
 
 export const TABLE_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
+const paginationNavButtonClass =
+  'border-input bg-card text-foreground hover:bg-muted/50 shadow-none';
+
+const paginationActivePageClass =
+  'border-neutral-900 bg-neutral-900 text-white hover:bg-neutral-800 hover:text-white';
+
 function buildPageList(page: number, totalPages: number): readonly (number | 'ellipsis')[] {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1);
@@ -114,12 +120,12 @@ export function TablePagination({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="hidden sm:inline-flex"
+          className={cn(paginationNavButtonClass, 'hidden sm:inline-flex')}
           disabled={safePage <= 1 || total === 0}
           aria-label="First page"
           onClick={() => onPageChange(1)}
@@ -130,6 +136,7 @@ export function TablePagination({
           type="button"
           variant="outline"
           size="sm"
+          className={paginationNavButtonClass}
           disabled={safePage <= 1 || total === 0}
           aria-label="Previous page"
           onClick={() => onPageChange(safePage - 1)}
@@ -137,19 +144,31 @@ export function TablePagination({
           <ChevronLeft className="size-4" aria-hidden="true" />
           Previous
         </Button>
-        <div className="flex items-center gap-0.5 px-1">
+        <div className="flex items-center gap-1 px-0.5">
           {pageList.map((item, index) =>
             item === 'ellipsis' ? (
-              <span key={`ellipsis-${index}`} className="text-muted-foreground px-1 text-sm">
+              <Button
+                key={`ellipsis-${index}`}
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(paginationNavButtonClass, 'min-w-8 px-2')}
+                disabled
+                aria-hidden
+                tabIndex={-1}
+              >
                 …
-              </span>
+              </Button>
             ) : (
               <Button
                 key={item}
                 type="button"
-                variant={item === safePage ? 'default' : 'outline'}
+                variant="outline"
                 size="sm"
-                className="min-w-8 px-2"
+                className={cn(
+                  'min-w-8 px-2',
+                  item === safePage ? paginationActivePageClass : paginationNavButtonClass,
+                )}
                 aria-label={`Page ${item}`}
                 aria-current={item === safePage ? 'page' : undefined}
                 disabled={total === 0}
@@ -164,6 +183,7 @@ export function TablePagination({
           type="button"
           variant="outline"
           size="sm"
+          className={paginationNavButtonClass}
           disabled={safePage >= totalPages || total === 0}
           aria-label="Next page"
           onClick={() => onPageChange(safePage + 1)}
@@ -175,7 +195,7 @@ export function TablePagination({
           type="button"
           variant="outline"
           size="sm"
-          className="hidden sm:inline-flex"
+          className={cn(paginationNavButtonClass, 'hidden sm:inline-flex')}
           disabled={safePage >= totalPages || total === 0}
           aria-label="Last page"
           onClick={() => onPageChange(totalPages)}

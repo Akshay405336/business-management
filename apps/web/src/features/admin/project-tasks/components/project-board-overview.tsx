@@ -80,7 +80,7 @@ export function ProjectBoardOverview({
   return (
     <section
       className={cn(
-        'border-border/60 bg-card/40 max-w-full min-w-0 rounded-lg border px-3 py-2.5 sm:px-4',
+        'workspace-toolbar max-w-full min-w-0 px-3 py-2.5 sm:px-4',
         className,
       )}
     >

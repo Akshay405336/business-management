@@ -2,21 +2,43 @@ import { cn } from '@/shared/lib/utils';
 
 export function TechwinMark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" aria-hidden="true" className={cn('size-8', className)}>
-      <rect width="32" height="32" rx="8" className="fill-primary" />
-      <path d="M9 10.5h14v3.2h-5.4V23h-3.2v-9.3H9z" className="fill-primary-foreground" />
-      <circle cx="22.5" cy="21.5" r="2" className="fill-primary-foreground/70" />
+    <svg viewBox="0 0 32 32" aria-hidden="true" className={cn('size-8 shrink-0', className)}>
+      <rect width="32" height="32" rx="9" className="fill-primary" />
+      <path
+        d="M10 9.5h12v2.75H15.1v10.25h-2.2V12.25H10V9.5z"
+        className="fill-primary-foreground"
+      />
     </svg>
   );
 }
 
-export function TechwinLogo({ className, subtitle }: { className?: string; subtitle?: string }) {
+export function TechwinLogo({
+  className,
+  subtitle,
+  compact = false,
+  title = 'Techwin',
+}: {
+  className?: string;
+  subtitle?: string;
+  compact?: boolean;
+  /** Primary brand line; sidebar uses “Techwin Pvt Ltd”. */
+  title?: string;
+}) {
   return (
-    <div className={cn('flex items-center gap-2.5', className)}>
-      <TechwinMark />
-      <div className="flex flex-col leading-none">
-        <span className="text-[15px] font-semibold tracking-tight">Techwin</span>
-        {subtitle ? <span className="text-muted-foreground mt-1 text-xs">{subtitle}</span> : null}
+    <div className={cn('flex min-w-0 items-center gap-2.5', className)}>
+      <TechwinMark className={compact ? 'size-8' : undefined} />
+      <div className="flex min-w-0 flex-col leading-tight">
+        <span
+          className={cn(
+            'text-foreground truncate tracking-tight',
+            compact ? 'text-[13px] font-bold' : 'text-[15px] font-semibold',
+          )}
+        >
+          {title}
+        </span>
+        {subtitle ? (
+          <span className="text-muted-foreground mt-0.5 truncate text-[11px]">{subtitle}</span>
+        ) : null}
       </div>
     </div>
   );

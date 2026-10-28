@@ -1,6 +1,17 @@
 'use client';
 
-import { Loader2, Pencil, Plus, Power, Search, Trash2 } from 'lucide-react';
+import {
+  ArrowUpDown,
+  Download,
+  ListFilter,
+  Loader2,
+  SquarePen,
+  Plus,
+  Search,
+  ToggleLeft,
+  ToggleRight,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -14,16 +25,19 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { TableCell, TableHead, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import {
   DataTable,
@@ -39,24 +53,47 @@ import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { cn } from '@/shared/lib/utils';
 import { deletePipeline, listPipelines, updatePipeline } from '../api/pipelines';
-import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import type { CrmPipeline } from '../types';
 import { describeCrmError } from '../utils/errors';
 import { CrmErrorAlert } from './crm-feedback';
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from './crm-toolbar-header';
 import { PipelineFormDialog } from './pipeline-form-dialog';
+import { PipelineStageDots } from './pipeline-stage-dots';
 import { useAsyncAction } from '../hooks/use-async-action';
 
 type PipelineStatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
+type PipelineSortKey = 'default' | 'name-asc' | 'name-desc' | 'leads-desc' | 'leads-asc';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-function activeStageCount(pipeline: CrmPipeline): number {
-  return pipeline.stages.filter((stage) => stage.status === 'ACTIVE').length;
+function escapeCsvCell(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
 }
 
-function formatStageCount(count: number): string {
-  return `${count} stage${count === 1 ? '' : 's'}`;
+function downloadPipelinesCsv(pipelines: readonly CrmPipeline[], filename = 'pipelines.csv') {
+  const headers = ['Name', 'Description', 'Status', 'Default', 'Sort order', 'Leads', 'Stages'];
+  const rows = pipelines.map((pipeline) =>
+    [
+      escapeCsvCell(pipeline.name),
+      escapeCsvCell(pipeline.description),
+      pipeline.status,
+      pipeline.isDefault ? 'Yes' : 'No',
+      String(pipeline.sortOrder),
+      String(pipeline.leadCount),
+      String(pipeline.stages.length),
+    ].join(','),
+  );
+  const content = [headers.join(','), ...rows].join('\r\n');
+  const blob = new Blob(['\ufeff', content], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function pipelineMatchesSearch(pipeline: CrmPipeline, query: string): boolean {
@@ -78,11 +115,16 @@ export function PipelinesPage() {
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<PipelineStatusFilter>('ALL');
+  const [sortKey, setSortKey] = useState<PipelineSortKey>('default');
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CrmPipeline | null>(null);
+  const [statusTarget, setStatusTarget] = useState<CrmPipeline | null>(null);
+  const [selectedPipelineIds, setSelectedPipelineIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -119,28 +161,80 @@ export function PipelinesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, sortKey]);
 
   const filtered = useMemo(() => {
     const items = pipelines ?? [];
-    return items
-      .filter((pipeline) => {
-        if (statusFilter !== 'ALL' && pipeline.status !== statusFilter) return false;
-        return pipelineMatchesSearch(pipeline, search);
-      })
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+    return items.filter((pipeline) => {
+      if (statusFilter !== 'ALL' && pipeline.status !== statusFilter) return false;
+      return pipelineMatchesSearch(pipeline, search);
+    });
   }, [pipelines, search, statusFilter]);
+
+  const sortedFiltered = useMemo(() => {
+    const items = [...filtered];
+    switch (sortKey) {
+      case 'name-asc':
+        return items.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name-desc':
+        return items.sort((a, b) => b.name.localeCompare(a.name));
+      case 'leads-desc':
+        return items.sort(
+          (a, b) => b.leadCount - a.leadCount || a.name.localeCompare(b.name),
+        );
+      case 'leads-asc':
+        return items.sort(
+          (a, b) => a.leadCount - b.leadCount || a.name.localeCompare(b.name),
+        );
+      default:
+        return items.sort(
+          (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+        );
+    }
+  }, [filtered, sortKey]);
 
   const hasAnyPipelines = (pipelines?.length ?? 0) > 0;
   const filtersActive = statusFilter !== 'ALL' || search.trim().length > 0;
   const searchActive = search.trim().length > 0;
-  const totalPipelines = filtered.length;
+  const totalPipelines = sortedFiltered.length;
   const totalPages = Math.max(1, Math.ceil(totalPipelines / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pagedPipelines = useMemo(() => {
     const start = (safePage - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, pageSize, safePage]);
+    return sortedFiltered.slice(start, start + pageSize);
+  }, [sortedFiltered, pageSize, safePage]);
+
+  const pagedPipelineIds = useMemo(
+    () => pagedPipelines.map((pipeline) => pipeline.id),
+    [pagedPipelines],
+  );
+
+  const allPagePipelinesSelected =
+    pagedPipelineIds.length > 0 &&
+    pagedPipelineIds.every((id) => selectedPipelineIds.has(id));
+  const somePagePipelinesSelected =
+    pagedPipelineIds.some((id) => selectedPipelineIds.has(id)) && !allPagePipelinesSelected;
+
+  const toggleAllPagePipelines = () => {
+    setSelectedPipelineIds((current) => {
+      const next = new Set(current);
+      if (allPagePipelinesSelected) {
+        for (const id of pagedPipelineIds) next.delete(id);
+      } else {
+        for (const id of pagedPipelineIds) next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const togglePipelineSelected = (pipelineId: string) => {
+    setSelectedPipelineIds((current) => {
+      const next = new Set(current);
+      if (next.has(pipelineId)) next.delete(pipelineId);
+      else next.add(pipelineId);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -149,9 +243,9 @@ export function PipelinesPage() {
   const tablePhase = deriveDataTablePhase({
     loading,
     error,
-    rowCount: hasAnyPipelines ? filtered.length : 0,
+    rowCount: hasAnyPipelines ? sortedFiltered.length : 0,
   });
-  const tableRefreshing = isDataTableRefreshing({ loading, rowCount: filtered.length });
+  const tableRefreshing = isDataTableRefreshing({ loading, rowCount: sortedFiltered.length });
 
   const emptyTitle = searchActive
     ? 'No pipelines match your search.'
@@ -175,8 +269,11 @@ export function PipelinesPage() {
     setFormOpen(true);
   };
 
-  const toggleStatus = async (pipeline: CrmPipeline) => {
+  const confirmStatusChange = async () => {
+    if (!statusTarget) return;
+    const pipeline = statusTarget;
     const next = pipeline.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    setStatusTarget(null);
     try {
       await run(() => updatePipeline(pipeline.id, { status: next }));
       toast.success(next === 'ACTIVE' ? 'Pipeline activated.' : 'Pipeline deactivated.');
@@ -206,6 +303,18 @@ export function PipelinesPage() {
     setPage(1);
   };
 
+  const handleExport = () => {
+    if (sortedFiltered.length === 0) {
+      toast.error('No pipelines to export.');
+      return;
+    }
+    downloadPipelinesCsv(sortedFiltered);
+  };
+
+  const statusFilterActive = statusFilter !== 'ALL';
+  const sortActive = sortKey !== 'default';
+  const statusChangeIsDeactivate = statusTarget?.status === 'ACTIVE';
+
   const breadcrumbs = [
     { label: 'Dashboard', href: '/admin/dashboard' },
     { label: 'CRM' },
@@ -213,14 +322,16 @@ export function PipelinesPage() {
   ] as const;
 
   return (
-    <div className="grid w-full min-w-0 max-w-full gap-3">
+    <div className="grid w-full min-w-0 max-w-full gap-3 pt-1">
       <AdminBreadcrumb breadcrumbs={breadcrumbs} className="mb-0.5" />
-      <CrmToolbarHeader
-        title="Pipeline"
-        description="Manage lead workflows and their stages."
-        className="shadow-xs"
-        titleSectionClassName="xl:max-w-none xl:min-w-0 xl:flex-[1_1_auto]"
-        toolbar={
+      <section className="workspace-surface min-w-0">
+        <div className="rounded-lg">
+        <CrmToolbarHeader
+          title="Pipeline"
+          description="Manage lead workflows and their stages."
+          className="rounded-none border-0 bg-card shadow-none"
+          titleSectionClassName="xl:max-w-none xl:min-w-0 xl:flex-[1_1_auto]"
+          toolbar={
           <>
             <form
               className={CRM_HEADER_SEARCH_FORM_CLASS}
@@ -241,40 +352,120 @@ export function PipelinesPage() {
                 />
               </InputGroup>
             </form>
-            <Select
-              value={statusFilter}
-              onValueChange={(value) => setStatusFilter(value as PipelineStatusFilter)}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className={cn(
+                        'shrink-0',
+                        statusFilterActive && 'border-primary/40 bg-primary/5',
+                      )}
+                      aria-label="Filter pipelines"
+                    >
+                      <ListFilter aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Filter</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuLabel>Status</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={statusFilter}
+                  onValueChange={(value) => setStatusFilter(value as PipelineStatusFilter)}
+                >
+                  <DropdownMenuRadioItem value="ALL">All statuses</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="ACTIVE">Active</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="INACTIVE">Inactive</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className={cn('shrink-0', sortActive && 'border-primary/40 bg-primary/5')}
+                      aria-label="Sort pipelines"
+                    >
+                      <ArrowUpDown aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Sort</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={sortKey}
+                  onValueChange={(value) => setSortKey(value as PipelineSortKey)}
+                >
+                  <DropdownMenuRadioItem value="default">Default order</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="name-asc">Name (A–Z)</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="name-desc">Name (Z–A)</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="leads-desc">Most leads</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="leads-asc">Fewest leads</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0"
+              onClick={handleExport}
             >
-              <SelectTrigger
-                className="h-9 w-full min-w-0 sm:w-[9.375rem] sm:max-w-[10rem]"
-                aria-label="Filter by status"
-              >
-                <SelectValue placeholder={CRM_FORM_PLACEHOLDERS.filterStatus} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All statuses</SelectItem>
-                <SelectItem value="ACTIVE">Active</SelectItem>
-                <SelectItem value="INACTIVE">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
+              <Download aria-hidden="true" />
+              Export
+            </Button>
             <Button type="button" size="sm" className="h-9 shrink-0" onClick={openCreate}>
               <Plus aria-hidden="true" />
               Add pipeline
             </Button>
           </>
-        }
-      />
+          }
+        />
 
-      {error && (pipelines?.length ?? 0) > 0 ? <CrmErrorAlert message={error} /> : null}
+        {error && (pipelines?.length ?? 0) > 0 ? (
+          <div className="border-border border-b px-4 sm:px-5">
+            <CrmErrorAlert message={error} />
+          </div>
+        ) : null}
 
-      <DataTable
-        className="min-w-0 max-w-full"
-        tableClassName="table-fixed"
-        phase={tablePhase}
-        colSpan={6}
+        <div aria-hidden className="table-header-edge" />
+
+        <DataTable
+          frame="flush"
+          headerVariant="plain"
+          className="min-w-0 max-w-full gap-0"
+          tableClassName="table-fixed [&_[data-slot=table-head]]:h-auto [&_[data-slot=table-head]]:py-3 [&_[data-slot=table-cell]]:py-3"
+          tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
+          phase={tablePhase}
+        colSpan={7}
         skeletonColumns={CRM_PIPELINES_TABLE_SKELETON}
         header={
           <TableRow className="hover:bg-transparent">
+            <TableHead className={CRM_PIPELINES_TABLE_COLUMN_CLASS.select}>
+              <Checkbox
+                aria-label="Select all pipelines on this page"
+                checked={
+                  allPagePipelinesSelected
+                    ? true
+                    : somePagePipelinesSelected
+                      ? 'indeterminate'
+                      : false
+                }
+                disabled={pagedPipelineIds.length === 0}
+                onCheckedChange={() => toggleAllPagePipelines()}
+              />
+            </TableHead>
             <TableHead className={CRM_PIPELINES_TABLE_COLUMN_CLASS.name}>Pipeline name</TableHead>
             <TableHead className={CRM_PIPELINES_TABLE_COLUMN_CLASS.description}>
               Description
@@ -299,34 +490,44 @@ export function PipelinesPage() {
         errorMessage={error}
         onRetry={() => void load()}
         refreshing={tableRefreshing}
-        footer={
-          <TablePagination
-            page={safePage}
-            pageSize={pageSize}
-            total={totalPipelines}
-            loading={tablePhase === 'initial-loading'}
-            hideWhenEmpty={false}
-            onPageChange={setPage}
-            onPageSizeChange={(nextSize) => {
-              setPageSize(nextSize);
-              setPage(1);
-            }}
-          />
-        }
-      >
+          footer={
+            <TablePagination
+              className="border-border border-t px-4 py-3 sm:px-5"
+              page={safePage}
+              pageSize={pageSize}
+              total={totalPipelines}
+              loading={tablePhase === 'initial-loading'}
+              hideWhenEmpty={false}
+              onPageChange={setPage}
+              onPageSizeChange={(nextSize) => {
+                setPageSize(nextSize);
+                setPage(1);
+              }}
+            />
+          }
+        >
         {pagedPipelines.map((pipeline) => {
-          const stageCount = activeStageCount(pipeline);
           const description = pipeline.description.trim();
           return (
-            <TableRow key={pipeline.id}>
+            <TableRow key={pipeline.id} className="border-0">
+              <TableCell className={CRM_PIPELINES_TABLE_COLUMN_CLASS.select}>
+                <Checkbox
+                  aria-label={`Select ${pipeline.name}`}
+                  checked={selectedPipelineIds.has(pipeline.id)}
+                  onCheckedChange={() => togglePipelineSelected(pipeline.id)}
+                />
+              </TableCell>
               <TableCell
-                className={cn(
-                  CRM_PIPELINES_TABLE_COLUMN_CLASS.name,
-                  'min-w-0 font-medium',
-                )}
-                title={pipeline.name}
+                className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.name, 'min-w-0')}
               >
-                <span className="block truncate">{pipeline.name}</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-foreground block truncate text-[13px] font-semibold">
+                      {pipeline.name}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">{pipeline.name}</TooltipContent>
+                </Tooltip>
               </TableCell>
               <TableCell
                 className={cn(
@@ -335,22 +536,31 @@ export function PipelinesPage() {
                 )}
               >
                 {description ? (
-                  <span className="line-clamp-2 text-sm break-words">{description}</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-muted-foreground line-clamp-2 text-sm break-words">
+                        {description}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-sm">
+                      {description}
+                    </TooltipContent>
+                  </Tooltip>
                 ) : (
                   <span className="text-muted-foreground text-sm">—</span>
                 )}
               </TableCell>
-              <TableCell className={CRM_PIPELINES_TABLE_COLUMN_CLASS.stages}>
-                <Badge variant="secondary" className="max-w-full font-normal tabular-nums">
-                  {formatStageCount(stageCount)}
-                </Badge>
+              <TableCell
+                className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.stages, 'align-middle')}
+              >
+                <PipelineStageDots stages={pipeline.stages} />
               </TableCell>
               <TableCell
                 className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.leads, 'text-right tabular-nums')}
               >
                 {pipeline.leadCount}
               </TableCell>
-              <TableCell className={CRM_PIPELINES_TABLE_COLUMN_CLASS.status}>
+              <TableCell className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.status, 'text-left')}>
                 {pipeline.status === 'ACTIVE' ? (
                   <Badge className="border-transparent bg-emerald-600/10 text-emerald-700 hover:bg-emerald-600/10">
                     Active
@@ -361,32 +571,47 @@ export function PipelinesPage() {
                   </Badge>
                 )}
               </TableCell>
-              <TableCell className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.actions, 'min-w-0')}>
-                <div className="flex shrink-0 items-center justify-end gap-0.5">
+              <TableCell className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.actions, 'min-w-0 pl-4')}>
+                <div className="flex w-full shrink-0 items-center justify-end gap-1">
                   <TableIconButton
                     label={
                       pipeline.status === 'ACTIVE'
                         ? `Deactivate ${pipeline.name}`
                         : `Activate ${pipeline.name}`
                     }
-                    tone={pipeline.status === 'ACTIVE' ? 'success' : 'danger'}
+                    tone="default"
+                    className={
+                      pipeline.status === 'ACTIVE'
+                        ? 'text-red-800 hover:bg-red-800/10 hover:text-red-900'
+                        : 'text-emerald-800 hover:bg-emerald-800/10 hover:text-emerald-900'
+                    }
                     disabled={pending}
-                    onClick={() => void toggleStatus(pipeline)}
+                    onClick={() => setStatusTarget(pipeline)}
                   >
-                    <Power className="size-4" aria-hidden="true" />
+                    {pipeline.status === 'ACTIVE' ? (
+                      <ToggleRight className="size-4 stroke-[2]" aria-hidden="true" />
+                    ) : (
+                      <ToggleLeft className="size-4 stroke-[2]" aria-hidden="true" />
+                    )}
                   </TableIconButton>
                   <TableIconButton
                     label={`Edit ${pipeline.name}`}
-                    tone="primary"
+                    tone="default"
+                    className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
                     disabled={pending}
                     onClick={() => openEdit(pipeline)}
                   >
-                    <Pencil className="size-4" aria-hidden="true" />
+                    <SquarePen className="size-4" aria-hidden="true" />
                   </TableIconButton>
                   <TableIconButton
-                    label={`Delete ${pipeline.name}`}
-                    tone="danger"
-                    disabled={pending || pipeline.isDefault}
+                    label={
+                      pipeline.isDefault
+                        ? `Default pipeline “${pipeline.name}” cannot be deleted`
+                        : `Delete ${pipeline.name}`
+                    }
+                    tone="default"
+                    className="text-neutral-900 hover:bg-neutral-900/10 hover:text-black disabled:opacity-100 disabled:hover:bg-transparent"
+                    disabled={pending}
                     onClick={() => setDeleteTarget(pipeline)}
                   >
                     <Trash2 className="size-4" aria-hidden="true" />
@@ -396,7 +621,9 @@ export function PipelinesPage() {
             </TableRow>
           );
         })}
-      </DataTable>
+        </DataTable>
+        </div>
+      </section>
 
       <PipelineFormDialog
         open={formOpen}
@@ -405,39 +632,89 @@ export function PipelinesPage() {
         onSaved={load}
       />
 
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <AlertDialog
+        open={statusTarget !== null}
+        onOpenChange={(open) => !open && setStatusTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete pipeline?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {statusChangeIsDeactivate ? 'Deactivate pipeline?' : 'Activate pipeline?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget
-                ? deleteTarget.leadCount > 0
-                  ? `“${deleteTarget.name}” has ${deleteTarget.leadCount} lead${
-                      deleteTarget.leadCount === 1 ? '' : 's'
-                    }. Move or remove those leads before deleting this pipeline.`
-                  : `“${deleteTarget.name}” and its stages will be permanently removed. This cannot be undone.`
+              {statusTarget
+                ? statusChangeIsDeactivate
+                  ? `“${statusTarget.name}” will be marked inactive. Existing leads stay in this pipeline, but it will not be used for new lead workflows until you activate it again.`
+                  : `“${statusTarget.name}” will be marked active and available for lead workflows.`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={!deleteTarget || deleteTarget.leadCount > 0 || pending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!statusTarget || pending}
+              className={
+                statusChangeIsDeactivate
+                  ? 'bg-neutral-900 text-white hover:bg-neutral-800'
+                  : undefined
+              }
               onClick={(event) => {
                 event.preventDefault();
-                void confirmDelete();
+                void confirmStatusChange();
               }}
             >
               {pending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  Deleting…
+                  {statusChangeIsDeactivate ? 'Deactivating…' : 'Activating…'}
                 </>
+              ) : statusChangeIsDeactivate ? (
+                'Deactivate'
               ) : (
-                'Delete pipeline'
+                'Activate'
               )}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete pipeline?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? deleteTarget.isDefault
+                  ? `“${deleteTarget.name}” is the default pipeline and cannot be deleted. Set another pipeline as default first, or remove it only after it is no longer the default.`
+                  : deleteTarget.leadCount > 0
+                    ? `“${deleteTarget.name}” has ${deleteTarget.leadCount} lead${
+                        deleteTarget.leadCount === 1 ? '' : 's'
+                      }. Move or remove those leads before you can delete this pipeline.`
+                    : `“${deleteTarget.name}” and all of its stages will be permanently removed. This action cannot be undone.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{deleteTarget?.isDefault ? 'Close' : 'Cancel'}</AlertDialogCancel>
+            {deleteTarget?.isDefault ? null : (
+              <AlertDialogAction
+                disabled={!deleteTarget || deleteTarget.leadCount > 0 || pending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void confirmDelete();
+                }}
+              >
+                {pending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                    Deleting…
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

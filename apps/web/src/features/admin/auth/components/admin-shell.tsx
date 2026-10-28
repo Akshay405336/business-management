@@ -1,210 +1,282 @@
 'use client';
 
-import { ChevronDown, LogOut, Menu } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetTitle,
-  SheetTrigger,
 } from '@/components/ui/sheet';
-import { adminPageTitle, isNavGroupActive, isNavItemActive, type AdminNavGroup } from '@/features/admin/navigation/admin-nav-config';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import {
+  adminPageTitle,
+  isNavItemActive,
+  type AdminNavGroup,
+  type AdminNavLink,
+} from '@/features/admin/navigation/admin-nav-config';
+import {
+  AdminAppHeader,
+  AdminHeaderSidebarToggle,
+  AdminMobileNavTrigger,
+} from './admin-app-header';
 import { useAdminAccess } from './admin-access-provider';
 import { TechwinLogo, TechwinMark } from '@/shared/components/techwin-logo';
 import { cn } from '@/shared/lib/utils';
-import { initialsOf } from '@/shared/lib/format';
-import { useAuthenticatedAdmin, useAdminSession } from '../hooks/use-admin-session';
+import { useAuthenticatedAdmin } from '../hooks/use-admin-session';
+
+const NAV_ICON_CLASS = 'size-[18px] shrink-0 stroke-[1.75]';
+
+/** CRM and Project Management always use a text heading + submenu, even with one link. */
+const COLLAPSIBLE_GROUP_IDS = new Set(['crm', 'projects']);
+
+function navLinksInGroup(group: AdminNavGroup): AdminNavLink[] {
+  return group.items.filter((item): item is AdminNavLink => item.kind === 'link');
+}
+
+function allNavLinks(groups: readonly AdminNavGroup[]): AdminNavLink[] {
+  return groups.flatMap((group) => navLinksInGroup(group));
+}
+
+function usesCollapsibleGroup(group: AdminNavGroup): boolean {
+  if (group.id === 'overview') return false;
+  if (COLLAPSIBLE_GROUP_IDS.has(group.id)) return true;
+  return navLinksInGroup(group).length > 1;
+}
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const { admin } = useAuthenticatedAdmin();
-  const { signOut, isSigningOut } = useAdminSession();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const title = adminPageTitle(pathname);
 
   return (
-    <div className="bg-background flex min-h-dvh min-w-0">
+    <div className="bg-background relative flex h-dvh max-h-dvh min-w-0 overflow-hidden">
+      <AdminHeaderSidebarToggle
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((value) => !value)}
+        className="absolute top-7 z-30 hidden -translate-x-1/2 -translate-y-1/2 lg:inline-flex"
+        style={{
+          left: sidebarCollapsed
+            ? 'var(--workspace-sidebar-width-collapsed)'
+            : 'var(--workspace-sidebar-width)',
+        }}
+      />
       <aside
         data-admin-chrome
-        className="bg-card hidden w-64 shrink-0 flex-col border-r lg:flex print:hidden"
+        data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+        className={cn(
+          'admin-sidebar-shell hidden h-full shrink-0 bg-white lg:block print:hidden',
+          sidebarCollapsed
+            ? 'w-[var(--workspace-sidebar-width-collapsed)] max-w-[var(--workspace-sidebar-width-collapsed)]'
+            : 'w-[var(--workspace-sidebar-width)] max-w-[var(--workspace-sidebar-width)]',
+        )}
       >
-        <div className="flex h-14 items-center border-b px-4">
-          <TechwinLogo subtitle="Admin" />
-        </div>
-        <SidebarNav pathname={pathname} />
-        <div className="mt-auto border-t p-3">
-          <p className="text-muted-foreground truncate px-2 text-xs">{admin.email}</p>
+        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div
+            className={cn(
+              'shrink-0 pt-4 pb-3',
+              sidebarCollapsed ? 'flex justify-center px-2' : 'px-3',
+            )}
+          >
+            {sidebarCollapsed ? (
+              <TechwinMark className="size-8" />
+            ) : (
+              <TechwinLogo compact title="Techwin Pvt Ltd" />
+            )}
+          </div>
+          <SidebarNav
+            pathname={pathname}
+            collapsed={sidebarCollapsed}
+            className="min-h-0 flex-1 pt-4"
+          />
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header
-          data-admin-chrome
-          className="bg-card sticky top-0 z-20 flex h-14 min-w-0 items-center gap-3 border-b px-3 sm:px-4 print:hidden"
-        >
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="lg:hidden"
-                aria-label="Open navigation"
-              >
-                <Menu />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-0">
-              <div className="flex h-14 items-center border-b px-4 pr-12">
-                <SheetTitle className="sr-only">Navigation</SheetTitle>
-                <SheetDescription className="sr-only">Platform administration</SheetDescription>
-                <TechwinLogo subtitle="Admin" />
-              </div>
-              <SidebarNav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
-            </SheetContent>
-          </Sheet>
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+        <AdminAppHeader
+          title={title}
+          admin={admin}
+          mobileNavTrigger={
+            <AdminMobileNavTrigger onClick={() => setMobileOpen(true)} />
+          }
+        />
 
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <TechwinMark className="size-7 lg:hidden" />
-            <p className="truncate text-sm font-medium">{title}</p>
-          </div>
+        <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+          <SheetContent
+            side="left"
+            className="flex w-[min(100vw,280px)] flex-col border-0 bg-white p-0"
+          >
+            <div className="shrink-0 px-3 pt-4 pb-3 pr-12">
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <SheetDescription className="sr-only">Platform administration</SheetDescription>
+              <TechwinLogo compact title="Techwin Pvt Ltd" />
+            </div>
+            <SidebarNav
+              pathname={pathname}
+              collapsed={false}
+              className="min-h-0 flex-1 pt-4"
+              onNavigate={() => setMobileOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
 
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="bg-accent text-accent-foreground hidden size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold sm:flex"
-              aria-hidden="true"
-            >
-              {initialsOf(admin.displayName)}
-            </span>
-            <span className="hidden min-w-0 truncate text-sm sm:inline">{admin.displayName}</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void signOut()}
-              disabled={isSigningOut}
-            >
-              <LogOut aria-hidden="true" />
-              {isSigningOut ? 'Signing out...' : 'Sign out'}
-            </Button>
-          </div>
-        </header>
-
-        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 sm:px-6 print:px-0 print:py-0">
-          {children}
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 print:overflow-visible print:px-0 print:py-0">
+          <TooltipProvider>{children}</TooltipProvider>
         </main>
       </div>
     </div>
   );
 }
 
-function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const { navGroups } = useAdminAccess();
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    for (const group of navGroups) {
-      initial[group.id] = isNavGroupActive(pathname, group);
-    }
-    return initial;
-  });
+function defaultExpandedForGroups(groups: readonly AdminNavGroup[]): Record<string, boolean> {
+  const initial: Record<string, boolean> = {};
+  for (const group of groups) {
+    if (usesCollapsibleGroup(group)) initial[group.id] = true;
+  }
+  return initial;
+}
 
-  const toggleGroup = (group: AdminNavGroup) => {
+function SidebarNav({
+  pathname,
+  onNavigate,
+  className,
+  collapsed = false,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+  className?: string;
+  collapsed?: boolean;
+}) {
+  const { navGroups } = useAdminAccess();
+  const navLinks = allNavLinks(navGroups);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    defaultExpandedForGroups(navGroups),
+  );
+
+  useEffect(() => {
+    setExpanded((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const group of navGroups) {
+        if (usesCollapsibleGroup(group) && next[group.id] === undefined) {
+          next[group.id] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [navGroups]);
+
+  const toggleGroup = (groupId: string) => {
     setExpanded((current) => ({
       ...current,
-      [group.id]: !current[group.id],
+      [groupId]: !current[groupId],
     }));
   };
+
+  if (collapsed) {
+    return (
+      <nav
+        aria-label="Admin"
+        className={cn(
+          'scrollbar-hide overflow-x-hidden overflow-y-auto px-1.5 pb-2',
+          className,
+        )}
+      >
+        <div className="flex flex-col gap-0.5">
+          {navLinks.map((item) => {
+            const active = isNavItemActive(pathname, item, navLinks);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={item.label}
+                onClick={onNavigate}
+                aria-current={active ? 'page' : undefined}
+                data-active={active ? 'true' : 'false'}
+                className={cn('admin-nav-item admin-nav-item-icon-only')}
+              >
+                <item.icon className={NAV_ICON_CLASS} aria-hidden="true" />
+                <span className="sr-only">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav
       aria-label="Admin"
-      className="max-h-[calc(100dvh-7rem)] overflow-y-auto p-2 lg:max-h-[calc(100dvh-8rem)]"
+      className={cn(
+        'scrollbar-hide overflow-x-hidden overflow-y-auto px-2 pb-2',
+        className,
+      )}
     >
-      <div className="grid gap-0.5">
+      <div className="flex flex-col gap-0.5">
         {navGroups.map((group) => {
-          const groupActive = isNavGroupActive(pathname, group);
-          const isOpen = expanded[group.id] ?? groupActive;
-          const singleLink =
-            group.items.length === 1 && group.items[0]?.kind === 'link' ? group.items[0] : null;
+          const links = navLinksInGroup(group);
+          if (links.length === 0) return null;
 
-          if (singleLink) {
-            const active = isNavItemActive(pathname, singleLink);
+          if (!usesCollapsibleGroup(group)) {
+            const link = links[0];
+            if (!link) return null;
+            const active = isNavItemActive(pathname, link, navLinks);
             return (
               <Link
                 key={group.id}
-                href={singleLink.href}
+                href={link.href}
                 onClick={onNavigate}
                 aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'flex items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium',
-                  active
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                )}
+                data-active={active ? 'true' : 'false'}
+                className="admin-nav-item"
               >
-                <singleLink.icon className="size-4 shrink-0" aria-hidden="true" />
-                {singleLink.label}
+                <link.icon className={NAV_ICON_CLASS} aria-hidden="true" />
+                <span className="truncate">{link.label}</span>
               </Link>
             );
           }
 
+          const isOpen = expanded[group.id] ?? true;
+
           return (
-            <div key={group.id} className="grid gap-0.5">
+            <div key={group.id} className="flex flex-col gap-0.5 pt-1 first:pt-0">
               <button
                 type="button"
-                onClick={() => toggleGroup(group)}
+                onClick={() => toggleGroup(group.id)}
                 aria-expanded={isOpen}
-                className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium',
-                  groupActive
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                )}
+                className="admin-nav-group-trigger"
               >
-                <group.icon className="size-4 shrink-0" aria-hidden="true" />
                 <span className="flex-1 truncate text-left">{group.label}</span>
                 <ChevronDown
-                  className={cn('size-4 shrink-0 transition-transform', isOpen && 'rotate-180')}
+                  className={cn(
+                    'admin-nav-group-chevron size-3.5 shrink-0 stroke-[1.75] transition-transform duration-200',
+                    isOpen && 'rotate-180',
+                  )}
                   aria-hidden="true"
                 />
               </button>
               {isOpen ? (
-                <div className="grid gap-0.5 border-l border-border/60 pl-2 ml-3">
-                  {group.items.map((item) => {
-                    if (item.kind === 'link') {
-                      const active = isNavItemActive(pathname, item);
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          onClick={onNavigate}
-                          aria-current={active ? 'page' : undefined}
-                          className={cn(
-                            'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm',
-                            active
-                              ? 'bg-primary/10 text-primary font-medium'
-                              : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
-                          )}
-                        >
-                          <item.icon className="size-3.5 shrink-0 opacity-80" aria-hidden="true" />
-                          <span className="truncate">{item.label}</span>
-                        </Link>
-                      );
-                    }
+                <div className="flex flex-col gap-0.5 pb-0.5">
+                  {links.map((item) => {
+                    const active = isNavItemActive(pathname, item, navLinks);
                     return (
-                      <div
-                        key={item.label}
-                        aria-disabled="true"
-                        title="Coming soon"
-                        className="text-muted-foreground flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm opacity-60"
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={onNavigate}
+                        aria-current={active ? 'page' : undefined}
+                        data-active={active ? 'true' : 'false'}
+                        className="admin-nav-subitem"
                       >
-                        <item.icon className="size-3.5 shrink-0" aria-hidden="true" />
-                        <span className="flex-1 truncate">{item.label}</span>
-                        <span className="text-[10px] font-medium tracking-wide uppercase">Soon</span>
-                      </div>
+                        <item.icon className={NAV_ICON_CLASS} aria-hidden="true" />
+                        <span className="truncate">{item.label}</span>
+                      </Link>
                     );
                   })}
                 </div>

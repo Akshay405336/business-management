@@ -659,7 +659,10 @@ export class PrismaOrgAccessRepository implements OrgAccessRepository {
     input: { name?: string; description?: string; status?: 'ACTIVE' | 'INACTIVE' },
     actorAdminId: string,
   ): Promise<OrgRoleRecord> {
-    await this.loadRoleOrThrow(organizationId, roleId);
+    const existing = await this.loadRoleOrThrow(organizationId, roleId);
+    if (existing.isSystem) {
+      throw new OrgAccessForbiddenError('System roles cannot be modified.');
+    }
     const row = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.organizationRole.update({
         where: { id: roleId },

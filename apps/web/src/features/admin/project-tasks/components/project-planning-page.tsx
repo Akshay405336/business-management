@@ -203,7 +203,7 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
         ]}
         className="mb-0"
       />
-      <section className="border-border/60 bg-card/40 rounded-lg border px-3 py-3 sm:px-4">
+      <section className="workspace-toolbar px-3 py-3 sm:px-4">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <p className="text-muted-foreground text-xs font-medium tabular-nums">

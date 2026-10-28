@@ -31,7 +31,7 @@ function SelectTrigger({
         'border-input bg-card text-foreground data-[placeholder]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/40 flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-60',
         'data-[state=invalid]:border-destructive data-[state=invalid]:ring-destructive/15 data-[state=invalid]:focus-visible:ring-destructive/25',
         'data-[state=valid]:border-success/70 data-[state=valid]:focus-visible:border-success/80',
-        size === 'default' ? 'h-11' : 'h-8',
+        size === 'default' ? 'h-9' : 'h-8',
         className,
       )}
       {...props}

@@ -20,7 +20,7 @@ export function TotpVerificationForm() {
   return (
     <div className="grid gap-8">
       <header className="grid gap-2">
-        <h1 id={headingId} className="text-2xl font-semibold tracking-tight">
+        <h1 id={headingId} className="type-page-title">
           Verify your identity
         </h1>
         <p id={hintId} className="text-muted-foreground text-sm">
