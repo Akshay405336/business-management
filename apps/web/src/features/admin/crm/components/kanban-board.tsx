@@ -40,7 +40,7 @@ function KanbanColumnStartDrop({ stageId, active }: { stageId: string; active: b
     <div
       ref={setNodeRef}
       className={cn(
-        '-mt-1 min-h-2 shrink-0 rounded-sm transition-colors',
+        '-mt-0.5 min-h-1 shrink-0 rounded-sm transition-colors',
         active && (isOver ? 'bg-primary/20' : 'bg-transparent'),
       )}
       aria-hidden="true"
@@ -52,17 +52,24 @@ function KanbanColumnDropZone({
   stage,
   leadCount,
   isDropTarget,
+  onAddLead,
   children,
 }: {
   stage: CrmPipelineStage;
   leadCount: number;
   isDropTarget: boolean;
+  onAddLead?: () => void;
   children: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   return (
     <div ref={setNodeRef} className="flex h-full min-h-0 shrink-0 self-stretch">
-      <KanbanStageColumn stage={stage} leadCount={leadCount} isDropTarget={isDropTarget || isOver}>
+      <KanbanStageColumn
+        stage={stage}
+        leadCount={leadCount}
+        isDropTarget={isDropTarget || isOver}
+        onAddLead={onAddLead}
+      >
         {children}
       </KanbanStageColumn>
     </div>
@@ -74,6 +81,7 @@ export function KanbanBoard({
   leads,
   disabled,
   onPersistMove,
+  onAddLead,
   onView,
   onEdit,
   onDelete,
@@ -87,6 +95,7 @@ export function KanbanBoard({
     stageId: string;
     beforeLeadId: string | null;
   }) => Promise<void>;
+  onAddLead?: (stageId: string) => void;
   onView: (leadId: string) => void;
   onEdit: (leadId: string) => void;
   onDelete: (leadId: string) => void;
@@ -226,7 +235,7 @@ export function KanbanBoard({
         role="region"
         aria-label="Kanban pipeline stages"
         tabIndex={0}
-        className="flex min-h-[min(32rem,calc(100vh-14rem))] items-stretch gap-3 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] focus-visible:ring-ring/40 outline-none focus-visible:ring-[3px] [&::-webkit-scrollbar]:hidden"
+        className="flex min-h-[min(32rem,calc(100vh-14rem))] items-stretch gap-4 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] focus-visible:ring-ring/40 outline-none focus-visible:ring-[3px] [&::-webkit-scrollbar]:hidden"
         onKeyDown={(event) => {
           if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
           event.preventDefault();
@@ -242,6 +251,7 @@ export function KanbanBoard({
               stage={stage}
               leadCount={stageLeadIds.length}
               isDropTarget={overStageId === stage.id}
+              onAddLead={onAddLead ? () => onAddLead(stage.id) : undefined}
             >
               <SortableContext items={stageLeadIds} strategy={verticalListSortingStrategy}>
                 <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -283,7 +293,7 @@ export function KanbanBoard({
       </div>
       <DragOverlay dropAnimation={null}>
         {activeLead ? (
-          <div className="pointer-events-none w-[16.5rem] rotate-[0.5deg] opacity-95 shadow-lg">
+          <div className="pointer-events-none w-[17rem] rotate-[0.5deg] opacity-95 shadow-lg">
             <KanbanLeadCard
               lead={activeLead}
               stages={stages}

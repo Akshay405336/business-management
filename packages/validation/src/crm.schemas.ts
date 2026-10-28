@@ -226,6 +226,7 @@ export function parseLeadListQuery(input: unknown): z.infer<typeof leadListQuery
 
 export const createLeadRequestSchema = z
   .object({
+    subject: z.string().trim().min(1, 'Enter a lead subject.').max(200),
     fullName: z.string().trim().min(1, 'Enter a name.').max(160),
     companyName: z.string().max(160).optional(),
     email: leadEmailSchema,

@@ -92,7 +92,6 @@ export function stageKanbanColumnTheme(stageColor: string): {
     },
     header: {
       backgroundColor: palette.headerBackground,
-      borderBottomColor: palette.border,
     },
   };
 }

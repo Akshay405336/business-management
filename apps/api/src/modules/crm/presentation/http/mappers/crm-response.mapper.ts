@@ -57,6 +57,7 @@ export const toCrmPipeline = (pipeline: PipelineRecord): CrmPipeline => ({
 export const toCrmLead = (lead: LeadRecord): CrmLead => ({
   id: lead.id,
   referenceNumber: lead.referenceNumber,
+  subject: lead.subject,
   fullName: lead.fullName,
   companyName: lead.companyName,
   email: lead.email,

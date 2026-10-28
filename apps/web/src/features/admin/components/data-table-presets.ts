@@ -1,12 +1,31 @@
 import type { DataTableSkeletonColumn } from './data-table-skeleton';
 
+/** Width classes for the CRM leads listing table (`table-fixed`). */
+export const CRM_LEADS_TABLE_COLUMN_CLASS = {
+  lead: 'w-[22%] min-w-[10rem]',
+  contact: 'w-[18%] min-w-[8rem]',
+  stage: 'w-[12%] min-w-[6.5rem]',
+  priority: 'w-[10%] min-w-[5.5rem]',
+  value: 'w-[10%] min-w-[5rem] pr-4',
+  activity: 'w-[14%] min-w-[7rem]',
+  actions: 'w-[14%] min-w-[9rem]',
+} as const;
+
 export const CRM_LEADS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
-  { variant: 'textWide' },
-  { variant: 'badge' },
-  { variant: 'badge' },
-  { variant: 'number', className: 'text-right' },
-  { variant: 'text' },
-  { variant: 'actions', headClassName: 'w-[7.5rem] text-right' },
+  { variant: 'textWide', className: CRM_LEADS_TABLE_COLUMN_CLASS.lead },
+  { variant: 'text', className: CRM_LEADS_TABLE_COLUMN_CLASS.contact },
+  { variant: 'badge', className: CRM_LEADS_TABLE_COLUMN_CLASS.stage },
+  { variant: 'badge', className: CRM_LEADS_TABLE_COLUMN_CLASS.priority },
+  {
+    variant: 'number',
+    className: `${CRM_LEADS_TABLE_COLUMN_CLASS.value} text-right`,
+  },
+  { variant: 'text', className: CRM_LEADS_TABLE_COLUMN_CLASS.activity },
+  {
+    variant: 'actions',
+    className: CRM_LEADS_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${CRM_LEADS_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
 ];
 
 export const CRM_PIPELINE_STAGES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [

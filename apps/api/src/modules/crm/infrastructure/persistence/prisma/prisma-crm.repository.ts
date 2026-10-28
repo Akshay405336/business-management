@@ -757,6 +757,7 @@ export class PrismaCrmRepository implements CrmRepository {
           id: leadId,
           organizationId,
           referenceNumber,
+          subject: input.subject?.trim() ?? '',
           fullName: input.fullName,
           companyName: input.companyName ?? '',
           email,

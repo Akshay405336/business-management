@@ -277,6 +277,7 @@ model Lead {
   id                 String       @id @db.Uuid
   organizationId     String       @map("organization_id") @db.Uuid
   referenceNumber    String       @map("reference_number") @db.VarChar(32)
+  subject            String       @default("") @db.VarChar(200)
   fullName           String       @map("full_name") @db.VarChar(160)
   companyName        String       @default("") @map("company_name") @db.VarChar(160)
   email              String?      @db.VarChar(254)

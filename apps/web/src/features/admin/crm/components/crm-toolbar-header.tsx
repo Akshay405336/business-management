@@ -25,6 +25,7 @@ export function CrmToolbarHeader({
   descriptionClassName,
   layout = 'inline',
   toolbarRowClassName,
+  headerRowClassName,
   bottomRow,
 }: {
   title: string;
@@ -36,6 +37,8 @@ export function CrmToolbarHeader({
   /** `stacked`: title row, then full-width toolbar row. */
   layout?: 'inline' | 'stacked';
   toolbarRowClassName?: string;
+  /** Override the title + toolbar flex row (e.g. `flex-nowrap`). */
+  headerRowClassName?: string;
   /** Full-width row below title/filters (e.g. lifecycle tabs). */
   bottomRow?: ReactNode;
 }) {
@@ -82,6 +85,7 @@ export function CrmToolbarHeader({
         className={cn(
           'flex min-w-0 max-w-full flex-wrap items-center gap-x-4 gap-y-3',
           bottomRow && 'justify-between',
+          headerRowClassName,
         )}
       >
         {titleBlock}

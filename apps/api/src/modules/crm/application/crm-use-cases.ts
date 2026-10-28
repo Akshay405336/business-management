@@ -174,6 +174,7 @@ export class CrmUseCases {
   async createLead(
     actor: CrmActor,
     input: {
+      subject?: string;
       fullName: string;
       companyName?: string;
       email?: string | null;
@@ -221,6 +222,7 @@ export class CrmUseCases {
     actor: CrmActor,
     leadId: string,
     input: {
+      subject?: string;
       fullName?: string;
       companyName?: string;
       email?: string | null;

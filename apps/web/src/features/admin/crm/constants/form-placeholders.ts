@@ -1,5 +1,6 @@
 /** Shared input / select placeholder copy for CRM forms. */
 export const CRM_FORM_PLACEHOLDERS = {
+  leadSubject: 'e.g. Website development',
   fullName: 'Enter full name',
   company: 'Enter company name',
   email: 'name@example.com',

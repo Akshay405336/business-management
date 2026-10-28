@@ -101,6 +101,7 @@ export interface CrmPipelineBulkActionResponse {
 export interface CrmLead {
   readonly id: string;
   readonly referenceNumber: string;
+  readonly subject: string;
   readonly fullName: string;
   readonly companyName: string;
   readonly email: string | null;

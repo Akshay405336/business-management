@@ -94,6 +94,7 @@ export const crmPipelineBulkActionResponseSchema = z.object({
 export const crmLeadResponseSchema = z.object({
   id: z.uuid(),
   referenceNumber: z.string(),
+  subject: z.string(),
   fullName: z.string(),
   companyName: z.string(),
   email: z.string().nullable(),

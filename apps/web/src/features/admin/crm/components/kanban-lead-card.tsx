@@ -3,8 +3,18 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { PointerEvent } from 'react';
-import { ArrowRightLeft, Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Calendar,
+  Eye,
+  Mail,
+  MoreHorizontal,
+  Pencil,
+  Phone,
+  Trash2,
+} from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
+import { initialsOf } from '@/shared/lib/format';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -14,16 +24,31 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { PriorityBadge } from '@/features/admin/components/priority-badge';
 import {
   LeadEmailIconButton,
-  LeadEmailTextRow,
-  LeadPhoneTextRow,
   LeadWhatsAppIconButton,
   stopLeadCardPointer,
 } from './lead-contact-quick-actions';
+import {
+  KANBAN_LEAD_CARD_BORDER_CLASS,
+  KANBAN_LEAD_HEADER_HEIGHT_CLASS,
+  KanbanLeadHeaderStepBorder,
+  KanbanLeadPriorityHeader,
+  KanbanLeadPriorityTab,
+} from './kanban-lead-priority-badge';
 import { PipelineStageMenuRadioItem } from './pipeline-stage-menu-items';
 import type { CrmLead, CrmPipelineStage } from '../types';
+
+const leadDateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+function formatLeadDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : leadDateFormatter.format(date);
+}
 
 function stopCardPointer(event: PointerEvent) {
   stopLeadCardPointer(event);
@@ -42,35 +67,28 @@ function KanbanCardActions({
 }) {
   return (
     <div
-      className="flex shrink-0 items-center gap-0"
+      className="relative z-[2] flex shrink-0 items-center pr-1.5"
       onPointerDown={stopCardPointer}
       onClick={(event) => event.stopPropagation()}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="size-6"
-        aria-label={`View ${lead.fullName}`}
-        title={`View ${lead.fullName}`}
-        onClick={onView}
-      >
-        <Eye className="size-3.5" aria-hidden="true" />
-      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-6"
+            className="text-muted-foreground hover:text-foreground size-7 rounded-md hover:bg-black/5"
             aria-label={`Actions for ${lead.fullName}`}
             title="Lead actions"
           >
-            <MoreVertical className="size-3.5" aria-hidden="true" />
+            <MoreHorizontal className="size-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[8rem]">
+          <DropdownMenuItem onSelect={onView}>
+            <Eye className="size-3.5" aria-hidden="true" />
+            View
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onEdit}>
             <Pencil className="size-3.5" aria-hidden="true" />
             Edit
@@ -102,7 +120,7 @@ function KanbanStageChangeButton({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="text-muted-foreground hover:text-foreground size-6 shrink-0"
+            className="text-muted-foreground hover:text-foreground size-7 shrink-0 rounded-md hover:bg-black/5"
             aria-label="Change stage"
             title="Change stage"
           >
@@ -144,36 +162,81 @@ export function KanbanLeadCard({
   onDelete: () => void;
   onStageChange: (stageId: string) => void;
 }) {
-  const company = lead.companyName?.trim();
+  const subject = lead.subject.trim();
+  const phone = lead.phone?.trim() ?? '';
+  const email = lead.email?.trim() ?? '';
+  const displaySubject = subject || 'Untitled lead';
 
   return (
-    <div
+    <article
       className={cn(
-        'group bg-card hover:border-border/80 flex flex-col gap-1 rounded-md border border-black/8 p-2 shadow-sm transition-shadow hover:shadow-md',
+        'group flex flex-col overflow-hidden rounded-tl-[18px] rounded-bl-[18px] rounded-br-[18px] bg-transparent shadow-[0_4px_20px_-10px_rgb(15_23_42_/_0.12)] transition-shadow hover:shadow-[0_8px_24px_-8px_rgb(15_23_42_/_0.16)]',
+        KANBAN_LEAD_CARD_BORDER_CLASS,
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-1">
-        <p className="min-w-0 flex-1 truncate text-base leading-tight font-medium">{lead.fullName}</p>
-        <KanbanCardActions lead={lead} onView={onView} onEdit={onEdit} onDelete={onDelete} />
-      </div>
-
-      {company ? (
-        <p className="text-muted-foreground truncate text-[13px] leading-tight">{company}</p>
-      ) : null}
-
-      <LeadPhoneTextRow phone={lead.phone} />
-      <LeadEmailTextRow email={lead.email} />
-
-      <div className="flex items-center justify-between gap-1">
-        <PriorityBadge priority={lead.priority} className="px-1.5 py-0.5 leading-none" />
-        <div className="flex shrink-0 items-center gap-0">
-          <LeadWhatsAppIconButton phone={lead.phone} />
-          <LeadEmailIconButton email={lead.email} />
-          <KanbanStageChangeButton lead={lead} stages={stages} onStageChange={onStageChange} />
+      <div className={cn('relative shrink-0 bg-transparent', KANBAN_LEAD_HEADER_HEIGHT_CLASS)}>
+        <KanbanLeadPriorityTab priority={lead.priority} />
+        <KanbanLeadHeaderStepBorder />
+        <div className={cn('relative flex w-full', KANBAN_LEAD_HEADER_HEIGHT_CLASS)}>
+          <KanbanLeadPriorityHeader priority={lead.priority} />
+          <div className="relative z-[2] min-w-0 flex-1 self-stretch bg-transparent">
+            <div className="flex h-full items-center justify-end bg-transparent pr-0.5">
+              <KanbanCardActions
+                lead={lead}
+                onView={onView}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      <div className="bg-card relative z-[1] flex flex-col gap-2.5 rounded-b-[17px] px-3 pt-2 pb-3">
+        <h3 className="text-foreground line-clamp-2 text-[15px] leading-snug font-bold tracking-tight">
+          {displaySubject}
+        </h3>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span
+              className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+              aria-hidden="true"
+            >
+              {initialsOf(lead.fullName)}
+            </span>
+            <span className="text-muted-foreground truncate text-xs font-medium">{lead.fullName}</span>
+          </div>
+          <div className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs">
+            <Calendar className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+            <time dateTime={lead.createdAt} className="whitespace-nowrap tabular-nums">
+              {formatLeadDate(lead.createdAt)}
+            </time>
+          </div>
+        </div>
+
+        <div className="border-border/60 border-t pt-2.5">
+          <div className="flex items-end justify-between gap-2">
+            <div className="text-muted-foreground flex min-w-0 flex-col gap-1 text-[10px] leading-snug">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Phone className="size-3 shrink-0 opacity-75" aria-hidden="true" />
+                <span className="truncate tabular-nums">{phone || '—'}</span>
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <Mail className="size-3 shrink-0 opacity-75" aria-hidden="true" />
+                <span className="truncate">{email || '—'}</span>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-0">
+              <LeadWhatsAppIconButton phone={lead.phone} />
+              <LeadEmailIconButton email={lead.email} />
+              <KanbanStageChangeButton lead={lead} stages={stages} onStageChange={onStageChange} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -224,7 +287,7 @@ export function SortableKanbanLeadCard({
         className={cn(
           'cursor-grab active:cursor-grabbing',
           isDragging && 'opacity-40 shadow-none',
-          isOver && !isDragging && 'border-primary/35',
+          isOver && !isDragging && 'ring-primary/25 ring-2',
         )}
         onView={onView}
         onEdit={onEdit}
