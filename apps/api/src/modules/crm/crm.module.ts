@@ -2,7 +2,12 @@ import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '../../infrastructure/database/database.module.js';
 import { AuthModule } from '../auth/index.js';
 import { OrgAccessModule } from '../org-access/org-access.module.js';
+import { BulkDeletePipelinesHandler } from './application/bulk-delete-pipelines/bulk-delete-pipelines.handler.js';
+import { BulkUpdatePipelineStatusHandler } from './application/bulk-update-pipeline-status/bulk-update-pipeline-status.handler.js';
 import { CrmUseCases } from './application/crm-use-cases.js';
+import { DeletePipelineHandler } from './application/delete-pipeline/delete-pipeline.handler.js';
+import { PipelineBulkActionRunner } from './application/pipeline-bulk/pipeline-bulk-action.runner.js';
+import { UpdatePipelineStatusHandler } from './application/update-pipeline-status/update-pipeline-status.handler.js';
 import { CRM_REPOSITORY } from './domain/repositories/crm.repository.js';
 import { PrismaCrmRepository } from './infrastructure/persistence/prisma/prisma-crm.repository.js';
 import { ClientsController } from './presentation/http/controllers/clients.controller.js';
@@ -25,6 +30,11 @@ import { CrmOrganizationGuard } from './presentation/http/guards/crm-organizatio
   providers: [
     { provide: CRM_REPOSITORY, useClass: PrismaCrmRepository },
     CrmUseCases,
+    PipelineBulkActionRunner,
+    UpdatePipelineStatusHandler,
+    DeletePipelineHandler,
+    BulkUpdatePipelineStatusHandler,
+    BulkDeletePipelinesHandler,
     CrmOrganizationGuard,
     CrmExceptionFilter,
   ],

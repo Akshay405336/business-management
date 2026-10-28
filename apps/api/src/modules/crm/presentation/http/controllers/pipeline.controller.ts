@@ -38,7 +38,11 @@ import {
   type UpdatePipelineStageRequest,
 } from '@techwin/validation';
 import { z } from 'zod';
+import { BulkDeletePipelinesHandler } from '../../../application/bulk-delete-pipelines/bulk-delete-pipelines.handler.js';
+import { BulkUpdatePipelineStatusHandler } from '../../../application/bulk-update-pipeline-status/bulk-update-pipeline-status.handler.js';
+import { toCrmActor } from '../../../application/crm-actor.js';
 import { CrmUseCases } from '../../../application/crm-use-cases.js';
+import { DeletePipelineHandler } from '../../../application/delete-pipeline/delete-pipeline.handler.js';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
 import {
   createStageBodySchema,
@@ -67,7 +71,14 @@ import { toCrmPipeline, toCrmPipelineStage } from '../mappers/crm-response.mappe
 @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(CrmExceptionFilter)
 export class PipelineController {
-  constructor(@Inject(CrmUseCases) private readonly crm: CrmUseCases) {}
+  constructor(
+    @Inject(CrmUseCases) private readonly crm: CrmUseCases,
+    @Inject(BulkUpdatePipelineStatusHandler)
+    private readonly bulkUpdatePipelineStatus: BulkUpdatePipelineStatusHandler,
+    @Inject(BulkDeletePipelinesHandler)
+    private readonly bulkDeletePipelines: BulkDeletePipelinesHandler,
+    @Inject(DeletePipelineHandler) private readonly deletePipeline: DeletePipelineHandler,
+  ) {}
 
   @RequirePermissions('leads.read')
   @Get()
@@ -103,7 +114,11 @@ export class PipelineController {
     @Body() raw: unknown,
   ): Promise<CrmPipelineBulkActionResponse> {
     const body = bulkPipelineStatusRequestSchema.parse(raw);
-    return this.crm.bulkUpdatePipelineStatus(ctx, body.pipelineIds, body.status);
+    return this.bulkUpdatePipelineStatus.execute({
+      actor: toCrmActor(ctx),
+      pipelineIds: body.pipelineIds,
+      status: body.status,
+    });
   }
 
   @RequirePermissions('leads.update')
@@ -115,7 +130,10 @@ export class PipelineController {
     @Body() raw: unknown,
   ): Promise<CrmPipelineBulkActionResponse> {
     const body = bulkPipelineIdsRequestSchema.parse(raw);
-    return this.crm.bulkDeletePipelines(ctx, body.pipelineIds);
+    return this.bulkDeletePipelines.execute({
+      actor: toCrmActor(ctx),
+      pipelineIds: body.pipelineIds,
+    });
   }
 
   @RequirePermissions('leads.read')
@@ -166,7 +184,10 @@ export class PipelineController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('pipelineId') pipelineId: string,
   ): Promise<void> {
-    await this.crm.deletePipeline(ctx, pipelineId);
+    await this.deletePipeline.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+    });
   }
 
   @RequirePermissions('leads.update')

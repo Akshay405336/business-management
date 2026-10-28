@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { StageColorSelect } from '@/features/admin/components/stage-color-select';
 import { formControlStateClass } from '@/shared/form/form-control-state';
 import { cn } from '@/shared/lib/utils';
-import { CrmInlineFieldError } from './crm-feedback';
+import { CrmFieldLabel, CrmInlineFieldError } from './crm-feedback';
 import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
 import { CRM_PIPELINE_FORM_FIELD_CLASS } from '../constants';
 import type { PipelineStageFormRow } from '../utils/pipeline-form';
@@ -118,6 +118,7 @@ function SortableStageRow({
 
 export function PipelineStagesEditor({
   stages,
+  sectionRequired = false,
   fieldErrors,
   onAddStage,
   onPatchStage,
@@ -125,6 +126,8 @@ export function PipelineStagesEditor({
   onRemoveStages,
 }: {
   stages: readonly PipelineStageFormRow[];
+  /** Red required asterisk on section title (create pipeline). */
+  sectionRequired?: boolean;
   fieldErrors: Record<string, string>;
   onAddStage: () => void;
   onPatchStage: (key: string, patch: Partial<PipelineStageFormRow>) => void;
@@ -150,7 +153,7 @@ export function PipelineStagesEditor({
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-foreground text-sm font-semibold">Pipeline stages</h3>
+        <CrmFieldLabel required={sectionRequired}>Pipeline stages</CrmFieldLabel>
         <Button
           type="button"
           variant="outline"

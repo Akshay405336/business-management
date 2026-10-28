@@ -45,10 +45,8 @@ import {
   validatePipelineStageRows,
   type PipelineFormState,
 } from '../utils/pipeline-form';
-import { CrmInlineFieldError } from './crm-feedback';
+import { CrmFieldLabel, CrmInlineFieldError } from './crm-feedback';
 import { PipelineStagesEditor } from './pipeline-stages-editor';
-
-const PIPELINE_FORM_LABEL_CLASS = 'text-foreground text-sm font-semibold';
 
 const PIPELINE_FORM_SECONDARY_BTN =
   'h-11 shrink-0 rounded-lg border border-input bg-card px-3.5 text-sm font-medium text-foreground shadow-none hover:bg-muted/50';
@@ -195,9 +193,9 @@ export function PipelineFormDialog({
           ) : (
             <div className="grid gap-4">
               <div className="grid gap-2">
-                <label htmlFor="pipeline-name" className={PIPELINE_FORM_LABEL_CLASS}>
+                <CrmFieldLabel htmlFor="pipeline-name" required={isCreate}>
                   Pipeline name
-                </label>
+                </CrmFieldLabel>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
                   <div className="min-w-0 flex-1">
                     <Input
@@ -233,9 +231,7 @@ export function PipelineFormDialog({
 
               {(!isCreate || showDescription) && (
                 <div className="grid gap-2">
-                  <label htmlFor="pipeline-description" className={PIPELINE_FORM_LABEL_CLASS}>
-                    Description
-                  </label>
+                  <CrmFieldLabel htmlFor="pipeline-description">Description</CrmFieldLabel>
                   <Textarea
                     id="pipeline-description"
                     placeholder={CRM_FORM_PLACEHOLDERS.pipelineDescription}
@@ -258,7 +254,7 @@ export function PipelineFormDialog({
 
               {isCreate && !showStages ? (
                 <div className="grid gap-2">
-                  <span className={PIPELINE_FORM_LABEL_CLASS}>Pipeline stages</span>
+                  <CrmFieldLabel required>Pipeline stages</CrmFieldLabel>
                   <div>
                     <Button
                       type="button"
@@ -276,6 +272,7 @@ export function PipelineFormDialog({
               {(!isCreate || showStages) && (
                 <PipelineStagesEditor
                   stages={form.stages}
+                  sectionRequired={isCreate}
                   fieldErrors={stageSubmitAttempted ? fieldErrors : {}}
                   onAddStage={() => setForm((current) => addPipelineStage(current))}
                   onPatchStage={(key, patch) =>
