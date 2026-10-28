@@ -81,6 +81,16 @@ export const crmPipelineListResponseSchema = z.object({
   pipelines: z.array(crmPipelineResponseSchema),
 });
 
+export const crmPipelineBulkActionResponseSchema = z.object({
+  succeededIds: z.array(z.uuid()),
+  failures: z.array(
+    z.object({
+      pipelineId: z.uuid(),
+      message: z.string(),
+    }),
+  ),
+});
+
 export const crmLeadResponseSchema = z.object({
   id: z.uuid(),
   referenceNumber: z.string(),

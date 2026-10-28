@@ -2,6 +2,7 @@ import { CRM_ROUTES } from '@techwin/contracts';
 import { apiRequest } from '@/shared/api/api-client';
 import type {
   CrmPipeline,
+  CrmPipelineBulkActionResponse,
   CrmPipelineListResponse,
   CrmPipelineStage,
   CreatePipelineRequest,
@@ -10,6 +11,15 @@ import type {
   UpdatePipelineRequest,
   UpdatePipelineStageRequest,
 } from '../types';
+
+export type BulkPipelineStatusRequest = {
+  pipelineIds: readonly string[];
+  status: 'ACTIVE' | 'INACTIVE';
+};
+
+export type BulkPipelineIdsRequest = {
+  pipelineIds: readonly string[];
+};
 
 export type PipelineListQuery = {
   search?: string;
@@ -47,6 +57,26 @@ export function updatePipeline(id: string, body: UpdatePipelineRequest): Promise
 
 export function deletePipeline(id: string): Promise<void> {
   return apiRequest<void>(CRM_ROUTES.pipeline(id), { method: 'DELETE', auth: true });
+}
+
+export function bulkUpdatePipelineStatus(
+  body: BulkPipelineStatusRequest,
+): Promise<CrmPipelineBulkActionResponse> {
+  return apiRequest<CrmPipelineBulkActionResponse>(CRM_ROUTES.pipelineBulkStatus, {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function bulkDeletePipelines(
+  body: BulkPipelineIdsRequest,
+): Promise<CrmPipelineBulkActionResponse> {
+  return apiRequest<CrmPipelineBulkActionResponse>(CRM_ROUTES.pipelineBulkDelete, {
+    method: 'POST',
+    auth: true,
+    body,
+  });
 }
 
 export function createPipelineStage(

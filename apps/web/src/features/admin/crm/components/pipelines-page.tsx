@@ -53,8 +53,14 @@ import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { cn } from '@/shared/lib/utils';
 import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '../constants';
-import { deletePipeline, listPipelines, updatePipeline } from '../api/pipelines';
-import type { CrmPipeline } from '../types';
+import {
+  bulkDeletePipelines,
+  bulkUpdatePipelineStatus,
+  deletePipeline,
+  listPipelines,
+  updatePipeline,
+} from '../api/pipelines';
+import type { CrmPipeline, CrmPipelineBulkActionResponse } from '../types';
 import { describeCrmError } from '../utils/errors';
 import { CrmErrorAlert } from './crm-feedback';
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from './crm-toolbar-header';
@@ -97,11 +103,26 @@ function downloadPipelinesCsv(pipelines: readonly CrmPipeline[], filename = 'pip
   URL.revokeObjectURL(url);
 }
 
-function pipelineMatchesSearch(pipeline: CrmPipeline, query: string): boolean {
-  const term = query.trim().toLowerCase();
-  if (!term) return true;
-  const haystack = [pipeline.name, pipeline.description].join(' ').toLowerCase();
-  return haystack.includes(term);
+function reportBulkActionResult(
+  toast: ReturnType<typeof useAdminToast>,
+  result: CrmPipelineBulkActionResponse,
+  successPastTense: string,
+) {
+  const ok = result.succeededIds.length;
+  const failed = result.failures.length;
+  if (failed === 0) {
+    toast.success(`${ok} pipeline${ok === 1 ? '' : 's'} ${successPastTense}.`);
+    return;
+  }
+  if (ok === 0) {
+    toast.error(
+      failed === 1
+        ? (result.failures[0]?.message ?? 'Action failed.')
+        : `${failed} pipelines could not be updated.`,
+    );
+    return;
+  }
+  toast.error(`${ok} succeeded, ${failed} failed. ${result.failures[0]?.message ?? ''}`.trim());
 }
 
 export function PipelinesPage() {
@@ -126,11 +147,16 @@ export function PipelinesPage() {
   const [selectedPipelineIds, setSelectedPipelineIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<'ACTIVE' | 'INACTIVE' | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await listPipelines();
+      const result = await listPipelines({
+        search: search.trim() || undefined,
+        status: statusFilter === 'ALL' ? undefined : statusFilter,
+      });
       setPipelines(result.pipelines);
       setError(null);
     } catch (failure) {
@@ -138,7 +164,7 @@ export function PipelinesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [search, statusFilter]);
 
   useEffect(() => {
     void load();
@@ -164,16 +190,12 @@ export function PipelinesPage() {
     setPage(1);
   }, [statusFilter, sortKey]);
 
-  const filtered = useMemo(() => {
-    const items = pipelines ?? [];
-    return items.filter((pipeline) => {
-      if (statusFilter !== 'ALL' && pipeline.status !== statusFilter) return false;
-      return pipelineMatchesSearch(pipeline, search);
-    });
-  }, [pipelines, search, statusFilter]);
+  useEffect(() => {
+    setSelectedPipelineIds(new Set());
+  }, [search, statusFilter]);
 
   const sortedFiltered = useMemo(() => {
-    const items = [...filtered];
+    const items = [...(pipelines ?? [])];
     switch (sortKey) {
       case 'name-asc':
         return items.sort((a, b) => a.name.localeCompare(b.name));
@@ -192,7 +214,9 @@ export function PipelinesPage() {
           (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
         );
     }
-  }, [filtered, sortKey]);
+  }, [pipelines, sortKey]);
+
+  const selectedCount = selectedPipelineIds.size;
 
   const hasAnyPipelines = (pipelines?.length ?? 0) > 0;
   const filtersActive = statusFilter !== 'ALL' || search.trim().length > 0;
@@ -291,6 +315,41 @@ export function PipelinesPage() {
     try {
       await run(() => deletePipeline(target.id));
       toast.success(`Pipeline "${target.name}" deleted.`);
+      await load();
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
+  const confirmBulkStatus = async () => {
+    if (!bulkStatusTarget || selectedCount === 0) return;
+    const status = bulkStatusTarget;
+    const pipelineIds = [...selectedPipelineIds];
+    setBulkStatusTarget(null);
+    try {
+      const result = await run(() => bulkUpdatePipelineStatus({ pipelineIds, status }));
+      if (!result) return;
+      reportBulkActionResult(
+        toast,
+        result,
+        status === 'ACTIVE' ? 'activated' : 'deactivated',
+      );
+      setSelectedPipelineIds(new Set());
+      await load();
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selectedCount === 0) return;
+    const pipelineIds = [...selectedPipelineIds];
+    setBulkDeleteOpen(false);
+    try {
+      const result = await run(() => bulkDeletePipelines({ pipelineIds }));
+      if (!result) return;
+      reportBulkActionResult(toast, result, 'deleted');
+      setSelectedPipelineIds(new Set());
       await load();
     } catch (failure) {
       toast.error(describeCrmError(failure));
@@ -449,6 +508,59 @@ export function PipelinesPage() {
         ) : null}
 
         <div aria-hidden className="table-header-edge" />
+
+        {selectedCount > 0 ? (
+          <div className="border-border flex flex-wrap items-center gap-2 border-b bg-[#f7faff] px-4 py-2.5 sm:px-5">
+            <span className="text-foreground text-sm font-medium tabular-nums">
+              {selectedCount} selected
+            </span>
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50"
+                disabled={pending}
+                onClick={() => setBulkStatusTarget('ACTIVE')}
+              >
+                <ToggleLeft className="size-4" aria-hidden="true" />
+                Activate
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 border-red-200 bg-white text-red-800 hover:bg-red-50"
+                disabled={pending}
+                onClick={() => setBulkStatusTarget('INACTIVE')}
+              >
+                <ToggleRight className="size-4" aria-hidden="true" />
+                Deactivate
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-50"
+                disabled={pending}
+                onClick={() => setBulkDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                Delete
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8"
+                disabled={pending}
+                onClick={() => setSelectedPipelineIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <DataTable
           frame="flush"
@@ -688,6 +800,83 @@ export function PipelinesPage() {
                 'Deactivate'
               ) : (
                 'Activate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={bulkStatusTarget !== null}
+        onOpenChange={(open) => !open && setBulkStatusTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {bulkStatusTarget === 'INACTIVE'
+                ? 'Deactivate selected pipelines?'
+                : 'Activate selected pipelines?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulkStatusTarget === 'INACTIVE'
+                ? `${selectedCount} pipeline${selectedCount === 1 ? '' : 's'} will be marked inactive. Existing leads stay in those pipelines until you activate them again.`
+                : `${selectedCount} pipeline${selectedCount === 1 ? '' : 's'} will be marked active and available for lead workflows.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!bulkStatusTarget || pending}
+              className={
+                bulkStatusTarget === 'INACTIVE'
+                  ? 'bg-neutral-900 text-white hover:bg-neutral-800'
+                  : undefined
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmBulkStatus();
+              }}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  {bulkStatusTarget === 'INACTIVE' ? 'Deactivating…' : 'Activating…'}
+                </>
+              ) : bulkStatusTarget === 'INACTIVE' ? (
+                'Deactivate'
+              ) : (
+                'Activate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete selected pipelines?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`${selectedCount} pipeline${selectedCount === 1 ? '' : 's'} selected. Empty non-default pipelines will be permanently removed. The default pipeline and pipelines with leads cannot be deleted and will be skipped with an error message.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={selectedCount === 0 || pending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmBulkDelete();
+              }}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Deleting…
+                </>
+              ) : (
+                'Delete'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

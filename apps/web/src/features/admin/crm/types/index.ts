@@ -10,6 +10,7 @@ export type {
   CrmLeadConvertResponse,
   CrmLeadListResponse,
   CrmPipeline,
+  CrmPipelineBulkActionResponse,
   CrmPipelineListResponse,
   CrmPipelineStage,
   CrmProposal,

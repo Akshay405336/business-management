@@ -10,7 +10,7 @@ import type {
   ProposalDocumentType,
   ProposalStatus,
 } from '../domain/crm-types.js';
-import { CrmNotFoundError } from '../domain/errors/crm.errors.js';
+import { CrmNotFoundError, CrmValidationError } from '../domain/errors/crm.errors.js';
 import {
   assertLeadContactAvailable,
   normalizeLeadContactForPersistence,
@@ -80,13 +80,59 @@ export class CrmUseCases {
     });
   }
 
-  deletePipeline(actor: CrmActor, pipelineId: string) {
-    return this.crm.deletePipeline(actor.organizationId, pipelineId, {
+  async deletePipeline(actor: CrmActor, pipelineId: string) {
+    const pipeline = await this.crm.getPipeline(actor.organizationId, pipelineId);
+    if (!pipeline) throw new CrmNotFoundError('Pipeline');
+    if (pipeline.isDefault) {
+      throw new CrmValidationError('The default pipeline cannot be deleted.');
+    }
+    await this.crm.deletePipeline(actor.organizationId, pipelineId, {
       type: 'PIPELINE_DELETED',
       adminId: actor.adminId,
       entityType: 'pipeline',
       entityId: pipelineId,
     });
+  }
+
+  bulkUpdatePipelineStatus(
+    actor: CrmActor,
+    pipelineIds: readonly string[],
+    status: PipelineStatus,
+  ) {
+    return this.runBulkPipelineAction(actor, pipelineIds, async (pipelineId) => {
+      await this.updatePipeline(actor, pipelineId, { status });
+    });
+  }
+
+  bulkDeletePipelines(actor: CrmActor, pipelineIds: readonly string[]) {
+    return this.runBulkPipelineAction(actor, pipelineIds, (pipelineId) =>
+      this.deletePipeline(actor, pipelineId),
+    );
+  }
+
+  private async runBulkPipelineAction(
+    actor: CrmActor,
+    pipelineIds: readonly string[],
+    action: (pipelineId: string) => Promise<void>,
+  ): Promise<{
+    succeededIds: string[];
+    failures: { pipelineId: string; message: string }[];
+  }> {
+    const succeededIds: string[] = [];
+    const failures: { pipelineId: string; message: string }[] = [];
+    const uniqueIds = [...new Set(pipelineIds)];
+    for (const pipelineId of uniqueIds) {
+      try {
+        await action(pipelineId);
+        succeededIds.push(pipelineId);
+      } catch (error) {
+        failures.push({
+          pipelineId,
+          message: error instanceof Error ? error.message : 'Request failed.',
+        });
+      }
+    }
+    return { succeededIds, failures };
   }
 
   createStage(

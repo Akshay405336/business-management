@@ -20,8 +20,15 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import type { CrmPipeline, CrmPipelineListResponse, CrmPipelineStage } from '@techwin/contracts';
+import type {
+  CrmPipeline,
+  CrmPipelineBulkActionResponse,
+  CrmPipelineListResponse,
+  CrmPipelineStage,
+} from '@techwin/contracts';
 import {
+  bulkPipelineIdsRequestSchema,
+  bulkPipelineStatusRequestSchema,
   createPipelineRequestSchema,
   updatePipelineRequestSchema,
   type CreatePipelineStageRequest,
@@ -35,6 +42,7 @@ import { CrmUseCases } from '../../../application/crm-use-cases.js';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
 import {
   createStageBodySchema,
+  crmPipelineBulkActionResponseSchema,
   crmPipelineListResponseSchema,
   crmPipelineResponseSchema,
   crmPipelineStageResponseSchema,
@@ -84,6 +92,30 @@ export class PipelineController {
   async getDefault(@CrmContext() ctx: CrmRequestContext): Promise<CrmPipeline> {
     const pipeline = await this.crm.getDefaultPipeline(ctx);
     return toCrmPipeline(pipeline);
+  }
+
+  @RequirePermissions('leads.update')
+  @Post('bulk/status')
+  @ApiOperation({ summary: 'Activate or deactivate multiple pipelines' })
+  @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineBulkActionResponseSchema) })
+  async bulkStatus(
+    @CrmContext() ctx: CrmRequestContext,
+    @Body() raw: unknown,
+  ): Promise<CrmPipelineBulkActionResponse> {
+    const body = bulkPipelineStatusRequestSchema.parse(raw);
+    return this.crm.bulkUpdatePipelineStatus(ctx, body.pipelineIds, body.status);
+  }
+
+  @RequirePermissions('leads.update')
+  @Post('bulk/delete')
+  @ApiOperation({ summary: 'Delete multiple empty non-default pipelines' })
+  @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineBulkActionResponseSchema) })
+  async bulkDelete(
+    @CrmContext() ctx: CrmRequestContext,
+    @Body() raw: unknown,
+  ): Promise<CrmPipelineBulkActionResponse> {
+    const body = bulkPipelineIdsRequestSchema.parse(raw);
+    return this.crm.bulkDeletePipelines(ctx, body.pipelineIds);
   }
 
   @RequirePermissions('leads.read')

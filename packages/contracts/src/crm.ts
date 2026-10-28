@@ -14,6 +14,8 @@ export const CRM_ROUTES = {
     `${API_PREFIX}/crm/pipelines/${pipelineId}/stages/${stageId}/activate`,
   pipelineStageDeactivate: (pipelineId: string, stageId: string) =>
     `${API_PREFIX}/crm/pipelines/${pipelineId}/stages/${stageId}/deactivate`,
+  pipelineBulkStatus: `${API_PREFIX}/crm/pipelines/bulk/status`,
+  pipelineBulkDelete: `${API_PREFIX}/crm/pipelines/bulk/delete`,
   leads: `${API_PREFIX}/crm/leads`,
   lead: (id: string) => `${API_PREFIX}/crm/leads/${id}`,
   leadStage: (id: string) => `${API_PREFIX}/crm/leads/${id}/stage`,
@@ -84,6 +86,16 @@ export interface CrmPipeline {
 
 export interface CrmPipelineListResponse {
   readonly pipelines: readonly CrmPipeline[];
+}
+
+export interface CrmPipelineBulkActionFailure {
+  readonly pipelineId: string;
+  readonly message: string;
+}
+
+export interface CrmPipelineBulkActionResponse {
+  readonly succeededIds: readonly string[];
+  readonly failures: readonly CrmPipelineBulkActionFailure[];
 }
 
 export interface CrmLead {

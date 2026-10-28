@@ -154,6 +154,21 @@ export const updatePipelineRequestSchema = updatePipelineRequestObjectSchema.sup
   },
 );
 
+export const bulkPipelineIdsRequestSchema = z
+  .object({
+    pipelineIds: z
+      .array(z.string().uuid())
+      .min(1, 'Select at least one pipeline.')
+      .max(50),
+  })
+  .strict();
+
+export const bulkPipelineStatusRequestSchema = bulkPipelineIdsRequestSchema
+  .extend({
+    status: pipelineStatusSchema,
+  })
+  .strict();
+
 export const createPipelineStageRequestSchema = z
   .object({
     name: z.string().trim().min(1, 'Enter a stage name.').max(120),
