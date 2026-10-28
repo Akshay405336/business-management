@@ -41,7 +41,9 @@ export function PipelineStageDots({ stages }: { stages: readonly CrmPipelineStag
           />
         ))}
       </div>
-      <span className="text-muted-foreground truncate text-xs whitespace-nowrap">{countLabel}</span>
+      <span className="text-foreground truncate text-[13px] font-semibold whitespace-nowrap">
+        {countLabel}
+      </span>
     </div>
   );
 }

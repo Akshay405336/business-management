@@ -12,6 +12,17 @@ export const CRM_PROPOSAL_FORM_DIALOG_CLASS =
 export const CRM_PIPELINE_FORM_DIALOG_CLASS =
   'flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-[720px] flex-col gap-0 overflow-hidden p-0 sm:w-[min(720px,calc(100vw-2rem))]';
 
+/** Light bluish fields in pipeline create/edit dialog */
+export const CRM_PIPELINE_FORM_FIELD_CLASS =
+  'h-11 rounded-lg border-0 bg-[#f7faff] text-foreground shadow-none placeholder:text-muted-foreground/55 focus-visible:border-0 focus-visible:ring-1 focus-visible:ring-sky-100';
+
+export const CRM_PIPELINE_FORM_TEXTAREA_CLASS =
+  'min-h-[5rem] resize-y rounded-lg border-0 bg-[#f7faff] text-foreground shadow-none placeholder:text-muted-foreground/55 focus-visible:ring-1 focus-visible:ring-sky-100';
+
+/** Pipeline list toolbar search (matches form field tint) */
+export const CRM_PIPELINE_SEARCH_INPUT_CLASS =
+  'border-input h-9 rounded-lg border bg-[#f7faff] shadow-none placeholder:text-muted-foreground/55 focus-visible:ring-1 focus-visible:ring-sky-100';
+
 export const STAGE_COLOR_PRESETS = [
   '#2563eb',
   '#7c3aed',

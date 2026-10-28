@@ -83,4 +83,6 @@ export const CRM_FORM_PLACEHOLDERS = {
   addOnGstOptional: 'GST % (optional)',
   addOnDescriptionOptional: 'Description (optional)',
   searchMultiSelect: 'Search options…',
+  pipelineName: 'e.g. Software development',
+  pipelineDescription: 'Describe this workflow (optional)',
 } as const;

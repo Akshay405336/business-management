@@ -23,10 +23,10 @@ export const CRM_PIPELINE_STAGES_TABLE_SKELETON: readonly DataTableSkeletonColum
 export const CRM_PIPELINES_TABLE_COLUMN_CLASS = {
   select: 'w-[2.75rem] min-w-[2.75rem] max-w-[2.75rem] px-2',
   name: 'w-[20%] min-w-[8rem]',
-  description: 'w-[32%] min-w-[12rem]',
-  stages: 'w-[16%] min-w-[7.5rem]',
-  leads: 'w-[4%] min-w-[2.5rem] max-w-[3.25rem]',
-  status: 'w-[7%] min-w-[4.25rem] max-w-[5.5rem]',
+  description: 'w-[30%] min-w-[12rem]',
+  stages: 'w-[15%] min-w-[7.5rem]',
+  leads: 'w-[6%] min-w-[4rem] pr-6',
+  status: 'w-[9%] min-w-[5.75rem] pl-1 pr-2',
   actions: 'w-[15%] min-w-[10rem]',
 } as const;
 

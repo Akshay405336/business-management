@@ -24,6 +24,8 @@ import { StageColorSelect } from '@/features/admin/components/stage-color-select
 import { formControlStateClass } from '@/shared/form/form-control-state';
 import { cn } from '@/shared/lib/utils';
 import { CrmInlineFieldError } from './crm-feedback';
+import { CRM_FORM_PLACEHOLDERS } from '../constants/form-placeholders';
+import { CRM_PIPELINE_FORM_FIELD_CLASS } from '../constants';
 import type { PipelineStageFormRow } from '../utils/pipeline-form';
 
 function stageFieldKey(index: number, field: string) {
@@ -57,7 +59,7 @@ function SortableStageRow({
         transition,
       }}
       className={cn(
-        'bg-muted/20 flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-border/70 px-2 py-2 sm:flex-nowrap',
+        'flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-[#f7faff] px-2 py-2 sm:flex-nowrap',
         isDragging && 'ring-primary z-10 opacity-95 ring-2',
       )}
     >
@@ -74,10 +76,13 @@ function SortableStageRow({
         <Input
           id={`stage-name-${row.key}`}
           value={row.name}
-          placeholder="Stage name"
+          placeholder={CRM_FORM_PLACEHOLDERS.stageName}
           aria-label={`Stage ${index + 1} name`}
           aria-invalid={Boolean(nameError)}
-          className={cn('h-9', formControlStateClass(nameError ? 'invalid' : 'neutral'))}
+          className={cn(
+            CRM_PIPELINE_FORM_FIELD_CLASS,
+            formControlStateClass(nameError ? 'invalid' : 'neutral'),
+          )}
           onChange={(event) => onChange(row.key, { name: event.target.value })}
         />
         {nameError ? (
@@ -145,8 +150,14 @@ export function PipelineStagesEditor({
   return (
     <section className="grid gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">Pipeline stages</h3>
-        <Button type="button" variant="outline" size="sm" className="h-8" onClick={onAddStage}>
+        <h3 className="text-foreground text-sm font-semibold">Pipeline stages</h3>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-11 rounded-lg border border-input bg-card shadow-none hover:bg-muted/50"
+          onClick={onAddStage}
+        >
           <Plus className="size-4" aria-hidden="true" />
           Add stage
         </Button>

@@ -52,6 +52,7 @@ import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { cn } from '@/shared/lib/utils';
+import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '../constants';
 import { deletePipeline, listPipelines, updatePipeline } from '../api/pipelines';
 import type { CrmPipeline } from '../types';
 import { describeCrmError } from '../utils/errors';
@@ -344,7 +345,10 @@ export function PipelinesPage() {
             >
               <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 max-w-full">
                 <Input
-                  className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
+                  className={cn(
+                    CRM_PIPELINE_SEARCH_INPUT_CLASS,
+                    inputGroupPaddingClass({ leading: true }),
+                  )}
                   placeholder="Search pipelines"
                   value={searchDraft}
                   onChange={(event) => setSearchDraft(event.target.value)}
@@ -419,13 +423,18 @@ export function PipelinesPage() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-9 shrink-0"
+              className="border-input h-9 shrink-0 border bg-neutral-100 text-foreground shadow-none hover:bg-neutral-200/80"
               onClick={handleExport}
             >
               <Download aria-hidden="true" />
               Export
             </Button>
-            <Button type="button" size="sm" className="h-9 shrink-0" onClick={openCreate}>
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+              onClick={openCreate}
+            >
               <Plus aria-hidden="true" />
               Add pipeline
             </Button>
@@ -471,10 +480,17 @@ export function PipelinesPage() {
               Description
             </TableHead>
             <TableHead className={CRM_PIPELINES_TABLE_COLUMN_CLASS.stages}>Stages</TableHead>
-            <TableHead className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.leads, 'text-right')}>
+            <TableHead
+              className={cn(
+                CRM_PIPELINES_TABLE_COLUMN_CLASS.leads,
+                'text-right whitespace-nowrap',
+              )}
+            >
               Leads
             </TableHead>
-            <TableHead className={CRM_PIPELINES_TABLE_COLUMN_CLASS.status}>Status</TableHead>
+            <TableHead className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.status, 'whitespace-nowrap')}>
+              Status
+            </TableHead>
             <TableHead
               className={cn(CRM_PIPELINES_TABLE_COLUMN_CLASS.actions, 'text-right')}
             >
