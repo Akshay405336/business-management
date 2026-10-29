@@ -37,7 +37,7 @@ import {
 } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/shared/lib/utils';
-import type { ProjectTask, ProjectTaskBoardPhase } from '../types';
+import type { ProjectTask, ProjectTaskBoardPhase, ProjectTaskStatus } from '../types';
 import {
   buildKanbanTaskItems,
   kanbanBeforeTaskId,
@@ -115,10 +115,12 @@ function EmptyPhaseDropZone({
   highlighted,
   onAddTask,
   dragDisabled,
+  hideAddTask,
 }: {
   highlighted: boolean;
   onAddTask: () => void;
   dragDisabled?: boolean;
+  hideAddTask?: boolean;
 }) {
   return (
     <div
@@ -205,10 +207,12 @@ function PhaseDropZone({
   onDeletePhase,
   onRenamePhase,
   renameDisabled,
+  showPhaseTimelineHint,
+  readOnlyView,
   children,
 }: {
   phase: ProjectTaskBoardPhase;
-  columnVariant?: 'default' | 'plan';
+  columnVariant?: 'default' | 'plan' | 'pipeline';
   isDropTarget: boolean;
   displayOrder?: number;
   columnDragHandle?: {
@@ -220,6 +224,8 @@ function PhaseDropZone({
   onDeletePhase?: (phaseId: string) => void;
   onRenamePhase?: (phaseId: string, name: string) => void | Promise<void>;
   renameDisabled?: boolean;
+  showPhaseTimelineHint?: boolean;
+  readOnlyView?: boolean;
   children: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: phase.id });
@@ -230,14 +236,17 @@ function PhaseDropZone({
         variant={columnVariant}
         isDropTarget={isDropTarget || isOver}
         displayOrder={displayOrder}
-        columnDragHandle={columnDragHandle}
-        onAddTask={() => onAddInPhase(phase.id)}
-        onManagePhases={onManagePhases}
-        onDeletePhase={onDeletePhase ? () => onDeletePhase(phase.id) : undefined}
+        columnDragHandle={readOnlyView ? undefined : columnDragHandle}
+        onAddTask={readOnlyView ? undefined : () => onAddInPhase(phase.id)}
+        onManagePhases={readOnlyView ? undefined : onManagePhases}
+        onDeletePhase={
+          readOnlyView || !onDeletePhase ? undefined : () => onDeletePhase(phase.id)
+        }
         onRenamePhase={
-          onRenamePhase ? (name) => onRenamePhase(phase.id, name) : undefined
+          readOnlyView || !onRenamePhase ? undefined : (name) => onRenamePhase(phase.id, name)
         }
         renameDisabled={renameDisabled}
+        showPhaseTimelineHint={showPhaseTimelineHint}
       >
         {children}
       </ProjectTaskPhaseColumn>
@@ -256,18 +265,22 @@ function SortablePlanPhaseColumn({
   onDeletePhase,
   onRenamePhase,
   renameDisabled,
+  showPhaseTimelineHint,
+  readOnlyView,
   children,
 }: {
   phase: ProjectTaskBoardPhase;
   displayOrder: number;
   enableColumnDrag: boolean;
   isDropTarget: boolean;
-  columnVariant?: 'default' | 'plan';
+  columnVariant?: 'default' | 'plan' | 'pipeline';
   onAddInPhase: (phaseId: string) => void;
   onManagePhases?: () => void;
   onDeletePhase?: (phaseId: string) => void;
   onRenamePhase?: (phaseId: string, name: string) => void | Promise<void>;
   renameDisabled?: boolean;
+  showPhaseTimelineHint?: boolean;
+  readOnlyView?: boolean;
   children: ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -299,6 +312,8 @@ function SortablePlanPhaseColumn({
         onDeletePhase={onDeletePhase}
         onRenamePhase={onRenamePhase}
         renameDisabled={renameDisabled}
+        showPhaseTimelineHint={showPhaseTimelineHint}
+        readOnlyView={readOnlyView}
       >
         {children}
       </PhaseDropZone>
@@ -317,6 +332,7 @@ export function ProjectTaskKanbanBoard({
   onView,
   onEdit,
   onDelete,
+  onTaskStatusChange,
   onAddInPhase,
   onManagePhases,
   onDeletePhase,
@@ -324,13 +340,17 @@ export function ProjectTaskKanbanBoard({
   renameDisabled,
   onAddPhase,
   onPersistPhaseReorder,
+  readOnlyView,
+  showPhaseTimelineHint,
 }: {
   phases: readonly ProjectTaskBoardPhase[];
   tasks: readonly ProjectTask[];
   disabled?: boolean;
   dragDisabled?: boolean;
-  columnVariant?: 'default' | 'plan';
-  cardVariant?: 'default' | 'plan';
+  readOnlyView?: boolean;
+  showPhaseTimelineHint?: boolean;
+  columnVariant?: 'default' | 'plan' | 'pipeline';
+  cardVariant?: 'default' | 'plan' | 'pipeline';
   onPersistMove: (input: {
     taskId: string;
     phaseId: string;
@@ -339,6 +359,7 @@ export function ProjectTaskKanbanBoard({
   onView: (taskId: string) => void;
   onEdit: (taskId: string) => void;
   onDelete: (taskId: string) => void;
+  onTaskStatusChange?: (taskId: string, status: ProjectTaskStatus) => void | Promise<void>;
   onAddInPhase: (phaseId: string) => void;
   onManagePhases?: () => void;
   onDeletePhase?: (phaseId: string) => void;
@@ -633,6 +654,7 @@ export function ProjectTaskKanbanBoard({
                     highlighted={columnHighlighted && dragKind === 'task' && !dndOff}
                     onAddTask={() => onAddInPhase(phase.id)}
                     dragDisabled={dragDisabled}
+                    hideAddTask={readOnlyView}
                   />
                 ) : (
                   phaseTaskIds.map((taskId) => {
@@ -652,9 +674,16 @@ export function ProjectTaskKanbanBoard({
                             : undefined
                         }
                         disabled={dndOff || dragKind === 'phase'}
+                        hideCardMenu={readOnlyView}
                         onView={() => onView(taskId)}
                         onEdit={() => onEdit(taskId)}
                         onDelete={() => onDelete(taskId)}
+                        onStatusChange={
+                          cardVariant === 'pipeline' && onTaskStatusChange
+                            ? (status) => void onTaskStatusChange(taskId, status)
+                            : undefined
+                        }
+                        statusControlDisabled={Boolean(disabled || readOnlyView)}
                       />
                     );
                   })
@@ -677,6 +706,8 @@ export function ProjectTaskKanbanBoard({
                 onDeletePhase={onDeletePhase}
                 onRenamePhase={onRenamePhase}
                 renameDisabled={renameDisabled}
+                showPhaseTimelineHint={showPhaseTimelineHint}
+                readOnlyView={readOnlyView}
               >
                 {columnBody}
               </SortablePlanPhaseColumn>
@@ -694,6 +725,8 @@ export function ProjectTaskKanbanBoard({
               onDeletePhase={onDeletePhase}
               onRenamePhase={onRenamePhase}
               renameDisabled={renameDisabled}
+              showPhaseTimelineHint={showPhaseTimelineHint}
+              readOnlyView={readOnlyView}
             >
               {columnBody}
             </PhaseDropZone>
@@ -738,7 +771,7 @@ export function ProjectTaskKanbanBoard({
           <div className="pointer-events-none w-[19rem] max-w-[calc(100vw-2rem)] rotate-[0.5deg] opacity-90 shadow-lg">
             <ProjectTaskPhaseColumn
               phase={activePhaseColumn}
-              variant="plan"
+              variant={columnVariant === 'pipeline' ? 'pipeline' : columnVariant}
               displayOrder={
                 phaseOrder.indexOf(activePhaseColumn.id) >= 0
                   ? phaseOrder.indexOf(activePhaseColumn.id) + 1

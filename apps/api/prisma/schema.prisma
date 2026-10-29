@@ -703,6 +703,7 @@ model ProjectTask {
   dueDate          DateTime?           @map("due_date") @db.Date
   labels           String[]            @default([])
   sortOrder        Int                 @map("sort_order")
+  inPlanBaseline   Boolean             @default(true) @map("in_plan_baseline")
   actualStartedAt  DateTime?           @map("actual_started_at") @db.Timestamptz(3)
   actualCompletedAt DateTime?          @map("actual_completed_at") @db.Timestamptz(3)
   createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)

@@ -23,6 +23,15 @@ export class ProjectExecutionLifecyclePolicy {
     this.assertCanSavePlan(lifecycle);
   }
 
+  /** Ad-hoc tasks during production are allowed; they are excluded from the frozen plan view. */
+  static assertCanCreateTask(
+    lifecycle: ProjectExecutionLifecycle,
+  ): void {
+    if (lifecycle === 'COMPLETED') {
+      throw new ProjectPlanLockedError(PROJECT_COMPLETED_READ_ONLY_MESSAGE);
+    }
+  }
+
   static assertCanUpdateProject(
     lifecycle: ProjectExecutionLifecycle,
     input: UpdateProjectInput,

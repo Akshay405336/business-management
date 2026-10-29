@@ -26,9 +26,11 @@ import {
 import type { LeadPriority } from '@/features/admin/crm/types';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { formatProjectDateOnly } from '../utils/format-project-date';
-import { startProjectProduction } from '@/features/admin/projects/api/projects';
+import {
+  completeProject,
+  startProjectProduction,
+} from '@/features/admin/projects/api/projects';
 import { ProjectNotPlannedSummaryCardBody } from './project-not-planned-summary-card-body';
-import { ProjectPlanLockNotice } from '@/features/admin/projects/components/project-plan-lock-notice';
 import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import { ProjectCardActionsMenu } from '@/features/admin/projects/components/project-card-actions-menu';
 import type { ProjectActionTarget } from '@/features/admin/projects/hooks/use-project-list-actions';
@@ -37,6 +39,7 @@ import { cn } from '@/shared/lib/utils';
 import type { ProjectTaskSummaryItem } from '../types';
 import { describeScheduleVarianceDays, projectCompletionVarianceDays } from '../utils/execution-schedule';
 import { ProjectPlannedSummaryCardBody } from './project-planned-summary-card-body';
+import { ProjectProductionSummaryCardBody } from './project-production-summary-card-body';
 import { projectClientAvatarColors } from '../utils/project-task-card-theme';
 import {
   getProjectCardTimelineIndicator,
@@ -63,6 +66,7 @@ export function ProjectTaskSummaryCard({
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
   const [startOpen, setStartOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
 
   const planHref = `/admin/project-tasks/${project.id}/plan`;
   const boardHref = `/admin/project-tasks/${project.id}`;
@@ -79,6 +83,17 @@ export function ProjectTaskSummaryCard({
       await run(() => startProjectProduction(project.id));
       toast.success('Production started.');
       setStartOpen(false);
+      onLifecycleChange?.();
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
+  const confirmCompleteProject = async () => {
+    try {
+      await run(() => completeProject(project.id));
+      toast.success('Project marked completed.');
+      setCompleteOpen(false);
       onLifecycleChange?.();
     } catch (failure) {
       toast.error(describeCrmError(failure));
@@ -103,6 +118,7 @@ export function ProjectTaskSummaryCard({
   const clientAvatarStyle = projectClientAvatarColors(
     clientName === '—' ? project.name : clientName,
   );
+
   return (
     <article
       className={cn(
@@ -168,6 +184,16 @@ export function ProjectTaskSummaryCard({
             pending={pending}
             onStartProduction={() => setStartOpen(true)}
           />
+        ) : lifecycle === 'IN_PRODUCTION' ? (
+          <ProjectProductionSummaryCardBody
+            project={project}
+            clientName={clientName}
+            clientAvatarStyle={clientAvatarStyle}
+            boardHref={boardHref}
+            actionsDisabled={actionsDisabled}
+            pending={pending}
+            onComplete={() => setCompleteOpen(true)}
+          />
         ) : (
           <>
             <div className="flex items-center justify-between gap-2">
@@ -220,20 +246,12 @@ export function ProjectTaskSummaryCard({
         <div
           className={cn(
             'border-border/60 mt-auto flex min-w-0 flex-col gap-2 border-t pt-2.5',
-            (lifecycle === 'PLANNED' || lifecycle === 'NOT_PLANNED') && 'hidden',
+            (lifecycle === 'PLANNED' ||
+              lifecycle === 'NOT_PLANNED' ||
+              lifecycle === 'IN_PRODUCTION') &&
+              'hidden',
           )}
         >
-          {lifecycle === 'IN_PRODUCTION' ? (
-            <>
-              <Button asChild className="h-9 w-full shrink-0">
-                <Link href={boardHref}>Open Production Board</Link>
-              </Button>
-              <Button asChild variant="outline" className="h-9 w-full shrink-0">
-                <Link href={viewPlanHref}>View Plan</Link>
-              </Button>
-              <ProjectPlanLockNotice compact className="px-0.5" />
-            </>
-          ) : null}
           {lifecycle === 'COMPLETED' ? (
             <>
               <Button asChild className="h-9 w-full shrink-0">
@@ -262,6 +280,21 @@ export function ProjectTaskSummaryCard({
             <AlertDialogAction onClick={() => void confirmStartProduction()}>
               Start Production
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={completeOpen} onOpenChange={setCompleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Complete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Mark “{project.name}” as completed? This project will become read-only.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmCompleteProject()}>Complete</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -30,6 +30,7 @@ const projectTaskResponseSchema = z.object({
   dueDate: z.string().nullable(),
   labels: z.array(z.string()),
   sortOrder: z.number().int(),
+  inPlanBaseline: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -26,9 +26,14 @@ export interface ProjectTaskRecord {
   readonly actualCompletedAt: string | null;
   readonly labels: readonly string[];
   readonly sortOrder: number;
+  readonly inPlanBaseline: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
+
+export type GetProjectBoardOptions = {
+  readonly planBaselineOnly?: boolean;
+};
 
 export interface ProjectTaskSummaryPhaseRecord {
   readonly id: string;
@@ -152,7 +157,11 @@ export interface ProjectTaskRepository {
     filters: ProjectTaskSummaryListFilters,
   ): Promise<PaginatedProjectTaskSummaries>;
 
-  getProjectBoard(organizationId: string, projectId: string): Promise<ProjectTaskBoardRecord>;
+  getProjectBoard(
+    organizationId: string,
+    projectId: string,
+    options?: GetProjectBoardOptions,
+  ): Promise<ProjectTaskBoardRecord>;
 
   getTask(
     organizationId: string,

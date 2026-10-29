@@ -10,6 +10,8 @@ export class GetProjectTaskBoardHandler {
   constructor(@Inject(PROJECT_TASK_REPOSITORY) private readonly repository: ProjectTaskRepository) {}
 
   execute(query: GetProjectTaskBoardQuery) {
-    return this.repository.getProjectBoard(query.actor.organizationId, query.projectId);
+    return this.repository.getProjectBoard(query.actor.organizationId, query.projectId, {
+      planBaselineOnly: query.planBaselineOnly,
+    });
   }
 }

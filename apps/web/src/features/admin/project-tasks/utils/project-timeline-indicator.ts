@@ -1,4 +1,4 @@
-import type { ProjectExecutionLifecycle } from '@techwin/contracts';
+import type { ProjectExecutionLifecycle, ProjectPhaseStatus } from '@techwin/contracts';
 import type { ProjectStatus } from '../types';
 
 export type ProjectTimelineIndicatorVariant =
@@ -182,10 +182,88 @@ export function getProjectCardTimelineIndicator(
   return { label: `Delayed by ${daysPassed} days`, tone: 'delayed' };
 }
 
+/** Compare actual production start (click time) to planned start date (calendar days). */
+export function describeProductionStartVsPlan(
+  plannedStartDate: string,
+  actualProductionStartedAt: string | null | undefined,
+): string | null {
+  if (!actualProductionStartedAt) return null;
+  const planned = plannedStartDate.slice(0, 10);
+  const actual = actualProductionStartedAt.slice(0, 10);
+  if (!isValidDateOnly(planned) || !isValidDateOnly(actual)) return null;
+
+  const varianceDays = calendarDaysBetween(planned, actual);
+  if (varianceDays === 0) return 'Started on planned date';
+  if (varianceDays > 0) {
+    return varianceDays === 1 ? 'Delayed by 1 day' : `Delayed by ${varianceDays} days`;
+  }
+  const earlyDays = Math.abs(varianceDays);
+  return earlyDays === 1 ? 'Early by 1 day' : `Early by ${earlyDays} days`;
+}
+
+export const projectProductionStartVarianceClass =
+  'text-amber-600 dark:text-amber-500';
+
 export const projectCardTimelineToneClass: Record<ProjectCardTimelineTone, string> = {
   upcoming: 'text-green-600 dark:text-green-500',
   'on-track': 'text-green-600 dark:text-green-500',
   delayed: 'text-red-600 dark:text-red-400',
+};
+
+export type PhaseColumnTimelineTone = 'upcoming' | 'delayed';
+
+/** Production board phase headers: upcoming start vs delay vs schedule end. */
+export function getPhaseColumnTimelineIndicator(
+  input: {
+    readonly startDate: string;
+    readonly expectedEndDate: string;
+    readonly status: ProjectPhaseStatus;
+  },
+  todayIso: string = localDateOnlyIso(),
+): { readonly label: string; readonly tone: PhaseColumnTimelineTone } | null {
+  const start = input.startDate.slice(0, 10);
+  const end = input.expectedEndDate.slice(0, 10);
+  if (!isValidDateOnly(start) || !isValidDateOnly(end)) return null;
+  if (input.status === 'COMPLETED') return null;
+
+  if (todayIso < start) {
+    const daysUntil = calendarDaysBetween(todayIso, start);
+    if (daysUntil <= 0) {
+      return { label: 'Starts today', tone: 'upcoming' };
+    }
+    if (daysUntil === 1) {
+      return { label: 'Starts in 1 day', tone: 'upcoming' };
+    }
+    return { label: `Starts in ${daysUntil} days`, tone: 'upcoming' };
+  }
+
+  if (input.status === 'NOT_STARTED' || input.status === 'BLOCKED') {
+    const daysPassed = calendarDaysBetween(start, todayIso);
+    if (daysPassed <= 0) {
+      return { label: 'Starts today', tone: 'upcoming' };
+    }
+    if (daysPassed === 1) {
+      return { label: 'Delayed by 1 day', tone: 'delayed' };
+    }
+    return { label: `Delayed by ${daysPassed} days`, tone: 'delayed' };
+  }
+
+  if (todayIso > end) {
+    const overdue = calendarDaysBetween(end, todayIso);
+    if (overdue === 1) {
+      return { label: 'Delayed by 1 day', tone: 'delayed' };
+    }
+    if (overdue > 1) {
+      return { label: `Delayed by ${overdue} days`, tone: 'delayed' };
+    }
+  }
+
+  return null;
+}
+
+export const phaseColumnTimelineToneClass: Record<PhaseColumnTimelineTone, string> = {
+  upcoming: projectCardTimelineToneClass.upcoming,
+  delayed: projectCardTimelineToneClass.delayed,
 };
 
 export type ProjectDaysLeftTone = 'neutral' | 'soon' | 'overdue';

@@ -28,6 +28,7 @@ export function toProjectTask(record: ProjectTaskRecord): ProjectTask {
     actualCompletedAt: record.actualCompletedAt,
     labels: record.labels,
     sortOrder: record.sortOrder,
+    inPlanBaseline: record.inPlanBaseline,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

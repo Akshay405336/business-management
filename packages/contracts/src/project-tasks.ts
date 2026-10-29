@@ -44,6 +44,7 @@ export interface ProjectTask {
   readonly actualCompletedAt: string | null;
   readonly labels: readonly string[];
   readonly sortOrder: number;
+  readonly inPlanBaseline: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

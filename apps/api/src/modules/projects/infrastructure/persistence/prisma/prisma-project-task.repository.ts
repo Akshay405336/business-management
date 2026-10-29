@@ -106,6 +106,7 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
       actualCompletedAt: row.actualCompletedAt?.toISOString() ?? null,
       labels: row.labels,
       sortOrder: row.sortOrder,
+      inPlanBaseline: row.inPlanBaseline,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -249,12 +250,20 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     return { items, total, page, pageSize, tabCounts };
   }
 
-  async getProjectBoard(organizationId: string, projectId: string): Promise<ProjectTaskBoardRecord> {
+  async getProjectBoard(
+    organizationId: string,
+    projectId: string,
+    options?: { planBaselineOnly?: boolean },
+  ): Promise<ProjectTaskBoardRecord> {
     const row = await this.prisma.project.findFirst({
       where: { id: projectId, organizationId },
       include: {
         phases: { orderBy: { sortOrder: 'asc' } },
-        tasks: { include: taskInclude, orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
+        tasks: {
+          where: options?.planBaselineOnly ? { inPlanBaseline: true } : undefined,
+          include: taskInclude,
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
       },
     });
     if (!row) throw new ProjectNotFoundError('Project');
@@ -328,7 +337,10 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   ): Promise<ProjectTaskRecord> {
     const project = await this.assertProject(organizationId, projectId);
     this.assertCanMutateTasks(project.executionLifecycle);
-    ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
+    ProjectExecutionLifecyclePolicy.assertCanCreateTask(project.executionLifecycle);
+    if (project.executionLifecycle !== 'IN_PRODUCTION') {
+      ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
+    }
     const phase = await this.assertPhaseInProject(organizationId, projectId, input.phaseId);
     this.assertTaskDatesWithinPhase(
       { startDate: input.startDate, dueDate: input.dueDate },
@@ -337,24 +349,34 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     await this.assertAssignee(organizationId, input.assigneeAdminId);
 
     const sortOrder = await this.nextSortOrder(organizationId, input.phaseId);
+    const now = new Date();
+    const startsInProgress = input.status === 'IN_PROGRESS';
 
-    const row = await this.prisma.projectTask.create({
-      data: {
-        id: crypto.randomUUID(),
-        organizationId,
-        projectId,
-        phaseId: input.phaseId,
-        title: input.title,
-        description: input.description ?? '',
-        status: input.status,
-        priority: input.priority,
-        assigneeAdminId: input.assigneeAdminId ?? null,
-        startDate: parseOptionalDate(input.startDate),
-        dueDate: parseOptionalDate(input.dueDate),
-        labels: input.labels ? [...input.labels] : [],
-        sortOrder,
-      },
-      include: taskInclude,
+    const row = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.projectTask.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId,
+          projectId,
+          phaseId: input.phaseId,
+          title: input.title,
+          description: input.description ?? '',
+          status: input.status,
+          priority: input.priority,
+          assigneeAdminId: input.assigneeAdminId ?? null,
+          startDate: parseOptionalDate(input.startDate),
+          dueDate: parseOptionalDate(input.dueDate),
+          labels: input.labels ? [...input.labels] : [],
+          sortOrder,
+          inPlanBaseline: project.executionLifecycle !== 'IN_PRODUCTION',
+          ...(startsInProgress ? { actualStartedAt: now } : {}),
+        },
+        include: taskInclude,
+      });
+      if (startsInProgress) {
+        await this.syncPhaseActualTimes(tx, organizationId, input.phaseId);
+      }
+      return created;
     });
     return this.toTaskRecord(row);
   }
@@ -400,9 +422,7 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     const phaseChanged = nextPhaseId !== existing.phaseId;
     const nextStatus = input.status ?? existing.status;
     const now = new Date();
-    const recordActualStart =
-      (nextStatus === 'IN_PROGRESS' || nextStatus === 'IN_REVIEW' || nextStatus === 'COMPLETED') &&
-      !existing.actualStartedAt;
+    const recordActualStart = nextStatus === 'IN_PROGRESS' && !existing.actualStartedAt;
     const recordActualComplete = nextStatus === 'COMPLETED' && !existing.actualCompletedAt;
 
     const row = await this.prisma.$transaction(async (tx) => {
@@ -452,15 +472,18 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   async deleteTask(organizationId: string, projectId: string, taskId: string): Promise<void> {
     const project = await this.assertProject(organizationId, projectId);
     this.assertCanMutateTasks(project.executionLifecycle);
-    ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
     const existing = await this.getTask(organizationId, projectId, taskId);
     if (!existing) throw new ProjectNotFoundError('Task');
+    if (project.executionLifecycle !== 'IN_PRODUCTION') {
+      ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.projectTask.delete({ where: { id: taskId } });
       const remaining = await this.listPhaseTaskIds(tx, organizationId, existing.phaseId);
       const ordered = remaining.filter((id) => id !== taskId);
       await this.applyTaskOrder(tx, organizationId, existing.phaseId, ordered);
+      await this.syncPhaseActualTimes(tx, organizationId, existing.phaseId);
     });
   }
 
@@ -473,7 +496,9 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   ): Promise<ProjectTaskRecord> {
     const project = await this.assertProject(organizationId, projectId);
     this.assertCanMutateTasks(project.executionLifecycle);
-    ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
+    if (project.executionLifecycle !== 'IN_PRODUCTION') {
+      ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
+    }
     const task = await this.getTask(organizationId, projectId, taskId);
     if (!task) throw new ProjectNotFoundError('Task');
     await this.assertPhaseInProject(organizationId, projectId, phaseId);
@@ -502,6 +527,10 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         });
       }
       await this.applyTaskOrder(tx, organizationId, phaseId, nextDestinationIds);
+      await this.syncPhaseActualTimes(tx, organizationId, phaseId);
+      if (phaseChanged) {
+        await this.syncPhaseActualTimes(tx, organizationId, sourcePhaseId);
+      }
       return tx.projectTask.findFirstOrThrow({
         where: { id: taskId, organizationId, projectId },
         include: taskInclude,
@@ -523,18 +552,27 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     if (!phase) return;
     const tasks = await tx.projectTask.findMany({
       where: { organizationId, phaseId },
-      select: { status: true },
+      select: { status: true, actualStartedAt: true },
     });
+    const anyInProgress = tasks.some((task) => task.status === 'IN_PROGRESS');
     const anyActive = tasks.some(
       (task) =>
         task.status === 'IN_PROGRESS' || task.status === 'IN_REVIEW' || task.status === 'COMPLETED',
     );
     const allCompleted = tasks.length > 0 && tasks.every((task) => task.status === 'COMPLETED');
     const now = new Date();
+    let phaseProductionStartedAt: Date | undefined;
+    if (anyInProgress && !phase.actualStartedAt) {
+      const startedAts = tasks
+        .filter((task) => task.status === 'IN_PROGRESS' && task.actualStartedAt)
+        .map((task) => task.actualStartedAt!.getTime());
+      phaseProductionStartedAt =
+        startedAts.length > 0 ? new Date(Math.min(...startedAts)) : now;
+    }
     await tx.projectPhase.update({
       where: { id: phaseId },
       data: {
-        ...(anyActive && !phase.actualStartedAt ? { actualStartedAt: now } : {}),
+        ...(phaseProductionStartedAt ? { actualStartedAt: phaseProductionStartedAt } : {}),
         ...(allCompleted && !phase.actualCompletedAt ? { actualCompletedAt: now } : {}),
         ...(allCompleted ? { status: 'COMPLETED' as const } : {}),
         ...(anyActive && !allCompleted ? { status: 'IN_PROGRESS' as const } : {}),

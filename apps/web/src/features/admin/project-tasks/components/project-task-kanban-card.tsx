@@ -2,22 +2,41 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CalendarClock, Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import {
+  Calendar,
+  CalendarClock,
+  ChevronDown,
+  Eye,
+  MoreHorizontal,
+  MoreVertical,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import type { CSSProperties, PointerEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  KANBAN_LEAD_CARD_BORDER_CLASS,
+  KANBAN_LEAD_HEADER_HEIGHT_CLASS,
+  KanbanLeadHeaderStepBorder,
+  KanbanLeadPriorityHeader,
+  KanbanLeadPriorityTab,
+} from '@/features/admin/crm/components/kanban-lead-priority-badge';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
 import { formatProjectDateOnly } from '../utils/format-project-date';
 import type { LeadPriority } from '@/features/admin/crm/types';
 import { initialsOf } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import { isTaskDateOutsidePhase, type TaskPhaseDateBounds } from '@techwin/validation';
-import type { ProjectTask, ProjectTaskPriority } from '../types';
+import type { ProjectTask, ProjectTaskPriority, ProjectTaskStatus } from '../types';
+import { labelProjectTaskStatus } from '../utils/labels';
 import { localDateOnlyIso } from '../utils/project-timeline-indicator';
 import { projectTaskCardBackground, projectTaskCardTheme } from '../utils/project-task-card-theme';
 
@@ -52,14 +71,26 @@ const PLAN_PRIORITY_PILL: Record<
   },
 };
 
-function PlanTaskCardMenu({
-  onView,
-  onEdit,
-  onDelete,
+const PIPELINE_TASK_STATUSES: readonly ProjectTaskStatus[] = [
+  'TODO',
+  'IN_PROGRESS',
+  'IN_REVIEW',
+  'COMPLETED',
+];
+
+function pipelineTaskStatusLabel(status: ProjectTaskStatus): string {
+  if (status === 'IN_REVIEW') return 'Review';
+  return labelProjectTaskStatus(status);
+}
+
+function PipelineTaskStatusButton({
+  status,
+  disabled,
+  onStatusChange,
 }: {
-  onView: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
+  status: ProjectTaskStatus;
+  disabled?: boolean;
+  onStatusChange: (status: ProjectTaskStatus) => void;
 }) {
   return (
     <div onPointerDown={stopCardPointer} onClick={(event) => event.stopPropagation()}>
@@ -68,11 +99,69 @@ function PlanTaskCardMenu({
           <Button
             type="button"
             variant="outline"
+            size="sm"
+            disabled={disabled}
+            className="border-border/80 h-7 shrink-0 gap-1 rounded-md px-2 text-[11px] font-medium shadow-none"
+            aria-label="Task status"
+          >
+            {pipelineTaskStatusLabel(status)}
+            <ChevronDown className="size-3 opacity-70" aria-hidden="true" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-[9.5rem]">
+          <DropdownMenuRadioGroup
+            value={status}
+            onValueChange={(value) => {
+              if (!value || value === status) return;
+              onStatusChange(value as ProjectTaskStatus);
+            }}
+          >
+            {PIPELINE_TASK_STATUSES.map((option) => (
+              <DropdownMenuRadioItem key={option} value={option}>
+                {pipelineTaskStatusLabel(option)}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+function TaskCardActionsMenu({
+  onView,
+  onEdit,
+  onDelete,
+  hideEdit,
+  triggerClassName,
+  iconSize = 'size-4',
+}: {
+  onView: () => void;
+  onEdit?: () => void;
+  onDelete: () => void;
+  hideEdit?: boolean;
+  triggerClassName?: string;
+  iconSize?: string;
+}) {
+  return (
+    <div
+      className="relative z-[2] flex shrink-0 items-center pr-1.5"
+      onPointerDown={stopCardPointer}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
             size="icon-sm"
-            className="size-7 shrink-0 rounded-lg bg-transparent text-foreground shadow-none hover:bg-white/30"
+            className={cn(
+              'text-muted-foreground hover:text-foreground size-7 rounded-md hover:bg-black/5',
+              triggerClassName,
+            )}
             aria-label="Task actions"
           >
-            <MoreVertical className="size-4" />
+            <MoreHorizontal className={iconSize} aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[9rem]">
@@ -80,10 +169,12 @@ function PlanTaskCardMenu({
             <Eye className="size-3.5" aria-hidden="true" />
             View
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onEdit}>
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </DropdownMenuItem>
+          {hideEdit ? null : (
+            <DropdownMenuItem onSelect={onEdit}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
             <Trash2 className="size-3.5" aria-hidden="true" />
             Delete
@@ -102,15 +193,21 @@ export function ProjectTaskKanbanCard({
   onView,
   onEdit,
   onDelete,
+  hideCardMenu,
+  onStatusChange,
+  statusControlDisabled,
 }: {
   task: ProjectTask;
-  variant?: 'default' | 'plan';
+  variant?: 'default' | 'plan' | 'pipeline';
   /** When set (plan board), dates outside the phase window are highlighted. */
   phaseBounds?: TaskPhaseDateBounds;
   className?: string;
+  hideCardMenu?: boolean;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onStatusChange?: (status: ProjectTaskStatus) => void;
+  statusControlDisabled?: boolean;
 }) {
   const overdue = isTaskOverdue(task);
   const priority = task.priority as LeadPriority;
@@ -172,7 +269,13 @@ export function ProjectTaskKanbanCard({
             >
               {priority}
             </span>
-            <PlanTaskCardMenu onView={onView} onEdit={onEdit} onDelete={onDelete} />
+            <TaskCardActionsMenu
+              onView={onView}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              triggerClassName="rounded-lg bg-transparent text-foreground shadow-none hover:bg-white/30"
+              iconSize="size-4"
+            />
           </div>
         </div>
 
@@ -234,6 +337,92 @@ export function ProjectTaskKanbanCard({
     );
   }
 
+  if (variant === 'pipeline') {
+    const hasDates = Boolean(task.startDate || task.dueDate);
+    return (
+      <article
+        className={cn(
+          'group flex flex-col overflow-hidden rounded-tl-[18px] rounded-bl-[18px] rounded-br-[18px] bg-transparent shadow-[0_4px_20px_-10px_rgb(15_23_42_/_0.12)] transition-shadow hover:shadow-[0_8px_24px_-8px_rgb(15_23_42_/_0.16)]',
+          KANBAN_LEAD_CARD_BORDER_CLASS,
+          overdue && 'ring-2 ring-red-400/40 ring-offset-1',
+          className,
+        )}
+      >
+        <div className={cn('relative shrink-0 bg-transparent', KANBAN_LEAD_HEADER_HEIGHT_CLASS)}>
+          {!hideCardMenu ? (
+            <>
+              <KanbanLeadPriorityTab priority={priority} />
+              <KanbanLeadHeaderStepBorder />
+              <div className={cn('relative flex w-full', KANBAN_LEAD_HEADER_HEIGHT_CLASS)}>
+                <KanbanLeadPriorityHeader priority={priority} />
+                <div className="relative z-[2] min-w-0 flex-1 self-stretch bg-transparent">
+                  <div className="flex h-full items-center justify-end bg-transparent pr-0.5">
+                    <TaskCardActionsMenu
+                      onView={onView}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      hideEdit={variant === 'pipeline'}
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className={cn('relative flex w-full', KANBAN_LEAD_HEADER_HEIGHT_CLASS)}>
+              <KanbanLeadPriorityHeader priority={priority} />
+            </div>
+          )}
+        </div>
+
+        <div className="bg-card relative z-[1] flex min-h-[7.5rem] flex-col gap-2 rounded-b-[17px] px-3 pt-2 pb-3">
+          <h3 className="text-foreground line-clamp-2 text-[15px] leading-snug font-bold tracking-tight">
+            {task.title}
+          </h3>
+          {task.description?.trim() ? (
+            <p className="text-muted-foreground line-clamp-2 text-xs leading-snug">{task.description.trim()}</p>
+          ) : null}
+
+          <div className="mt-auto flex items-end justify-between gap-2 pt-1">
+            <div className="min-w-0 flex-1 space-y-1.5">
+              {task.assignee ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                    aria-hidden="true"
+                  >
+                    {initialsOf(task.assignee.displayName)}
+                  </span>
+                  <span className="text-muted-foreground truncate text-xs font-medium">
+                    {task.assignee.displayName}
+                  </span>
+                </div>
+              ) : null}
+
+              {hasDates ? (
+                <div className="text-muted-foreground flex items-center gap-1.5 text-xs tabular-nums">
+                  <Calendar className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+                  <span className="truncate">
+                    {task.startDate ? formatProjectDateOnly(task.startDate) : '—'}
+                    {' – '}
+                    {task.dueDate ? formatProjectDateOnly(task.dueDate) : '—'}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            {onStatusChange ? (
+              <PipelineTaskStatusButton
+                status={task.status}
+                disabled={statusControlDisabled}
+                onStatusChange={onStatusChange}
+              />
+            ) : null}
+          </div>
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article
       className={cn(
@@ -254,39 +443,43 @@ export function ProjectTaskKanbanCard({
           onPointerDown={stopCardPointer}
           onClick={(event) => event.stopPropagation()}
         >
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-6"
-            aria-label={`View ${task.title}`}
-            onClick={onView}
-          >
-            <Eye className="size-3.5" aria-hidden="true" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          {hideCardMenu ? null : (
+            <>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 className="size-6"
-                aria-label="Task actions"
+                aria-label={`View ${task.title}`}
+                onClick={onView}
               >
-                <MoreVertical className="size-3.5" aria-hidden="true" />
+                <Eye className="size-3.5" aria-hidden="true" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[8rem]">
-              <DropdownMenuItem onSelect={onEdit}>
-                <Pencil className="size-3.5" aria-hidden="true" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-                <Trash2 className="size-3.5" aria-hidden="true" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-6"
+                    aria-label="Task actions"
+                  >
+                    <MoreVertical className="size-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[8rem]">
+                  <DropdownMenuItem onSelect={onEdit}>
+                    <Pencil className="size-3.5" aria-hidden="true" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+                    <Trash2 className="size-3.5" aria-hidden="true" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
@@ -314,14 +507,20 @@ export function SortableProjectTaskKanbanCard({
   onView,
   onEdit,
   onDelete,
+  hideCardMenu,
+  onStatusChange,
+  statusControlDisabled,
 }: {
   task: ProjectTask;
-  variant?: 'default' | 'plan';
+  variant?: 'default' | 'plan' | 'pipeline';
   phaseBounds?: TaskPhaseDateBounds;
   disabled?: boolean;
+  hideCardMenu?: boolean;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onStatusChange?: (status: ProjectTaskStatus) => void;
+  statusControlDisabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: task.id,
@@ -349,14 +548,13 @@ export function SortableProjectTaskKanbanCard({
         task={task}
         variant={variant}
         phaseBounds={phaseBounds}
-        className={cn(
-          'cursor-grab active:cursor-grabbing',
-          isDragging && 'opacity-40 shadow-none',
-          isOver && !isDragging && 'ring-2 ring-primary/30',
-        )}
+        hideCardMenu={hideCardMenu}
+        className={hideCardMenu ? undefined : 'cursor-grab active:cursor-grabbing'}
         onView={onView}
         onEdit={onEdit}
         onDelete={onDelete}
+        onStatusChange={onStatusChange}
+        statusControlDisabled={statusControlDisabled}
       />
     </div>
   );

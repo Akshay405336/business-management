@@ -102,10 +102,14 @@ export class ProjectTasksController {
   async getProjectBoard(
     @CrmContext() ctx: CrmRequestContext,
     @Param('projectId') projectId: string,
+    @Req() request: Request,
   ): Promise<ProjectTaskBoardResponse> {
+    const planBaselineOnly =
+      request.query.planBaseline === '1' || request.query.planBaseline === 'true';
     const board = await this.getBoard.execute({
       actor: toProjectActor(ctx),
       projectId,
+      planBaselineOnly,
     });
     return toProjectTaskBoardResponse(board);
   }

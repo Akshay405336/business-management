@@ -288,6 +288,7 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
     <>
       <ProjectWorkspaceShell
         project={project}
+        breadcrumbTail="Plan"
         actionsDisabled={actionsBusy || readOnly}
         onToggleActive={(target) => setStatusToggleTarget(target)}
         onEditProject={() => setProjectFormOpen(true)}

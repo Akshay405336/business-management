@@ -9,3 +9,16 @@ export function formatProjectDateOnly(iso: string | null | undefined): string {
   const date = match[3];
   return `${Number(date)}/${Number(month)}/${year}`;
 }
+
+/** Display ISO timestamp (production start, etc.) as `D/M/YYYY, h:mm AM/PM`. */
+export function formatProjectDateTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  const datePart = formatProjectDateOnly(iso);
+  const timePart = parsed.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${datePart}, ${timePart}`;
+}

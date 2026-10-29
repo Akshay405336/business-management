@@ -12,11 +12,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatProjectDateOnly } from '../utils/format-project-date';
-import { stageKanbanColumnTheme } from '@/features/admin/crm/utils/stage-color';
+import { mixStageColorWithWhite, stageKanbanColumnTheme } from '@/features/admin/crm/utils/stage-color';
 import { labelProjectPhaseStatus } from '@/features/admin/projects/utils/labels';
 import { cn } from '@/shared/lib/utils';
 import type { ProjectTaskBoardPhase } from '../types';
 import { projectPhaseAccentHex } from '../utils/phase-accent-color';
+
+function PhaseProductionScheduleMeta({ phase }: { phase: ProjectTaskBoardPhase }) {
+  return (
+    <p className="text-muted-foreground text-[10px] leading-snug tabular-nums">
+      <span className="text-foreground/75 font-medium">Planned date:</span>{' '}
+      {formatProjectDateOnly(phase.startDate)} – {formatProjectDateOnly(phase.expectedEndDate)}
+    </p>
+  );
+}
 
 function PhaseAccentProgressBar({ percent, accent }: { percent: number; accent: string }) {
   const clamped = Math.min(100, Math.max(0, percent));
@@ -130,18 +139,20 @@ export function ProjectTaskPhaseColumn({
   onDeletePhase,
   onRenamePhase,
   renameDisabled,
+  showPhaseTimelineHint,
   displayOrder,
   columnDragHandle,
   children,
 }: {
   phase: ProjectTaskBoardPhase;
-  variant?: 'default' | 'plan';
+  variant?: 'default' | 'plan' | 'pipeline';
   isDropTarget?: boolean;
   onAddTask?: () => void;
   onManagePhases?: () => void;
   onDeletePhase?: () => void;
   onRenamePhase?: (name: string) => void | Promise<void>;
   renameDisabled?: boolean;
+  showPhaseTimelineHint?: boolean;
   displayOrder?: number;
   columnDragHandle?: {
     attributes: DraggableAttributes;
@@ -152,6 +163,78 @@ export function ProjectTaskPhaseColumn({
   const accentHex = projectPhaseAccentHex(phase.sortOrder);
   const theme = stageKanbanColumnTheme(accentHex);
   const taskLabel = phase.taskCount === 1 ? '1 task' : `${phase.taskCount} tasks`;
+
+  if (variant === 'pipeline') {
+    const columnBackground = isDropTarget
+      ? mixStageColorWithWhite(theme.accent, 0.11)
+      : theme.column.backgroundColor!;
+    const headerBackground = theme.header.backgroundColor!;
+
+    return (
+      <div
+        className={cn(
+          'flex h-full min-h-0 w-[min(100vw-2rem,18.5rem)] shrink-0 flex-col overflow-hidden rounded-xl shadow-[0_2px_16px_-6px_rgb(15_23_42_/_0.12)] transition-[box-shadow,ring-color]',
+          'sm:w-[19rem]',
+          isDropTarget && 'ring-primary/30 ring-2',
+        )}
+        style={{
+          backgroundColor: columnBackground,
+          borderColor: theme.column.borderColor,
+          borderWidth: 1,
+          borderStyle: 'solid',
+        }}
+      >
+        <div
+          className="flex items-start gap-2 px-3 pt-2.5 pb-1"
+          style={{ backgroundColor: headerBackground }}
+        >
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3
+                className="text-foreground truncate text-base font-semibold tracking-tight"
+                title={phase.name}
+              >
+                {phase.name}
+              </h3>
+              <span className="bg-card/95 text-foreground/80 rounded-full border border-black/5 px-2 py-0.5 text-[11px] font-medium tabular-nums shadow-xs">
+                {phase.taskCount}
+              </span>
+            </div>
+            {showPhaseTimelineHint ? (
+              <PhaseProductionScheduleMeta phase={phase} />
+            ) : (
+              <p className="text-muted-foreground text-[10px] tabular-nums">
+                {formatProjectDateOnly(phase.startDate)} –{' '}
+                {formatProjectDateOnly(phase.expectedEndDate)}
+              </p>
+            )}
+          </div>
+          {onAddTask ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-9 shrink-0 rounded-lg border-dashed border-black/15 bg-card/80 shadow-none hover:bg-card"
+              aria-label={`Add task in ${phase.name}`}
+              onClick={onAddTask}
+            >
+              <Plus className="size-4" aria-hidden="true" />
+            </Button>
+          ) : null}
+        </div>
+        <div
+          aria-hidden
+          className="h-2 shrink-0"
+          style={{
+            background: `linear-gradient(to bottom, ${headerBackground}, ${columnBackground})`,
+          }}
+        />
+        <div className="flex min-h-[14rem] min-w-0 flex-1 flex-col gap-2.5 overflow-y-auto px-2.5 pt-1 pb-2.5">
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   if (variant === 'plan') {
     return (
@@ -181,10 +264,18 @@ export function ProjectTaskPhaseColumn({
                 onRenamePhase={onRenamePhase}
                 renameDisabled={renameDisabled}
               />
-              <p className="text-muted-foreground mt-0.5 text-[10px] tabular-nums">
-                {formatProjectDateOnly(phase.startDate)} – {formatProjectDateOnly(phase.expectedEndDate)}
-              </p>
+              {showPhaseTimelineHint ? (
+                <div className="mt-1">
+                  <PhaseProductionScheduleMeta phase={phase} />
+                </div>
+              ) : (
+                <p className="text-muted-foreground mt-0.5 text-[10px] tabular-nums">
+                  {formatProjectDateOnly(phase.startDate)} –{' '}
+                  {formatProjectDateOnly(phase.expectedEndDate)}
+                </p>
+              )}
             </div>
+            {onAddTask || onManagePhases || onDeletePhase ? (
             <div className="flex shrink-0 items-center gap-0.5">
               {onAddTask ? (
                 <Button
@@ -198,34 +289,37 @@ export function ProjectTaskPhaseColumn({
                   <Plus className="size-4" />
                 </Button>
               ) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    className="size-7 shrink-0 rounded-md border-black/12 bg-white text-foreground shadow-none hover:bg-white"
-                    aria-label={`Phase actions for ${phase.name}`}
-                  >
-                    <MoreVertical className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[10rem]">
-                  {onManagePhases ? (
-                    <DropdownMenuItem onSelect={onManagePhases}>Manage phases</DropdownMenuItem>
-                  ) : null}
-                  {onDeletePhase ? (
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      disabled={phase.taskCount > 0}
-                      onSelect={onDeletePhase}
+              {onManagePhases || onDeletePhase ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      className="size-7 shrink-0 rounded-md border-black/12 bg-white text-foreground shadow-none hover:bg-white"
+                      aria-label={`Phase actions for ${phase.name}`}
                     >
-                      Delete phase
-                    </DropdownMenuItem>
-                  ) : null}
-                </DropdownMenuContent>
-              </DropdownMenu>
+                      <MoreVertical className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[10rem]">
+                    {onManagePhases ? (
+                      <DropdownMenuItem onSelect={onManagePhases}>Manage phases</DropdownMenuItem>
+                    ) : null}
+                    {onDeletePhase ? (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        disabled={phase.taskCount > 0}
+                        onSelect={onDeletePhase}
+                      >
+                        Delete phase
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
+            ) : null}
           </div>
         </div>
         <div className="flex min-h-[14rem] min-w-0 flex-1 flex-col gap-2 overflow-y-auto bg-white p-2">

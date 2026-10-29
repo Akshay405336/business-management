@@ -26,12 +26,17 @@ export function listProjectTaskSummaries(
 
 export function getProjectTaskBoard(
   projectId: string,
-  signal?: AbortSignal,
+  options?: { planBaseline?: boolean; signal?: AbortSignal },
 ): Promise<ProjectTaskBoardResponse> {
-  return apiRequest<ProjectTaskBoardResponse>(PROJECT_TASK_ROUTES.board(projectId), {
-    auth: true,
-    signal,
-  });
+  const query =
+    options?.planBaseline === true ? buildQueryString({ planBaseline: '1' }) : '';
+  return apiRequest<ProjectTaskBoardResponse>(
+    `${PROJECT_TASK_ROUTES.board(projectId)}${query}`,
+    {
+      auth: true,
+      signal: options?.signal,
+    },
+  );
 }
 
 export function reorderProjectPhases(

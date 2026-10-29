@@ -4,6 +4,7 @@ import {
   Calendar,
   Flag,
   PieChart,
+  PlayCircle,
   SquarePen,
   ToggleLeft,
   ToggleRight,
@@ -14,16 +15,18 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
-import { formatProjectDateOnly } from '../utils/format-project-date';
+import { formatProjectDateOnly, formatProjectDateTime } from '../utils/format-project-date';
 import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import type { ProjectActionTarget } from '@/features/admin/projects/hooks/use-project-list-actions';
 import type { ProjectDetail, ProjectPriority, ProjectStatus } from '@/features/admin/projects/types';
 import { labelProjectPriority, labelProjectStatus } from '@/features/admin/projects/utils/labels';
 import { cn } from '@/shared/lib/utils';
 import {
+  describeProductionStartVsPlan,
   getProjectRemainingTimeLabel,
   localDateOnlyIso,
   projectDaysLeftToneClass,
+  projectProductionStartVarianceClass,
 } from '../utils/project-timeline-indicator';
 
 const statusPillClass: Record<ProjectStatus, string> = {
@@ -89,6 +92,7 @@ function HeaderMetric({
   label,
   value,
   valueClassName,
+  labelFirst = false,
 }: {
   icon: LucideIcon;
   iconWrapClassName: string;
@@ -96,9 +100,26 @@ function HeaderMetric({
   label: string;
   value: string;
   valueClassName?: string;
+  /** When true, caption is above the value (production dates). */
+  labelFirst?: boolean;
 }) {
+  const caption = (
+    <p className="text-muted-foreground text-[11px] leading-snug">{label}</p>
+  );
+  const reading = (
+    <p
+      className={cn(
+        'text-foreground text-xs font-semibold tabular-nums',
+        labelFirst ? 'mt-0.5 whitespace-nowrap' : 'truncate',
+        valueClassName,
+      )}
+    >
+      {value}
+    </p>
+  );
+
   return (
-    <div className="flex min-w-0 max-w-max shrink-0 items-center gap-2">
+    <div className="flex min-w-0 max-w-max shrink-0 items-start gap-2">
       <span
         className={cn(
           'flex size-8 shrink-0 items-center justify-center rounded-full',
@@ -109,10 +130,17 @@ function HeaderMetric({
         <Icon className={cn('size-3.5', iconClassName)} />
       </span>
       <div className="min-w-0 leading-tight">
-        <p className={cn('text-foreground truncate text-xs font-semibold tabular-nums', valueClassName)}>
-          {value}
-        </p>
-        <p className="text-muted-foreground text-[11px]">{label}</p>
+        {labelFirst ? (
+          <>
+            {caption}
+            {reading}
+          </>
+        ) : (
+          <>
+            {reading}
+            {caption}
+          </>
+        )}
       </div>
     </div>
   );
@@ -120,6 +148,7 @@ function HeaderMetric({
 
 export function ProjectWorkspaceShell({
   project,
+  breadcrumbTail,
   actionsDisabled,
   onToggleActive,
   onEditProject,
@@ -127,6 +156,8 @@ export function ProjectWorkspaceShell({
   children,
 }: {
   project: ProjectDetail;
+  /** e.g. `Plan` or `Production` — shown after the project name in breadcrumbs. */
+  breadcrumbTail?: string;
   actionsDisabled?: boolean;
   onToggleActive: (target: ProjectActionTarget) => void;
   onEditProject: () => void;
@@ -151,6 +182,16 @@ export function ProjectWorkspaceShell({
   const startDay = project.startDate.slice(0, 10);
   const remainingTimeCaption =
     startDay.length === 10 && todayIso < startDay ? 'Until expected start' : 'Remaining time';
+  const isProductionWorkspace = breadcrumbTail === 'Production';
+  const productionStartedLabel = project.actualProductionStartedAt
+    ? formatProjectDateTime(project.actualProductionStartedAt).replace(', ', ' ')
+    : '—';
+  const productionStartVariance = isProductionWorkspace
+    ? describeProductionStartVsPlan(project.startDate, project.actualProductionStartedAt)
+    : null;
+  const showProductionStartVariance =
+    productionStartVariance !== null &&
+    productionStartVariance !== 'Started on planned date';
 
   return (
     <div className="grid w-full min-w-0 max-w-full gap-2 pt-1">
@@ -158,8 +199,12 @@ export function ProjectWorkspaceShell({
         breadcrumbs={[
           { label: 'Dashboard', href: '/admin/dashboard' },
           { label: 'Project Tasks', href: '/admin/project-tasks' },
-          { label: project.name, href: `/admin/project-tasks/${project.id}` },
-          { label: 'Plan' },
+          ...(breadcrumbTail
+            ? [
+                { label: project.name, href: `/admin/project-tasks/${project.id}` },
+                { label: breadcrumbTail },
+              ]
+            : [{ label: project.name }]),
         ]}
         className="mb-0.5"
       />
@@ -213,6 +258,16 @@ export function ProjectWorkspaceShell({
                     {project.name}
                   </h1>
                   <ProjectStatusPill status={project.status} />
+                  {showProductionStartVariance ? (
+                    <span
+                      className={cn(
+                        'text-xs font-semibold tabular-nums',
+                        projectProductionStartVarianceClass,
+                      )}
+                    >
+                      {productionStartVariance}
+                    </span>
+                  ) : null}
                 </div>
                 {description ? (
                   <p className="text-muted-foreground max-w-3xl text-sm leading-relaxed">{description}</p>
@@ -222,23 +277,46 @@ export function ProjectWorkspaceShell({
 
             <div className="bg-muted/20 px-4 py-2.5 sm:px-5">
               <div className="flex flex-wrap items-start justify-start gap-x-6 gap-y-3 sm:gap-x-8 lg:gap-x-10">
-                <HeaderMetric
-                  icon={Calendar}
-                  iconWrapClassName="bg-slate-100"
-                  iconClassName="text-slate-600"
-                  label="Project duration"
-                  value={durationLabel}
-                />
-                <HeaderMetric
-                  icon={PieChart}
-                  iconWrapClassName="bg-emerald-100"
-                  iconClassName="text-emerald-600"
-                  label={remainingTimeCaption}
-                  value={remainingTime?.label ?? '—'}
-                  valueClassName={
-                    remainingTime ? projectDaysLeftToneClass[remainingTime.tone] : undefined
-                  }
-                />
+                {isProductionWorkspace ? (
+                  <>
+                    <HeaderMetric
+                      icon={Calendar}
+                      iconWrapClassName="bg-slate-100"
+                      iconClassName="text-slate-600"
+                      label="Planned date"
+                      value={durationLabel}
+                      labelFirst
+                    />
+                    <HeaderMetric
+                      icon={PlayCircle}
+                      iconWrapClassName="bg-blue-100"
+                      iconClassName="text-blue-600"
+                      label="Production started"
+                      value={productionStartedLabel}
+                      labelFirst
+                    />
+                  </>
+                ) : (
+                  <>
+                    <HeaderMetric
+                      icon={Calendar}
+                      iconWrapClassName="bg-slate-100"
+                      iconClassName="text-slate-600"
+                      label="Project duration"
+                      value={durationLabel}
+                    />
+                    <HeaderMetric
+                      icon={PieChart}
+                      iconWrapClassName="bg-emerald-100"
+                      iconClassName="text-emerald-600"
+                      label={remainingTimeCaption}
+                      value={remainingTime?.label ?? '—'}
+                      valueClassName={
+                        remainingTime ? projectDaysLeftToneClass[remainingTime.tone] : undefined
+                      }
+                    />
+                  </>
+                )}
                 <HeaderMetric
                   icon={Flag}
                   iconWrapClassName={priorityTone.wrap}

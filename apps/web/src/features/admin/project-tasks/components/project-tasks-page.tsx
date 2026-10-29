@@ -130,7 +130,10 @@ export function ProjectTasksPage() {
     deleteTarget,
     setDeleteTarget,
     confirmDelete,
-    toggleActive,
+    statusToggleTarget,
+    setStatusToggleTarget,
+    requestToggleActive,
+    confirmToggleActive,
   } = useProjectListActions(load);
 
   useEffect(() => {
@@ -385,7 +388,7 @@ export function ProjectTasksPage() {
             <ProjectGridView
               items={items}
               actionsDisabled={actionsBusy}
-              onToggleActive={(target) => void toggleActive(target)}
+              onToggleActive={requestToggleActive}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
               onLifecycleChange={() => void load()}
@@ -408,10 +411,10 @@ export function ProjectTasksPage() {
             setPageSize(size);
             setPage(1);
           }}
-          onToggleActive={(target) => void toggleActive(target)}
+          onToggleActive={requestToggleActive}
           onEdit={openEdit}
           onDelete={setDeleteTarget}
-          onToggleActive={requestToggleActive}
+          onClearFilters={clearFilters}
           onRetry={() => void load()}
         />
       ) : (
@@ -450,6 +453,32 @@ export function ProjectTasksPage() {
         }}
         onConfirm={() => void confirmDelete()}
       />
+
+      <AlertDialog
+        open={Boolean(statusToggleTarget)}
+        onOpenChange={(open) => {
+          if (!open) setStatusToggleTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {statusToggleTarget?.status === 'ACTIVE' ? 'Mark inactive?' : 'Activate project?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {statusToggleTarget?.status === 'ACTIVE'
+                ? `“${statusToggleTarget.name}” will be marked inactive.`
+                : `Activate “${statusToggleTarget?.name ?? 'this project'}”?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmToggleActive()}>
+              {statusToggleTarget?.status === 'ACTIVE' ? 'Mark inactive' : 'Activate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
