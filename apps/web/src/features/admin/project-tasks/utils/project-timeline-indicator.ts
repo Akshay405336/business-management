@@ -103,7 +103,7 @@ export const projectTimelineIndicatorClass: Record<ProjectTimelineIndicatorVaria
   neutral: 'border-border bg-muted text-muted-foreground',
 };
 
-export type ProjectCardTimelineTone = 'pre-start' | 'in-flight';
+export type ProjectCardTimelineTone = 'upcoming' | 'on-track' | 'delayed';
 
 export type ProjectCardTimelineIndicator = {
   readonly label: string;
@@ -140,7 +140,7 @@ export function getProjectCardTimelineIndicator(
     if (days < 1) return null;
     return {
       label: days === 1 ? 'Completed in 1 day' : `Completed in ${days} days`,
-      tone: 'in-flight',
+      tone: 'on-track',
     };
   }
 
@@ -149,7 +149,7 @@ export function getProjectCardTimelineIndicator(
     if (projectDay < 1) return null;
     return {
       label: projectDay <= 1 ? 'Day 1 of project' : `Day ${projectDay} of project`,
-      tone: 'in-flight',
+      tone: 'on-track',
     };
   }
 
@@ -160,31 +160,32 @@ export function getProjectCardTimelineIndicator(
   if (todayIso < expectedStart) {
     const daysUntil = calendarDaysBetween(todayIso, expectedStart);
     if (daysUntil <= 0) {
-      return { label: 'Starts today', tone: 'pre-start' };
+      return { label: 'Starts today', tone: 'upcoming' };
     }
     if (daysUntil === 1) {
-      return { label: 'Starts in 1 day', tone: 'pre-start' };
+      return { label: 'Starts in 1 day', tone: 'upcoming' };
     }
-    return { label: `Starts in ${daysUntil} days`, tone: 'pre-start' };
+    return { label: `Starts in ${daysUntil} days`, tone: 'upcoming' };
   }
 
   if (todayIso === expectedStart) {
-    return { label: 'Starts today', tone: 'pre-start' };
+    return { label: 'Starts today', tone: 'upcoming' };
   }
 
   const daysPassed = calendarDaysBetween(expectedStart, todayIso);
   if (daysPassed <= 0) {
-    return { label: 'Starts today', tone: 'pre-start' };
+    return { label: 'Starts today', tone: 'upcoming' };
   }
   if (daysPassed === 1) {
-    return { label: 'Start date passed by 1 day', tone: 'pre-start' };
+    return { label: 'Start date passed by 1 day', tone: 'delayed' };
   }
-  return { label: `Start date passed by ${daysPassed} days`, tone: 'pre-start' };
+  return { label: `Start date passed by ${daysPassed} days`, tone: 'delayed' };
 }
 
 export const projectCardTimelineToneClass: Record<ProjectCardTimelineTone, string> = {
-  'pre-start': 'text-red-600 dark:text-red-400',
-  'in-flight': 'text-green-600 dark:text-green-500',
+  upcoming: 'text-green-600 dark:text-green-500',
+  'on-track': 'text-green-600 dark:text-green-500',
+  delayed: 'text-red-600 dark:text-red-400',
 };
 
 export type ProjectDaysLeftTone = 'neutral' | 'soon' | 'overdue';

@@ -42,7 +42,7 @@ import {
   reorderProjectPhases,
   updateProjectTask,
 } from '../api/project-tasks';
-import type { ProjectTask, ProjectTaskBoardResponse, ProjectTaskStatus } from '../types';
+import type { ProjectTask, ProjectTaskBoardResponse } from '../types';
 import { buildSavePlanPayload } from '../utils/build-save-plan-payload';
 import { reorderBoardPhasesWithSlotDates } from '../utils/reorder-phases-with-slot-dates';
 import { ProjectAddPhaseDialog } from './project-add-phase-dialog';
@@ -135,20 +135,6 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
     }
   };
 
-  const changeTaskStatus = async (taskId: string, status: ProjectTaskStatus) => {
-    if (readOnly) return;
-    const task = tasks.find((row) => row.id === taskId);
-    if (!task) return;
-    try {
-      await run(() =>
-        updateProjectTask(projectId, taskId, { status, labels: [...task.labels] }),
-      );
-      await load();
-    } catch (failure) {
-      toast.error(describeCrmError(failure));
-    }
-  };
-
   const handleSaveTask = async (payload: Parameters<typeof createProjectTask>[1]) => {
     if (readOnly) return;
     if (editingTask) {
@@ -189,7 +175,7 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
       const payload = buildSavePlanPayload(project, board.phases);
       await run(() => saveProjectPlan(projectId, payload));
       toast.success('Plan saved. Project is now Planned.');
-      await load();
+      router.push('/admin/project-tasks');
     } catch (failure) {
       toast.error(describeCrmError(failure));
     }
@@ -373,7 +359,6 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
           renameDisabled={actionsBusy}
           onAddPhase={readOnly ? undefined : () => setAddPhaseOpen(true)}
           onPersistPhaseReorder={readOnly ? undefined : reorderPhasesOnBoard}
-          onTaskStatusChange={readOnly ? undefined : changeTaskStatus}
         />
       </ProjectWorkspaceShell>
 

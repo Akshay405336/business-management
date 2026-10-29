@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CalendarClock, ChevronDown, Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { CalendarClock, Eye, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import type { CSSProperties, PointerEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,12 +16,10 @@ import { formatDateOnly } from '@/features/admin/crm/utils/format';
 import type { LeadPriority } from '@/features/admin/crm/types';
 import { initialsOf } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
-import { PROJECT_TASK_STATUSES } from '../constants';
-import type { ProjectTask, ProjectTaskPriority, ProjectTaskStatus } from '../types';
-import { labelProjectTaskStatus } from '../utils/labels';
+import { isTaskDateOutsidePhase, type TaskPhaseDateBounds } from '@techwin/validation';
+import type { ProjectTask, ProjectTaskPriority } from '../types';
 import { localDateOnlyIso } from '../utils/project-timeline-indicator';
 import { projectTaskCardBackground, projectTaskCardTheme } from '../utils/project-task-card-theme';
-import { projectTaskStatusStyle } from '../utils/project-task-status-style';
 
 function stopCardPointer(event: PointerEvent) {
   event.stopPropagation();
@@ -63,51 +61,6 @@ const PLAN_PRIORITY_PILL: Record<
     color: '#b91c1c',
   },
 };
-
-function PlanTaskStatusMenu({
-  task,
-  disabled,
-  onStatusChange,
-}: {
-  task: ProjectTask;
-  disabled?: boolean;
-  onStatusChange?: (status: ProjectTaskStatus) => void;
-}) {
-  const statusStyle = projectTaskStatusStyle(task.status);
-  return (
-    <div onPointerDown={stopCardPointer} onClick={(event) => event.stopPropagation()}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild disabled={disabled || !onStatusChange}>
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-0.5 rounded-full border bg-transparent px-2.5 py-1 text-[11px] font-semibold hover:bg-black/[0.04] disabled:opacity-60"
-            style={{ color: statusStyle.color, borderColor: statusStyle.borderColor }}
-            aria-label={`Task status: ${labelProjectTaskStatus(task.status)}`}
-          >
-            {labelProjectTaskStatus(task.status)}
-            <ChevronDown className="size-3 shrink-0 opacity-80" aria-hidden="true" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[10rem]">
-          {PROJECT_TASK_STATUSES.map((status) => {
-            const optionStyle = projectTaskStatusStyle(status);
-            return (
-            <DropdownMenuItem
-              key={status}
-              disabled={status === task.status}
-              className="font-medium"
-              style={{ color: optionStyle.color }}
-              onSelect={() => onStatusChange?.(status)}
-            >
-              {labelProjectTaskStatus(status)}
-            </DropdownMenuItem>
-            );
-          })}
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
-}
 
 function PlanTaskCardMenu({
   onView,
@@ -154,21 +107,20 @@ function PlanTaskCardMenu({
 export function ProjectTaskKanbanCard({
   task,
   variant = 'default',
+  phaseBounds,
   className,
   onView,
   onEdit,
   onDelete,
-  onStatusChange,
-  statusChangeDisabled,
 }: {
   task: ProjectTask;
   variant?: 'default' | 'plan';
+  /** When set (plan board), dates outside the phase window are highlighted. */
+  phaseBounds?: TaskPhaseDateBounds;
   className?: string;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onStatusChange?: (status: ProjectTaskStatus) => void;
-  statusChangeDisabled?: boolean;
 }) {
   const overdue = isTaskOverdue(task);
   const priority = task.priority as LeadPriority;
@@ -177,6 +129,12 @@ export function ProjectTaskKanbanCard({
     const theme = projectTaskCardTheme(task.id);
     const labels = task.labels.length > 0 ? task.labels : [];
     const hasDates = Boolean(task.startDate || task.dueDate);
+    const datesOutsidePhase =
+      phaseBounds &&
+      isTaskDateOutsidePhase(
+        { startDate: task.startDate, dueDate: task.dueDate },
+        phaseBounds,
+      );
 
     const cardBackground = projectTaskCardBackground(task.id);
     return (
@@ -235,10 +193,28 @@ export function ProjectTaskKanbanCard({
           {task.title}
         </h3>
 
+        {task.description?.trim() ? (
+          <p
+            className="line-clamp-3 max-w-[70%] text-xs font-normal leading-snug"
+            style={{ color: theme.ink, opacity: 0.82 }}
+            title={task.description.trim()}
+          >
+            {task.description.trim()}
+          </p>
+        ) : null}
+
         {hasDates ? (
           <p
-            className="flex min-w-0 items-center gap-1.5 text-xs font-normal tabular-nums"
-            style={{ color: theme.ink }}
+            className={cn(
+              'flex min-w-0 items-center gap-1.5 text-xs font-normal tabular-nums',
+              datesOutsidePhase && 'rounded-md bg-amber-500/15 px-1 py-0.5',
+            )}
+            style={{ color: datesOutsidePhase ? '#b45309' : theme.ink }}
+            title={
+              datesOutsidePhase && phaseBounds
+                ? `Outside phase (${formatPlanCardDate(phaseBounds.phaseStartDate)} – ${formatPlanCardDate(phaseBounds.phaseExpectedEndDate)}). Edit task dates.`
+                : undefined
+            }
           >
             <CalendarClock className="size-3.5 shrink-0 opacity-90" aria-hidden="true" />
             <span className="truncate">
@@ -253,24 +229,17 @@ export function ProjectTaskKanbanCard({
           </p>
         ) : null}
 
-        <div className="mt-auto flex items-center justify-between gap-2 pt-0.5">
-          <div className="flex min-w-0 items-center">
-            {task.assignee ? (
-              <span
-                className="inline-flex size-8 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                style={{ backgroundColor: theme.accent }}
-                title={task.assignee.displayName}
-              >
-                {initialsOf(task.assignee.displayName)}
-              </span>
-            ) : null}
+        {task.assignee ? (
+          <div className="mt-auto flex items-center pt-0.5">
+            <span
+              className="inline-flex size-8 items-center justify-center rounded-full text-[11px] font-bold text-white"
+              style={{ backgroundColor: theme.accent }}
+              title={task.assignee.displayName}
+            >
+              {initialsOf(task.assignee.displayName)}
+            </span>
           </div>
-          <PlanTaskStatusMenu
-            task={task}
-            disabled={statusChangeDisabled}
-            onStatusChange={onStatusChange}
-          />
-        </div>
+        ) : null}
       </article>
     );
   }
@@ -350,21 +319,19 @@ export function ProjectTaskKanbanCard({
 export function SortableProjectTaskKanbanCard({
   task,
   variant = 'default',
+  phaseBounds,
   disabled,
   onView,
   onEdit,
   onDelete,
-  onStatusChange,
-  statusChangeDisabled,
 }: {
   task: ProjectTask;
   variant?: 'default' | 'plan';
+  phaseBounds?: TaskPhaseDateBounds;
   disabled?: boolean;
   onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onStatusChange?: (status: ProjectTaskStatus) => void;
-  statusChangeDisabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: task.id,
@@ -391,6 +358,7 @@ export function SortableProjectTaskKanbanCard({
       <ProjectTaskKanbanCard
         task={task}
         variant={variant}
+        phaseBounds={phaseBounds}
         className={cn(
           'cursor-grab active:cursor-grabbing',
           isDragging && 'opacity-40 shadow-none',
@@ -399,8 +367,6 @@ export function SortableProjectTaskKanbanCard({
         onView={onView}
         onEdit={onEdit}
         onDelete={onDelete}
-        onStatusChange={onStatusChange}
-        statusChangeDisabled={statusChangeDisabled}
       />
     </div>
   );

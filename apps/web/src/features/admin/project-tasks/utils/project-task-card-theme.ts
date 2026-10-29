@@ -46,3 +46,9 @@ export function projectTaskCardBackground(taskId: string): string {
   const theme = projectTaskCardTheme(taskId);
   return `linear-gradient(180deg, ${theme.top} 0%, ${theme.bottom} 100%)`;
 }
+
+/** Light tinted circle for client initials on project summary cards. */
+export function projectClientAvatarColors(seed: string): { backgroundColor: string; color: string } {
+  const theme = projectTaskCardTheme(seed);
+  return { backgroundColor: theme.top, color: theme.ink };
+}

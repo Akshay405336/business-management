@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MONEY_PARSE_ERROR, normalizeMoneyInput } from './money.js';
 import { collectProjectPhaseScheduleIssues } from './project-phase-schedule.js';
+import { collectTaskPhaseDateFieldErrors } from './project-task-phase-dates.js';
 import { projectTaskPrioritySchema } from './project-task-priority.schema.js';
 
 const moneyString = z.union([
@@ -277,9 +278,35 @@ export const projectPlanTaskInputSchema = z
     }
   });
 
-export const projectPlanPhaseInputSchema = projectPhaseInputObjectSchema.extend({
-  tasks: z.array(projectPlanTaskInputSchema),
-});
+export const projectPlanPhaseInputSchema = projectPhaseInputObjectSchema
+  .extend({
+    tasks: z.array(projectPlanTaskInputSchema),
+  })
+  .check((ctx) => {
+    const { startDate, expectedEndDate, tasks } = ctx.value;
+    tasks.forEach((task, taskIndex) => {
+      const fieldErrors = collectTaskPhaseDateFieldErrors(task, {
+        phaseStartDate: startDate,
+        phaseExpectedEndDate: expectedEndDate,
+      });
+      if (fieldErrors.startDate) {
+        ctx.issues.push({
+          code: 'custom',
+          message: fieldErrors.startDate,
+          path: ['tasks', taskIndex, 'startDate'],
+          input: ctx.value,
+        });
+      }
+      if (fieldErrors.dueDate) {
+        ctx.issues.push({
+          code: 'custom',
+          message: fieldErrors.dueDate,
+          path: ['tasks', taskIndex, 'dueDate'],
+          input: ctx.value,
+        });
+      }
+    });
+  });
 
 export const saveProjectPlanRequestSchema = z
   .object({

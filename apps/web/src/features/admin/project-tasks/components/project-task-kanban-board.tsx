@@ -37,7 +37,7 @@ import {
 } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/shared/lib/utils';
-import type { ProjectTask, ProjectTaskBoardPhase, ProjectTaskStatus } from '../types';
+import type { ProjectTask, ProjectTaskBoardPhase } from '../types';
 import {
   buildKanbanTaskItems,
   kanbanBeforeTaskId,
@@ -331,7 +331,6 @@ export function ProjectTaskKanbanBoard({
   renameDisabled,
   onAddPhase,
   onPersistPhaseReorder,
-  onTaskStatusChange,
 }: {
   phases: readonly ProjectTaskBoardPhase[];
   tasks: readonly ProjectTask[];
@@ -354,7 +353,6 @@ export function ProjectTaskKanbanBoard({
   renameDisabled?: boolean;
   onAddPhase?: () => void;
   onPersistPhaseReorder?: (orderedPhaseIds: readonly string[]) => Promise<void>;
-  onTaskStatusChange?: (taskId: string, status: ProjectTaskStatus) => void | Promise<void>;
 }) {
   const dndOff = Boolean(disabled || dragDisabled);
   const enablePlanColumnDrag =
@@ -652,16 +650,18 @@ export function ProjectTaskKanbanBoard({
                         key={taskId}
                         task={task}
                         variant={cardVariant}
+                        phaseBounds={
+                          cardVariant === 'plan'
+                            ? {
+                                phaseStartDate: columnPhase.startDate,
+                                phaseExpectedEndDate: columnPhase.expectedEndDate,
+                              }
+                            : undefined
+                        }
                         disabled={dndOff || dragKind === 'phase'}
                         onView={() => onView(taskId)}
                         onEdit={() => onEdit(taskId)}
                         onDelete={() => onDelete(taskId)}
-                        onStatusChange={
-                          cardVariant === 'plan' && onTaskStatusChange
-                            ? (status) => void onTaskStatusChange(taskId, status)
-                            : undefined
-                        }
-                        statusChangeDisabled={disabled || dragDisabled}
                       />
                     );
                   })

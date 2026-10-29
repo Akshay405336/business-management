@@ -1,3 +1,4 @@
+import { collectTaskPhaseDateFieldErrors } from '@techwin/validation';
 import { Inject, Injectable } from '@nestjs/common';
 import { Prisma } from '../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../infrastructure/database/prisma.service.js';
@@ -139,13 +140,28 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     organizationId: string,
     projectId: string,
     phaseId: string,
-  ) {
+  ): Promise<{ startDate: string; expectedEndDate: string }> {
     const phase = await this.prisma.projectPhase.findFirst({
       where: { id: phaseId, organizationId, projectId },
-      select: { id: true },
+      select: { id: true, startDate: true, expectedEndDate: true },
     });
     if (!phase) throw new ProjectValidationError('Selected phase is not valid for this project.');
-    return phase;
+    return {
+      startDate: dateOnly(phase.startDate),
+      expectedEndDate: dateOnly(phase.expectedEndDate),
+    };
+  }
+
+  private assertTaskDatesWithinPhase(
+    taskDates: { startDate?: string | null; dueDate?: string | null },
+    phase: { startDate: string; expectedEndDate: string },
+  ): void {
+    const errors = collectTaskPhaseDateFieldErrors(taskDates, {
+      phaseStartDate: phase.startDate,
+      phaseExpectedEndDate: phase.expectedEndDate,
+    });
+    const message = errors.startDate ?? errors.dueDate;
+    if (message) throw new ProjectValidationError(message);
   }
 
   private async assertAssignee(organizationId: string, assigneeAdminId: string | null | undefined) {
@@ -310,7 +326,11 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     const project = await this.assertProject(organizationId, projectId);
     this.assertCanMutateTasks(project.executionLifecycle);
     ProjectExecutionLifecyclePolicy.assertCanMutatePlanBaseline(project.executionLifecycle);
-    await this.assertPhaseInProject(organizationId, projectId, input.phaseId);
+    const phase = await this.assertPhaseInProject(organizationId, projectId, input.phaseId);
+    this.assertTaskDatesWithinPhase(
+      { startDate: input.startDate, dueDate: input.dueDate },
+      phase,
+    );
     await this.assertAssignee(organizationId, input.assigneeAdminId);
 
     const sortOrder = await this.nextSortOrder(organizationId, input.phaseId);
@@ -355,14 +375,25 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
       ProjectExecutionLifecyclePolicy.assertCanSavePlan(project.executionLifecycle);
     }
 
-    if (input.phaseId) {
-      await this.assertPhaseInProject(organizationId, projectId, input.phaseId);
-    }
+    const nextPhaseId = input.phaseId ?? existing.phaseId;
+    const phase = await this.assertPhaseInProject(organizationId, projectId, nextPhaseId);
     if (input.assigneeAdminId !== undefined) {
       await this.assertAssignee(organizationId, input.assigneeAdminId);
     }
 
-    const nextPhaseId = input.phaseId ?? existing.phaseId;
+    const effectiveStartDate =
+      input.startDate !== undefined ? input.startDate : existing.startDate;
+    const effectiveDueDate = input.dueDate !== undefined ? input.dueDate : existing.dueDate;
+    if (
+      input.startDate !== undefined ||
+      input.dueDate !== undefined ||
+      input.phaseId !== undefined
+    ) {
+      this.assertTaskDatesWithinPhase(
+        { startDate: effectiveStartDate, dueDate: effectiveDueDate },
+        phase,
+      );
+    }
     const phaseChanged = nextPhaseId !== existing.phaseId;
     const nextStatus = input.status ?? existing.status;
     const now = new Date();

@@ -32,11 +32,11 @@ import { ProjectPlanLockNotice } from '@/features/admin/projects/components/proj
 import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import { ProjectCardActionsMenu } from '@/features/admin/projects/components/project-card-actions-menu';
 import type { ProjectActionTarget } from '@/features/admin/projects/hooks/use-project-list-actions';
-import { ProjectProgressBar } from '@/features/admin/projects/components/project-progress-bar';
 import { initialsOf } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import type { ProjectTaskSummaryItem } from '../types';
 import { describeScheduleVarianceDays, projectCompletionVarianceDays } from '../utils/execution-schedule';
+import { projectClientAvatarColors } from '../utils/project-task-card-theme';
 import {
   getProjectCardTimelineIndicator,
   getProjectDaysLeftUntilEnd,
@@ -100,6 +100,9 @@ export function ProjectTaskSummaryCard({
   const priority = project.priority as LeadPriority;
   const clientName = project.clientName.trim() || '—';
   const clientPhone = project.clientPhone?.trim() || '—';
+  const clientAvatarStyle = projectClientAvatarColors(
+    clientName === '—' ? project.name : clientName,
+  );
   /** Not-yet-planned projects: name, client, phone, dates only (no phases/progress). */
   const simplifiedBody = lifecycle === 'NOT_PLANNED';
   const daysLeftUntilEnd = getProjectDaysLeftUntilEnd(project.expectedEndDate);
@@ -150,7 +153,8 @@ export function ProjectTaskSummaryCard({
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <span
-                  className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  style={clientAvatarStyle}
                   aria-hidden="true"
                 >
                   {initialsOf(clientName === '—' ? project.name : clientName)}
@@ -183,15 +187,16 @@ export function ProjectTaskSummaryCard({
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
                 <span
-                  className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  style={clientAvatarStyle}
                   aria-hidden="true"
                 >
                   {initialsOf(clientName === '—' ? project.name : clientName)}
                 </span>
                 <span className="text-muted-foreground truncate text-xs font-medium">{clientName}</span>
               </div>
-              <div className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs">
-                <Calendar className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+              <div className="text-foreground flex shrink-0 items-center gap-1.5 text-xs font-medium">
+                <Calendar className="size-3.5 shrink-0 opacity-90" aria-hidden="true" />
                 <span className="whitespace-nowrap tabular-nums">
                   {formatDateOnly(project.startDate)} – {formatDateOnly(project.expectedEndDate)}
                 </span>
@@ -203,28 +208,38 @@ export function ProjectTaskSummaryCard({
                 {project.phaseCount} {project.phaseCount === 1 ? 'phase' : 'phases'}
               </span>
               <span className="font-medium tabular-nums">
-                {project.completedTaskCount}/{project.taskCount} tasks done
+                {project.taskCount} {project.taskCount === 1 ? 'task' : 'tasks'}
               </span>
             </div>
 
-            <ProjectProgressBar percent={project.progressPercent} />
-
-            {timelineIndicator || completionVariance !== null ? (
-              <p className="text-foreground m-0 flex min-w-0 flex-wrap items-baseline gap-x-1 gap-y-0 text-xs leading-snug">
-                {timelineIndicator ? (
-                  <span
-                    className={cn('font-medium', projectCardTimelineToneClass[timelineIndicator.tone])}
-                  >
-                    {timelineIndicator.label}
-                  </span>
-                ) : null}
-                {completionVariance !== null ? (
-                  <span className="text-muted-foreground font-normal">
-                    {describeScheduleVarianceDays(completionVariance)}
-                  </span>
-                ) : null}
-              </p>
-            ) : null}
+            <div className="mt-auto flex items-end justify-between gap-2">
+              {timelineIndicator || completionVariance !== null ? (
+                <p className="text-foreground m-0 flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1 gap-y-0 text-xs leading-snug">
+                  {timelineIndicator ? (
+                    <span
+                      className={cn(
+                        'font-medium',
+                        projectCardTimelineToneClass[timelineIndicator.tone],
+                      )}
+                    >
+                      {timelineIndicator.label}
+                    </span>
+                  ) : null}
+                  {completionVariance !== null ? (
+                    <span className="text-muted-foreground font-normal">
+                      {describeScheduleVarianceDays(completionVariance)}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <span className="min-w-0 flex-1" aria-hidden="true" />
+              )}
+              {lifecycle === 'PLANNED' ? (
+                <span className="shrink-0 rounded-full border border-black bg-white px-2.5 py-1 text-[10px] font-semibold text-neutral-900">
+                  Planned
+                </span>
+              ) : null}
+            </div>
           </>
         )}
 
@@ -236,7 +251,10 @@ export function ProjectTaskSummaryCard({
           ) : null}
           {lifecycle === 'PLANNED' ? (
             <>
-              <Button asChild variant="default" className="h-9 w-full shrink-0">
+              <Button
+                asChild
+                className="h-9 w-full shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+              >
                 <Link href={planHref}>Edit Plan</Link>
               </Button>
               <Button

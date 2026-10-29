@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  collectTaskPhaseDateFieldErrors,
   createProjectTaskRequestSchema,
   updateProjectTaskRequestSchema,
   type UpdateProjectTaskRequest,
@@ -31,6 +32,7 @@ import {
 import { CrmFieldLabel, CrmInlineFieldError } from '@/features/admin/crm/components/crm-feedback';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
+import { formatDateOnly } from '@/features/admin/crm/utils/format';
 import { EmployeeAssigneeSelect } from '@/features/admin/employees/components/employee-assignee-select';
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { zodIssuesToFieldMap } from '@/shared/form/zod-field-error';
@@ -58,17 +60,20 @@ type FormState = {
   labelsText: string;
 };
 
-const emptyForm = (phaseId: string): FormState => ({
-  title: '',
-  phaseId,
-  priority: 'MEDIUM',
-  status: 'TODO',
-  description: '',
-  assigneeAdminId: '',
-  startDate: '',
-  dueDate: '',
-  labelsText: '',
-});
+const emptyForm = (phaseId: string, phases: readonly ProjectTaskBoardPhase[]): FormState => {
+  const phase = phases.find((entry) => entry.id === phaseId);
+  return {
+    title: '',
+    phaseId,
+    priority: 'MEDIUM',
+    status: 'TODO',
+    description: '',
+    assigneeAdminId: '',
+    startDate: phase?.startDate ?? '',
+    dueDate: phase?.expectedEndDate ?? '',
+    labelsText: '',
+  };
+};
 
 function taskToForm(task: ProjectTask): FormState {
   return {
@@ -129,7 +134,7 @@ export function ProjectTaskFormDialog({
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
   const [form, setForm] = useState<FormState>(() =>
-    emptyForm(defaultPhaseId ?? phases[0]?.id ?? ''),
+    emptyForm(defaultPhaseId ?? phases[0]?.id ?? '', phases),
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -138,10 +143,11 @@ export function ProjectTaskFormDialog({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset form when dialog opens
     setFieldErrors({});
     if (editingTask) setForm(taskToForm(editingTask));
-    else setForm(emptyForm(defaultPhaseId ?? phases[0]?.id ?? ''));
+    else setForm(emptyForm(defaultPhaseId ?? phases[0]?.id ?? '', phases));
   }, [open, editingTask, defaultPhaseId, phases]);
 
   const executionOnly = mode === 'execution';
+  const planOnly = mode === 'plan';
   const viewOnly = mode === 'readonly';
   const title = viewOnly
     ? 'Task details'
@@ -169,6 +175,23 @@ export function ProjectTaskFormDialog({
       focusFirstInvalidField();
       return;
     }
+
+    const selectedPhase = phases.find((phase) => phase.id === form.phaseId);
+    if (selectedPhase && !executionOnly) {
+      const phaseDateErrors = collectTaskPhaseDateFieldErrors(
+        { startDate: form.startDate, dueDate: form.dueDate },
+        {
+          phaseStartDate: selectedPhase.startDate,
+          phaseExpectedEndDate: selectedPhase.expectedEndDate,
+        },
+      );
+      if (phaseDateErrors.startDate || phaseDateErrors.dueDate) {
+        setFieldErrors(phaseDateErrors);
+        focusFirstInvalidField();
+        return;
+      }
+    }
+
     setFieldErrors({});
     try {
       await run(() => onSubmit(parsed.data as ReturnType<typeof formToPayload>));
@@ -179,6 +202,13 @@ export function ProjectTaskFormDialog({
   };
 
   const phaseOptions = useMemo(() => phases.map((p) => ({ id: p.id, name: p.name })), [phases]);
+  const selectedPhase = useMemo(
+    () => phases.find((phase) => phase.id === form.phaseId),
+    [form.phaseId, phases],
+  );
+  const phaseDateHint = selectedPhase
+    ? `Task dates must stay within ${formatDateOnly(selectedPhase.startDate)} – ${formatDateOnly(selectedPhase.expectedEndDate)}.`
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -191,7 +221,7 @@ export function ProjectTaskFormDialog({
             <p className="text-muted-foreground pt-1 text-sm">
               {executionOnly
                 ? 'Update status and assignee during production. Planned task details stay locked.'
-                : 'Tasks belong to a project phase. Dates and assignee are optional.'}
+                : 'Tasks belong to a project phase. Start and due dates must fall within that phase’s schedule.'}
             </p>
           ) : null}
         </DialogHeader>
@@ -246,7 +276,12 @@ export function ProjectTaskFormDialog({
               <CrmInlineFieldError message={fieldErrors.phaseId} reserveSpace={false} />
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+            <div
+              className={cn(
+                'grid gap-2',
+                !planOnly && 'sm:grid-cols-2 sm:gap-3',
+              )}
+            >
               <div className="grid gap-2">
                 <CrmFieldLabel htmlFor="task-priority" required>
                   Priority
@@ -270,29 +305,31 @@ export function ProjectTaskFormDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
-                <CrmFieldLabel htmlFor="task-status" required>
-                  Status
-                </CrmFieldLabel>
-                <Select
-                  value={form.status}
-                  disabled={viewOnly || pending}
-                  onValueChange={(value) =>
-                    setForm((c) => ({ ...c, status: value as FormState['status'] }))
-                  }
-                >
-                  <SelectTrigger id="task-status" className={SELECT_TRIGGER_CLASS}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROJECT_TASK_STATUSES.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {labelProjectTaskStatus(s)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!planOnly ? (
+                <div className="grid gap-2">
+                  <CrmFieldLabel htmlFor="task-status" required>
+                    Status
+                  </CrmFieldLabel>
+                  <Select
+                    value={form.status}
+                    disabled={viewOnly || pending}
+                    onValueChange={(value) =>
+                      setForm((c) => ({ ...c, status: value as FormState['status'] }))
+                    }
+                  >
+                    <SelectTrigger id="task-status" className={SELECT_TRIGGER_CLASS}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROJECT_TASK_STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {labelProjectTaskStatus(s)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
             </div>
 
             <div className="grid gap-2">
@@ -309,42 +346,51 @@ export function ProjectTaskFormDialog({
               <CrmInlineFieldError message={fieldErrors.assigneeAdminId} reserveSpace={false} />
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
-              <div className="grid gap-2">
-                <CrmFieldLabel htmlFor="task-start" optional>
-                  Start date
-                </CrmFieldLabel>
-                <Input
-                  id="task-start"
-                  type="date"
-                  value={form.startDate}
-                  disabled={executionOnly || viewOnly || pending}
-                  aria-invalid={Boolean(fieldErrors.startDate)}
-                  className={cn(
-                    CRM_PIPELINE_FORM_FIELD_CLASS,
-                    formControlStateClass(fieldErrors.startDate ? 'invalid' : 'neutral'),
-                  )}
-                  onChange={(e) => setForm((c) => ({ ...c, startDate: e.target.value }))}
-                />
-                <CrmInlineFieldError message={fieldErrors.startDate} reserveSpace={false} />
-              </div>
-              <div className="grid gap-2">
-                <CrmFieldLabel htmlFor="task-due" optional>
-                  Due date
-                </CrmFieldLabel>
-                <Input
-                  id="task-due"
-                  type="date"
-                  value={form.dueDate}
-                  disabled={executionOnly || viewOnly || pending}
-                  aria-invalid={Boolean(fieldErrors.dueDate)}
-                  className={cn(
-                    CRM_PIPELINE_FORM_FIELD_CLASS,
-                    formControlStateClass(fieldErrors.dueDate ? 'invalid' : 'neutral'),
-                  )}
-                  onChange={(e) => setForm((c) => ({ ...c, dueDate: e.target.value }))}
-                />
-                <CrmInlineFieldError message={fieldErrors.dueDate} reserveSpace={false} />
+            <div className="grid gap-2">
+              {phaseDateHint && !executionOnly && !viewOnly ? (
+                <p className="text-muted-foreground text-xs leading-snug">{phaseDateHint}</p>
+              ) : null}
+              <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+                <div className="grid gap-2">
+                  <CrmFieldLabel htmlFor="task-start" optional>
+                    Start date
+                  </CrmFieldLabel>
+                  <Input
+                    id="task-start"
+                    type="date"
+                    value={form.startDate}
+                    min={selectedPhase?.startDate}
+                    max={selectedPhase?.expectedEndDate}
+                    disabled={executionOnly || viewOnly || pending}
+                    aria-invalid={Boolean(fieldErrors.startDate)}
+                    className={cn(
+                      CRM_PIPELINE_FORM_FIELD_CLASS,
+                      formControlStateClass(fieldErrors.startDate ? 'invalid' : 'neutral'),
+                    )}
+                    onChange={(e) => setForm((c) => ({ ...c, startDate: e.target.value }))}
+                  />
+                  <CrmInlineFieldError message={fieldErrors.startDate} reserveSpace={false} />
+                </div>
+                <div className="grid gap-2">
+                  <CrmFieldLabel htmlFor="task-due" optional>
+                    Due date
+                  </CrmFieldLabel>
+                  <Input
+                    id="task-due"
+                    type="date"
+                    value={form.dueDate}
+                    min={selectedPhase?.startDate}
+                    max={selectedPhase?.expectedEndDate}
+                    disabled={executionOnly || viewOnly || pending}
+                    aria-invalid={Boolean(fieldErrors.dueDate)}
+                    className={cn(
+                      CRM_PIPELINE_FORM_FIELD_CLASS,
+                      formControlStateClass(fieldErrors.dueDate ? 'invalid' : 'neutral'),
+                    )}
+                    onChange={(e) => setForm((c) => ({ ...c, dueDate: e.target.value }))}
+                  />
+                  <CrmInlineFieldError message={fieldErrors.dueDate} reserveSpace={false} />
+                </div>
               </div>
             </div>
 
