@@ -50,6 +50,7 @@ export interface ProjectTaskSummaryRecord {
   readonly name: string;
   readonly clientId: string;
   readonly clientName: string;
+  readonly clientPhone: string;
   readonly companyName: string;
   readonly priority: import('../project-types.js').ProjectPriority;
   readonly status: import('../project-types.js').ProjectStatus;

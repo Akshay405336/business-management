@@ -118,7 +118,6 @@ export function formToCreatePayload(form: ProjectFormState) {
     proposalId: form.proposalId.trim() ? form.proposalId : null,
     acceptedCommercialValue: form.acceptedCommercialValue.trim() || undefined,
     scopeAndRequirements: form.scopeAndRequirements.trim() || undefined,
-    phases: form.phases.map(phaseRowToPayload),
   };
 }
 

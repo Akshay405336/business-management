@@ -66,6 +66,7 @@ export interface ProjectTaskSummaryItem {
   readonly name: string;
   readonly clientId: string;
   readonly clientName: string;
+  readonly clientPhone: string;
   readonly companyName: string;
   readonly priority: ProjectPriority;
   readonly status: ProjectStatus;

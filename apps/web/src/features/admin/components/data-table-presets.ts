@@ -93,15 +93,31 @@ export const CRM_PROPOSALS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = 
   { variant: 'actions', headClassName: 'w-[7.5rem] text-right' },
 ];
 
+/** Width classes for the CRM projects listing table (`table-fixed`). */
+export const CRM_PROJECTS_TABLE_COLUMN_CLASS = {
+  project: 'w-[18%] min-w-[9rem]',
+  client: 'w-[16%] min-w-[8rem]',
+  phases: 'w-[9%] min-w-[5rem]',
+  priority: 'w-[9%] min-w-[5.5rem]',
+  progress: 'w-[14%] min-w-[7rem]',
+  startDate: 'w-[11%] min-w-[6rem]',
+  status: 'w-[10%] min-w-[5.75rem]',
+  actions: 'w-[13%] min-w-[10rem]',
+} as const;
+
 export const CRM_PROJECTS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
-  { variant: 'textWide' },
-  { variant: 'text' },
-  { variant: 'badge' },
-  { variant: 'badge' },
-  { variant: 'text' },
-  { variant: 'text' },
-  { variant: 'badge' },
-  { variant: 'actions', headClassName: 'w-[11rem] min-w-[11rem] text-right' },
+  { variant: 'textWide', className: CRM_PROJECTS_TABLE_COLUMN_CLASS.project },
+  { variant: 'text', className: CRM_PROJECTS_TABLE_COLUMN_CLASS.client },
+  { variant: 'badge', className: CRM_PROJECTS_TABLE_COLUMN_CLASS.phases },
+  { variant: 'badge', className: CRM_PROJECTS_TABLE_COLUMN_CLASS.priority },
+  { variant: 'text', className: CRM_PROJECTS_TABLE_COLUMN_CLASS.progress },
+  { variant: 'text', className: CRM_PROJECTS_TABLE_COLUMN_CLASS.startDate },
+  { variant: 'badge', className: CRM_PROJECTS_TABLE_COLUMN_CLASS.status },
+  {
+    variant: 'actions',
+    className: CRM_PROJECTS_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${CRM_PROJECTS_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
 ];
 
 export const CRM_PACKAGES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [

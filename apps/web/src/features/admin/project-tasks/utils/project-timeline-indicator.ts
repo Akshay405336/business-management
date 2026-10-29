@@ -186,3 +186,43 @@ export const projectCardTimelineToneClass: Record<ProjectCardTimelineTone, strin
   'pre-start': 'text-red-600 dark:text-red-400',
   'in-flight': 'text-green-600 dark:text-green-500',
 };
+
+export type ProjectDaysLeftTone = 'neutral' | 'soon' | 'overdue';
+
+/** Days from today until expected end (for date row on cards). */
+export function getProjectDaysLeftUntilEnd(
+  expectedEndDate: string,
+  todayIso: string = localDateOnlyIso(),
+): { readonly label: string; readonly tone: ProjectDaysLeftTone } | null {
+  const end = expectedEndDate.slice(0, 10);
+  if (!isValidDateOnly(end)) return null;
+
+  if (todayIso > end) {
+    const overdue = calendarDaysBetween(end, todayIso);
+    if (overdue <= 0) {
+      return { label: 'Ended today', tone: 'overdue' };
+    }
+    if (overdue === 1) {
+      return { label: '1 day overdue', tone: 'overdue' };
+    }
+    return { label: `${overdue} days overdue`, tone: 'overdue' };
+  }
+
+  const left = calendarDaysBetween(todayIso, end);
+  if (left <= 0) {
+    return { label: 'Ends today', tone: 'soon' };
+  }
+  if (left === 1) {
+    return { label: '1 day left', tone: 'soon' };
+  }
+  if (left <= 7) {
+    return { label: `${left} days left`, tone: 'soon' };
+  }
+  return { label: `${left} days left`, tone: 'neutral' };
+}
+
+export const projectDaysLeftToneClass: Record<ProjectDaysLeftTone, string> = {
+  neutral: 'text-green-800 dark:text-green-600',
+  soon: 'text-green-800 dark:text-green-600',
+  overdue: 'text-red-600 dark:text-red-400',
+};

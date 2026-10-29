@@ -42,6 +42,7 @@ export const projectTaskSummaryListResponseSchema = z.object({
       name: z.string(),
       clientId: z.uuid(),
       clientName: z.string(),
+      clientPhone: z.string(),
       companyName: z.string(),
       priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']),
       status: z.enum(['ACTIVE', 'INACTIVE', 'ON_HOLD', 'COMPLETED', 'CANCELLED']),

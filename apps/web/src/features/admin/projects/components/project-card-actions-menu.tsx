@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreVertical, Pencil, Power, Trash2 } from 'lucide-react';
+import { MoreHorizontal, MoreVertical, Pencil, Power, Trash2 } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/shared/lib/utils';
 import type { ProjectActionTarget } from '../hooks/use-project-list-actions';
 
 function stopMenuPointer(event: PointerEvent) {
@@ -20,6 +21,7 @@ export function ProjectCardActionsMenu({
   project,
   disabled,
   editDisabled,
+  variant = 'default',
   onToggleActive,
   onEdit,
   onDelete,
@@ -27,25 +29,37 @@ export function ProjectCardActionsMenu({
   project: ProjectActionTarget;
   disabled?: boolean;
   editDisabled?: boolean;
+  variant?: 'default' | 'kanban';
   onToggleActive: (project: ProjectActionTarget) => void;
   onEdit: (id: string) => void;
   onDelete: (project: ProjectActionTarget) => void;
 }) {
   const isActive = project.status === 'ACTIVE';
 
+  const MenuIcon = variant === 'kanban' ? MoreHorizontal : MoreVertical;
+
   return (
-    <div onPointerDown={stopMenuPointer} onClick={(event) => event.stopPropagation()}>
+    <div
+      className={cn(variant === 'kanban' && 'relative z-[2] flex shrink-0 items-center pr-1.5')}
+      onPointerDown={stopMenuPointer}
+      onClick={(event) => event.stopPropagation()}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="size-7 shrink-0"
+            className={cn(
+              'size-7 shrink-0',
+              variant === 'kanban' &&
+                'text-muted-foreground hover:text-foreground rounded-md hover:bg-black/5',
+            )}
             disabled={disabled}
             aria-label={`Actions for ${project.name}`}
+            title={variant === 'kanban' ? 'Project actions' : undefined}
           >
-            <MoreVertical className="size-4" aria-hidden="true" />
+            <MenuIcon className="size-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[10rem]">

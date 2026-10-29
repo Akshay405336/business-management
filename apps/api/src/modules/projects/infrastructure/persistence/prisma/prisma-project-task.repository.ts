@@ -212,6 +212,7 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         name: row.name,
         clientId: row.clientId,
         clientName: row.clientName,
+        clientPhone: row.clientPhone,
         companyName: row.companyName,
         priority: row.priority,
         status: row.status,

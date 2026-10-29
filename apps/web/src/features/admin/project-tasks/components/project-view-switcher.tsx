@@ -44,11 +44,10 @@ export function ProjectViewSwitcher({
             title={label}
             variant={active ? 'secondary' : 'ghost'}
             size="sm"
-            className={cn('h-[calc(100%-0px)] px-2.5 text-xs', active && 'shadow-xs')}
+            className={cn('size-8 px-0', active && 'shadow-xs')}
             onClick={() => onChange(id)}
           >
-            <Icon className="size-3.5 shrink-0" aria-hidden="true" />
-            <span className="hidden sm:inline">{label.replace(' view', '').replace(' chart', '')}</span>
+            <Icon className="size-4 shrink-0" aria-hidden="true" />
             <span className="sr-only">{label}</span>
           </Button>
         );
