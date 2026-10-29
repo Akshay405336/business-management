@@ -6,6 +6,7 @@ import {
   Calendar,
   CalendarClock,
   ChevronDown,
+  Play,
   Eye,
   MoreHorizontal,
   MoreVertical,
@@ -31,6 +32,10 @@ import {
 } from '@/features/admin/crm/components/kanban-lead-priority-badge';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
 import { formatProjectDateOnly } from '../utils/format-project-date';
+import {
+  formatPipelineTaskPlannedRange,
+  formatPipelineTaskStartedRange,
+} from '../utils/task-actual-date-display';
 import type { LeadPriority } from '@/features/admin/crm/types';
 import { initialsOf } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
@@ -83,6 +88,32 @@ function pipelineTaskStatusLabel(status: ProjectTaskStatus): string {
   return labelProjectTaskStatus(status);
 }
 
+const PIPELINE_TASK_STATUS_DOT_CLASS: Record<ProjectTaskStatus, string> = {
+  TODO: 'bg-neutral-400',
+  IN_PROGRESS: 'bg-sky-500',
+  IN_REVIEW: 'bg-amber-600',
+  COMPLETED: 'bg-emerald-500',
+};
+
+function PipelineTaskStatusDot({
+  status,
+  className,
+}: {
+  status: ProjectTaskStatus;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        'size-2 shrink-0 rounded-full',
+        PIPELINE_TASK_STATUS_DOT_CLASS[status],
+        className,
+      )}
+      aria-hidden="true"
+    />
+  );
+}
+
 function PipelineTaskStatusButton({
   status,
   disabled,
@@ -104,6 +135,7 @@ function PipelineTaskStatusButton({
             className="border-border/80 h-7 shrink-0 gap-1 rounded-md px-2 text-[11px] font-medium shadow-none"
             aria-label="Task status"
           >
+            <PipelineTaskStatusDot status={status} />
             {pipelineTaskStatusLabel(status)}
             <ChevronDown className="size-3 opacity-70" aria-hidden="true" />
           </Button>
@@ -117,7 +149,8 @@ function PipelineTaskStatusButton({
             }}
           >
             {PIPELINE_TASK_STATUSES.map((option) => (
-              <DropdownMenuRadioItem key={option} value={option}>
+              <DropdownMenuRadioItem key={option} value={option} className="gap-2">
+                <PipelineTaskStatusDot status={option} />
                 {pipelineTaskStatusLabel(option)}
               </DropdownMenuRadioItem>
             ))}
@@ -338,7 +371,6 @@ export function ProjectTaskKanbanCard({
   }
 
   if (variant === 'pipeline') {
-    const hasDates = Boolean(task.startDate || task.dueDate);
     return (
       <article
         className={cn(
@@ -375,41 +407,10 @@ export function ProjectTaskKanbanCard({
         </div>
 
         <div className="bg-card relative z-[1] flex min-h-[7.5rem] flex-col gap-2 rounded-b-[17px] px-3 pt-2 pb-3">
-          <h3 className="text-foreground line-clamp-2 text-[15px] leading-snug font-bold tracking-tight">
-            {task.title}
-          </h3>
-          {task.description?.trim() ? (
-            <p className="text-muted-foreground line-clamp-2 text-xs leading-snug">{task.description.trim()}</p>
-          ) : null}
-
-          <div className="mt-auto flex items-end justify-between gap-2 pt-1">
-            <div className="min-w-0 flex-1 space-y-1.5">
-              {task.assignee ? (
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-                    aria-hidden="true"
-                  >
-                    {initialsOf(task.assignee.displayName)}
-                  </span>
-                  <span className="text-muted-foreground truncate text-xs font-medium">
-                    {task.assignee.displayName}
-                  </span>
-                </div>
-              ) : null}
-
-              {hasDates ? (
-                <div className="text-muted-foreground flex items-center gap-1.5 text-xs tabular-nums">
-                  <Calendar className="size-3.5 shrink-0 opacity-70" aria-hidden="true" />
-                  <span className="truncate">
-                    {task.startDate ? formatProjectDateOnly(task.startDate) : '—'}
-                    {' – '}
-                    {task.dueDate ? formatProjectDateOnly(task.dueDate) : '—'}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-
+          <div className="flex items-start gap-2">
+            <h3 className="text-foreground min-w-0 flex-1 line-clamp-2 text-[15px] leading-snug font-bold tracking-tight">
+              {task.title}
+            </h3>
             {onStatusChange ? (
               <PipelineTaskStatusButton
                 status={task.status}
@@ -417,6 +418,45 @@ export function ProjectTaskKanbanCard({
                 onStatusChange={onStatusChange}
               />
             ) : null}
+          </div>
+          {task.description?.trim() ? (
+            <p className="text-muted-foreground line-clamp-2 text-xs leading-snug">{task.description.trim()}</p>
+          ) : null}
+
+          <div className="mt-auto space-y-1.5 pt-1">
+            {task.assignee ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <span
+                  className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  aria-hidden="true"
+                >
+                  {initialsOf(task.assignee.displayName)}
+                </span>
+                <span className="text-muted-foreground truncate text-xs font-medium">
+                  {task.assignee.displayName}
+                </span>
+              </div>
+            ) : null}
+
+            <div className="text-muted-foreground space-y-1 text-xs leading-snug tabular-nums">
+              <div className="flex min-w-0 items-start gap-1.5">
+                <Calendar className="mt-0.5 size-3.5 shrink-0 opacity-70" aria-hidden="true" />
+                <span className="min-w-0 break-words">
+                  <span className="text-foreground/70 font-medium">Planned:</span>{' '}
+                  {formatPipelineTaskPlannedRange(task)}
+                </span>
+              </div>
+              <div className="flex min-w-0 items-start gap-1.5">
+                <Play
+                  className="mt-0.5 size-3.5 shrink-0 fill-emerald-600 text-emerald-600"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 break-words">
+                  <span className="text-foreground/70 font-medium">Started:</span>{' '}
+                  {formatPipelineTaskStartedRange(task)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </article>

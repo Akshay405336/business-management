@@ -17,6 +17,7 @@
     "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:domain": "tsx --test src/modules/projects/domain/project-task-actual-times.test.ts src/modules/projects/domain/project-phase-production-sync.test.ts",
     "lint": "eslint .",
     "self-check:rate-limiter": "tsx src/infrastructure/cache/rate-limiter.self-check.mts",
     "db:generate": "prisma generate",

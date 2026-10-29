@@ -11,7 +11,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { formatProjectDateOnly } from '../utils/format-project-date';
+import { formatProjectDateFromTimestamp, formatProjectDateOnly } from '../utils/format-project-date';
+import {
+  computePhaseProductionFromTasks,
+  formatPhaseProductionHeaderValue,
+} from '../utils/phase-production-from-tasks';
+import { describePhaseCompletionVsPlan } from '../utils/project-timeline-indicator';
 import { mixStageColorWithWhite, stageKanbanColumnTheme } from '@/features/admin/crm/utils/stage-color';
 import { labelProjectPhaseStatus } from '@/features/admin/projects/utils/labels';
 import { cn } from '@/shared/lib/utils';
@@ -19,11 +24,28 @@ import type { ProjectTaskBoardPhase } from '../types';
 import { projectPhaseAccentHex } from '../utils/phase-accent-color';
 
 function PhaseProductionScheduleMeta({ phase }: { phase: ProjectTaskBoardPhase }) {
+  const productionLine = formatPhaseProductionHeaderValue(
+    phase.tasks,
+    formatProjectDateFromTimestamp,
+  );
+  const { productionCompletedAt } = computePhaseProductionFromTasks(phase.tasks);
+  const completionVariance = productionCompletedAt
+    ? describePhaseCompletionVsPlan(phase.expectedEndDate, productionCompletedAt)
+    : null;
+
   return (
-    <p className="text-muted-foreground text-[10px] leading-snug tabular-nums">
-      <span className="text-foreground/75 font-medium">Planned date:</span>{' '}
-      {formatProjectDateOnly(phase.startDate)} – {formatProjectDateOnly(phase.expectedEndDate)}
-    </p>
+    <div className="text-muted-foreground space-y-0.5 text-[10px] leading-snug tabular-nums">
+      <p>
+        <span className="text-foreground/75 font-medium">Planned date:</span>{' '}
+        {formatProjectDateOnly(phase.startDate)} – {formatProjectDateOnly(phase.expectedEndDate)}
+      </p>
+      <p>
+        <span className="text-foreground/75 font-medium">Production:</span> {productionLine}
+      </p>
+      {completionVariance ? (
+        <p className="text-foreground/80 font-medium">{completionVariance}</p>
+      ) : null}
+    </div>
   );
 }
 

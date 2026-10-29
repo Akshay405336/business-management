@@ -8,6 +8,12 @@ import {
 } from '../../../domain/errors/project.errors.js';
 import { ProjectTaskProgressPolicy } from '../../../domain/services/project-task-progress.policy.js';
 import { ProjectExecutionLifecyclePolicy } from '../../../domain/services/project-execution-lifecycle.policy.js';
+import { resolvePhaseProductionSync } from '../../../domain/project-phase-production-sync.js';
+import {
+  isTaskProductionActiveStatus,
+  resolveTaskActualTimesOnCreate,
+  resolveTaskActualTimesOnStatusChange,
+} from '../../../domain/project-task-actual-times.js';
 import type { ProjectExecutionLifecycle, ProjectLifecycleTab } from '../../../domain/project-types.js';
 import type {
   CreateProjectTaskInput,
@@ -350,7 +356,8 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
 
     const sortOrder = await this.nextSortOrder(organizationId, input.phaseId);
     const now = new Date();
-    const startsInProgress = input.status === 'IN_PROGRESS';
+    const actualOnCreate = resolveTaskActualTimesOnCreate({ status: input.status, now });
+    const touchesProduction = isTaskProductionActiveStatus(input.status);
 
     const row = await this.prisma.$transaction(async (tx) => {
       const created = await tx.projectTask.create({
@@ -369,11 +376,14 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
           labels: input.labels ? [...input.labels] : [],
           sortOrder,
           inPlanBaseline: project.executionLifecycle !== 'IN_PRODUCTION',
-          ...(startsInProgress ? { actualStartedAt: now } : {}),
+          ...(actualOnCreate.actualStartedAt ? { actualStartedAt: actualOnCreate.actualStartedAt } : {}),
+          ...(actualOnCreate.actualCompletedAt
+            ? { actualCompletedAt: actualOnCreate.actualCompletedAt }
+            : {}),
         },
         include: taskInclude,
       });
-      if (startsInProgress) {
+      if (touchesProduction) {
         await this.syncPhaseActualTimes(tx, organizationId, input.phaseId);
       }
       return created;
@@ -422,8 +432,23 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     const phaseChanged = nextPhaseId !== existing.phaseId;
     const nextStatus = input.status ?? existing.status;
     const now = new Date();
-    const recordActualStart = nextStatus === 'IN_PROGRESS' && !existing.actualStartedAt;
-    const recordActualComplete = nextStatus === 'COMPLETED' && !existing.actualCompletedAt;
+    const statusChanging = input.status !== undefined && input.status !== existing.status;
+    const existingStartedAt = existing.actualStartedAt
+      ? new Date(existing.actualStartedAt)
+      : null;
+    const existingCompletedAt = existing.actualCompletedAt
+      ? new Date(existing.actualCompletedAt)
+      : null;
+    const actualTimePatch =
+      statusChanging && input.status !== undefined
+        ? resolveTaskActualTimesOnStatusChange({
+            previousStatus: existing.status,
+            nextStatus: input.status,
+            actualStartedAt: existingStartedAt,
+            actualCompletedAt: existingCompletedAt,
+            now,
+          })
+        : null;
 
     const row = await this.prisma.$transaction(async (tx) => {
       if (phaseChanged) {
@@ -449,8 +474,12 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
             : {}),
           ...(input.dueDate !== undefined ? { dueDate: parseOptionalDate(input.dueDate) } : {}),
           ...(input.labels !== undefined ? { labels: [...input.labels] } : {}),
-          ...(recordActualStart ? { actualStartedAt: now } : {}),
-          ...(recordActualComplete ? { actualCompletedAt: now } : {}),
+          ...(actualTimePatch?.actualStartedAt
+            ? { actualStartedAt: actualTimePatch.actualStartedAt }
+            : {}),
+          ...(actualTimePatch && 'actualCompletedAt' in actualTimePatch
+            ? { actualCompletedAt: actualTimePatch.actualCompletedAt }
+            : {}),
           ...(phaseChanged
             ? {
                 sortOrder: (await this.listPhaseTaskIds(tx, organizationId, nextPhaseId)).length - 1,
@@ -459,6 +488,19 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
         },
         include: taskInclude,
       });
+      if (statusChanging && input.status !== undefined) {
+        await tx.projectTaskStatusEvent.create({
+          data: {
+            id: crypto.randomUUID(),
+            organizationId,
+            projectTaskId: taskId,
+            fromStatus: existing.status,
+            toStatus: input.status,
+            actualStartedAtSnapshot: updated.actualStartedAt,
+            actualCompletedAtSnapshot: updated.actualCompletedAt,
+          },
+        });
+      }
       await this.syncPhaseActualTimes(tx, organizationId, nextPhaseId);
       if (phaseChanged) {
         await this.syncPhaseActualTimes(tx, organizationId, existing.phaseId);
@@ -541,7 +583,10 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
   }
 
   private async syncPhaseActualTimes(
-    tx: Pick<PrismaService, 'projectPhase' | 'projectTask'>,
+    tx: Pick<
+      PrismaService,
+      'projectPhase' | 'projectTask' | 'projectPhaseProductionEvent'
+    >,
     organizationId: string,
     phaseId: string,
   ): Promise<void> {
@@ -552,30 +597,43 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
     if (!phase) return;
     const tasks = await tx.projectTask.findMany({
       where: { organizationId, phaseId },
-      select: { status: true, actualStartedAt: true },
+      select: { status: true, actualStartedAt: true, actualCompletedAt: true },
     });
-    const anyInProgress = tasks.some((task) => task.status === 'IN_PROGRESS');
-    const anyActive = tasks.some(
-      (task) =>
-        task.status === 'IN_PROGRESS' || task.status === 'IN_REVIEW' || task.status === 'COMPLETED',
-    );
-    const allCompleted = tasks.length > 0 && tasks.every((task) => task.status === 'COMPLETED');
-    const now = new Date();
-    let phaseProductionStartedAt: Date | undefined;
-    if (anyInProgress && !phase.actualStartedAt) {
-      const startedAts = tasks
-        .filter((task) => task.status === 'IN_PROGRESS' && task.actualStartedAt)
-        .map((task) => task.actualStartedAt!.getTime());
-      phaseProductionStartedAt =
-        startedAts.length > 0 ? new Date(Math.min(...startedAts)) : now;
+    const patch = resolvePhaseProductionSync({
+      phaseActualStartedAt: phase.actualStartedAt,
+      phaseActualCompletedAt: phase.actualCompletedAt,
+      tasks,
+    });
+
+    if (patch.logStageCompleted) {
+      await tx.projectPhaseProductionEvent.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId,
+          phaseId,
+          kind: 'STAGE_COMPLETED',
+          actualCompletedAt: patch.logStageCompleted,
+        },
+      });
     }
+    if (patch.logStageCompletionWithdrawn) {
+      await tx.projectPhaseProductionEvent.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId,
+          phaseId,
+          kind: 'STAGE_COMPLETION_WITHDRAWN',
+          actualCompletedAt: patch.logStageCompletionWithdrawn,
+        },
+      });
+    }
+
     await tx.projectPhase.update({
       where: { id: phaseId },
       data: {
-        ...(phaseProductionStartedAt ? { actualStartedAt: phaseProductionStartedAt } : {}),
-        ...(allCompleted && !phase.actualCompletedAt ? { actualCompletedAt: now } : {}),
-        ...(allCompleted ? { status: 'COMPLETED' as const } : {}),
-        ...(anyActive && !allCompleted ? { status: 'IN_PROGRESS' as const } : {}),
+        actualStartedAt: patch.actualStartedAt,
+        actualCompletedAt: patch.actualCompletedAt,
+        status: patch.status,
       },
     });
   }

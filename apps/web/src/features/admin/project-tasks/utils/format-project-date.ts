@@ -1,3 +1,14 @@
+/** Calendar date from an ISO timestamp in the local timezone (`D/M/YYYY`). */
+export function formatProjectDateFromTimestamp(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  const day = parsed.getDate();
+  const month = parsed.getMonth() + 1;
+  const year = parsed.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 /** Display ISO date-only (`YYYY-MM-DD`) as `D/M/YYYY` (e.g. 31/10/2026). */
 export function formatProjectDateOnly(iso: string | null | undefined): string {
   if (!iso) return '—';

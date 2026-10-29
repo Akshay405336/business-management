@@ -183,6 +183,34 @@ export function getProjectCardTimelineIndicator(
 }
 
 /** Compare actual production start (click time) to planned start date (calendar days). */
+/** Compare stage actual completion (local calendar day) to planned end date. */
+export function describePhaseCompletionVsPlan(
+  plannedEndDate: string,
+  actualCompletedAt: string | null | undefined,
+): string | null {
+  if (!actualCompletedAt) return null;
+  const planned = plannedEndDate.slice(0, 10);
+  const actual = dateOnlyFromLocalTimestamp(actualCompletedAt);
+  if (!isValidDateOnly(planned) || !isValidDateOnly(actual)) return null;
+
+  const varianceDays = calendarDaysBetween(planned, actual);
+  if (varianceDays === 0) return 'On time';
+  if (varianceDays < 0) {
+    const earlyDays = Math.abs(varianceDays);
+    return earlyDays === 1 ? 'Early by 1 day' : `Early by ${earlyDays} days`;
+  }
+  return varianceDays === 1 ? 'Delayed by 1 day' : `Delayed by ${varianceDays} days`;
+}
+
+function dateOnlyFromLocalTimestamp(iso: string): string | null {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const y = parsed.getFullYear();
+  const m = parsed.getMonth() + 1;
+  const d = parsed.getDate();
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
 export function describeProductionStartVsPlan(
   plannedStartDate: string,
   actualProductionStartedAt: string | null | undefined,

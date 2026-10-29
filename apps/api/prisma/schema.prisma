@@ -178,8 +178,10 @@ model Organization {
   proposals       ProposalDocument[]
   servicePackages ServicePackage[]
   projects        Project[]
-  projectPhases   ProjectPhase[]
-  projectTasks    ProjectTask[]
+  projectPhases              ProjectPhase[]
+  projectTasks               ProjectTask[]
+  projectTaskStatusEvents    ProjectTaskStatusEvent[]
+  projectPhaseProductionEvents ProjectPhaseProductionEvent[]
   employees       Employee[]
   sequences       OrganizationSequence[]
   auditEvents     CrmAuditEvent[]
@@ -669,10 +671,31 @@ model ProjectPhase {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   owner        PlatformAdmin? @relation("PhaseOwner", fields: [ownerAdminId], references: [id], onDelete: SetNull)
-  tasks        ProjectTask[]
+  tasks             ProjectTask[]
+  productionEvents  ProjectPhaseProductionEvent[]
 
   @@index([organizationId, projectId])
   @@map("project_phases")
+}
+
+enum ProjectPhaseProductionEventKind {
+  STAGE_COMPLETED
+  STAGE_COMPLETION_WITHDRAWN
+}
+
+model ProjectPhaseProductionEvent {
+  id               String                          @id @db.Uuid
+  organizationId   String                          @map("organization_id") @db.Uuid
+  phaseId          String                          @map("phase_id") @db.Uuid
+  kind             ProjectPhaseProductionEventKind
+  actualCompletedAt DateTime?                      @map("actual_completed_at") @db.Timestamptz(3)
+  occurredAt       DateTime                        @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  phase        ProjectPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, phaseId, occurredAt])
+  @@map("project_phase_production_events")
 }
 
 enum ProjectTaskStatus {
@@ -713,10 +736,28 @@ model ProjectTask {
   project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   phase        ProjectPhase  @relation(fields: [phaseId], references: [id], onDelete: Cascade)
   assignee     PlatformAdmin? @relation("ProjectTaskAssignee", fields: [assigneeAdminId], references: [id], onDelete: SetNull)
+  statusEvents ProjectTaskStatusEvent[]
 
   @@index([organizationId, projectId])
   @@index([organizationId, phaseId, sortOrder])
   @@map("project_tasks")
+}
+
+model ProjectTaskStatusEvent {
+  id                        String            @id @db.Uuid
+  organizationId            String            @map("organization_id") @db.Uuid
+  projectTaskId             String            @map("project_task_id") @db.Uuid
+  fromStatus                ProjectTaskStatus @map("from_status")
+  toStatus                  ProjectTaskStatus @map("to_status")
+  actualStartedAtSnapshot   DateTime?         @map("actual_started_at_snapshot") @db.Timestamptz(3)
+  actualCompletedAtSnapshot DateTime?         @map("actual_completed_at_snapshot") @db.Timestamptz(3)
+  occurredAt                DateTime          @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task         ProjectTask  @relation(fields: [projectTaskId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, projectTaskId, occurredAt])
+  @@map("project_task_status_events")
 }
 
 enum CrmAuditEventType {
