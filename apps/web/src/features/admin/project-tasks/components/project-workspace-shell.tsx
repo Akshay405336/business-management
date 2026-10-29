@@ -14,7 +14,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import type { ProjectActionTarget } from '@/features/admin/projects/hooks/use-project-list-actions';
 import type { ProjectDetail, ProjectPriority, ProjectStatus } from '@/features/admin/projects/types';
@@ -146,7 +146,7 @@ export function ProjectWorkspaceShell({
   const editLocked = isProjectPlanLocked(project.executionLifecycle);
   const managerName = project.projectManagerName?.trim() || 'Unassigned';
   const priorityTone = priorityMetricTone[project.priority];
-  const durationLabel = `${formatDateOnly(project.startDate)} – ${formatDateOnly(project.expectedEndDate)}`;
+  const durationLabel = `${formatProjectDateOnly(project.startDate)} – ${formatProjectDateOnly(project.expectedEndDate)}`;
   const todayIso = localDateOnlyIso();
   const startDay = project.startDate.slice(0, 10);
   const remainingTimeCaption =

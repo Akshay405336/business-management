@@ -222,10 +222,13 @@ export class PrismaProjectTaskRepository implements ProjectTaskRepository {
           ...this.taskStats(phaseTasks),
         };
       });
+      const description =
+        row.description.trim() || row.scopeAndRequirements.trim() || '';
       return {
         id: row.id,
         projectNumber: row.projectNumber,
         name: row.name,
+        description,
         clientId: row.clientId,
         clientName: row.clientName,
         clientPhone: row.clientPhone,

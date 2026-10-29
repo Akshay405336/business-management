@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
 import { ProjectProgressBar } from '@/features/admin/projects/components/project-progress-bar';
 import { ProjectStatusBadge } from '@/features/admin/projects/components/project-status-badge';
@@ -421,7 +421,7 @@ export function ProjectGanttView({
                         label={p.name}
                         progressPercent={p.progressPercent}
                         heightClass="h-7"
-                        tooltip={`${p.name}\n${formatDateOnly(p.startDate)} – ${formatDateOnly(p.expectedEndDate)}\nProgress ${p.progressPercent}%\nStatus ${p.status}`}
+                        tooltip={`${p.name}\n${formatProjectDateOnly(p.startDate)} – ${formatProjectDateOnly(p.expectedEndDate)}\nProgress ${p.progressPercent}%\nStatus ${p.status}`}
                         onClick={() => router.push(`/admin/project-tasks/${p.id}`)}
                       />
                     );
@@ -447,7 +447,7 @@ export function ProjectGanttView({
                         label={phase.name}
                         progressPercent={phase.progressPercent}
                         heightClass="h-6"
-                        tooltip={`${phase.name}\n${formatDateOnly(phase.startDate)} – ${formatDateOnly(phase.expectedEndDate)}\n${labelProjectPhaseStatus(phase.status)}\nProgress ${phase.progressPercent}%`}
+                        tooltip={`${phase.name}\n${formatProjectDateOnly(phase.startDate)} – ${formatProjectDateOnly(phase.expectedEndDate)}\n${labelProjectPhaseStatus(phase.status)}\nProgress ${phase.progressPercent}%`}
                         onClick={() => router.push(`/admin/project-tasks/${row.project.id}`)}
                       />
                     );

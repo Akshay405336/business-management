@@ -25,7 +25,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Inbox, Plus } from 'lucide-react';
+import { GripVertical, Inbox, Plus } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -162,33 +162,26 @@ function PlanAddPhaseColumn({
         'sm:w-[19rem]',
       )}
     >
-      <div
-        className="border-border/60 border-b px-3 py-2.5"
-        style={{ backgroundColor: planTheme.header }}
-      >
-        <div className="flex items-start gap-2">
-          <span
-            className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-            style={{ backgroundColor: planTheme.accent }}
-            aria-hidden="true"
-          >
-            {nextSortOrder}
+      <div className="border-border/60 border-b bg-white px-3 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground shrink-0 rounded p-0.5" aria-hidden="true">
+            <GripVertical className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-foreground truncate text-sm font-semibold leading-tight">New phase</p>
-            <p className="text-muted-foreground mt-0.5 text-[11px] tabular-nums">0 tasks</p>
+            <p className="text-muted-foreground mt-0.5 text-[10px] tabular-nums">0 tasks</p>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-7 shrink-0 rounded-md bg-neutral-950 text-white hover:bg-neutral-800 hover:text-white"
+            aria-label="Add phase"
+            onClick={onAddPhase}
+          >
+            <Plus className="size-4" aria-hidden="true" />
+          </Button>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-2 h-8 w-full border-black/10 bg-white/90 text-xs shadow-none"
-          onClick={onAddPhase}
-        >
-          <Plus className="size-3.5" aria-hidden="true" />
-          Add Phase
-        </Button>
       </div>
       <div
         className="text-muted-foreground flex min-h-[14rem] flex-1 flex-col items-center justify-center gap-2 px-4 py-8 text-center text-xs"

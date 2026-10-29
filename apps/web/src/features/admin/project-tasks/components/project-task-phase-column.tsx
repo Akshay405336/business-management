@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { stageKanbanColumnTheme } from '@/features/admin/crm/utils/stage-color';
 import { labelProjectPhaseStatus } from '@/features/admin/projects/utils/labels';
 import { cn } from '@/shared/lib/utils';
@@ -182,7 +182,7 @@ export function ProjectTaskPhaseColumn({
                 renameDisabled={renameDisabled}
               />
               <p className="text-muted-foreground mt-0.5 text-[10px] tabular-nums">
-                {formatDateOnly(phase.startDate)} – {formatDateOnly(phase.expectedEndDate)}
+                {formatProjectDateOnly(phase.startDate)} – {formatProjectDateOnly(phase.expectedEndDate)}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-0.5">
@@ -272,7 +272,7 @@ export function ProjectTaskPhaseColumn({
                 {labelProjectPhaseStatus(phase.status)}
               </Badge>
               <span className="text-muted-foreground text-[10px] tabular-nums">
-                {formatDateOnly(phase.startDate)} – {formatDateOnly(phase.expectedEndDate)}
+                {formatProjectDateOnly(phase.startDate)} – {formatProjectDateOnly(phase.expectedEndDate)}
               </span>
             </div>
             <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0 text-[10px]">

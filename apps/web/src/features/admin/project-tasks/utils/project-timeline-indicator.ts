@@ -177,9 +177,9 @@ export function getProjectCardTimelineIndicator(
     return { label: 'Starts today', tone: 'upcoming' };
   }
   if (daysPassed === 1) {
-    return { label: 'Start date passed by 1 day', tone: 'delayed' };
+    return { label: 'Delayed by 1 day', tone: 'delayed' };
   }
-  return { label: `Start date passed by ${daysPassed} days`, tone: 'delayed' };
+  return { label: `Delayed by ${daysPassed} days`, tone: 'delayed' };
 }
 
 export const projectCardTimelineToneClass: Record<ProjectCardTimelineTone, string> = {

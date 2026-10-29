@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import type { LeadPriority } from '@/features/admin/crm/types';
 import { initialsOf } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
@@ -28,16 +28,6 @@ function stopCardPointer(event: PointerEvent) {
 function isTaskOverdue(task: ProjectTask): boolean {
   if (!task.dueDate || task.status === 'COMPLETED') return false;
   return task.dueDate < localDateOnlyIso();
-}
-
-function formatPlanCardDate(value: string): string {
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(date.getTime())) return formatDateOnly(value);
-  return new Intl.DateTimeFormat(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  }).format(date);
 }
 
 const PLAN_PRIORITY_PILL: Record<
@@ -212,18 +202,18 @@ export function ProjectTaskKanbanCard({
             style={{ color: datesOutsidePhase ? '#b45309' : theme.ink }}
             title={
               datesOutsidePhase && phaseBounds
-                ? `Outside phase (${formatPlanCardDate(phaseBounds.phaseStartDate)} – ${formatPlanCardDate(phaseBounds.phaseExpectedEndDate)}). Edit task dates.`
+                ? `Outside phase (${formatProjectDateOnly(phaseBounds.phaseStartDate)} – ${formatProjectDateOnly(phaseBounds.phaseExpectedEndDate)}). Edit task dates.`
                 : undefined
             }
           >
             <CalendarClock className="size-3.5 shrink-0 opacity-90" aria-hidden="true" />
             <span className="truncate">
               {task.startDate && task.dueDate
-                ? `${formatPlanCardDate(task.startDate)} – ${formatPlanCardDate(task.dueDate)}`
+                ? `${formatProjectDateOnly(task.startDate)} – ${formatProjectDateOnly(task.dueDate)}`
                 : task.startDate
-                  ? formatPlanCardDate(task.startDate)
+                  ? formatProjectDateOnly(task.startDate)
                   : task.dueDate
-                    ? formatPlanCardDate(task.dueDate)
+                    ? formatProjectDateOnly(task.dueDate)
                     : null}
             </span>
           </p>
@@ -307,9 +297,9 @@ export function ProjectTaskKanbanCard({
       ) : null}
       {(task.startDate || task.dueDate) && (
         <p className="text-muted-foreground text-[10px] tabular-nums">
-          {task.startDate ? formatDateOnly(task.startDate) : '—'}
+          {task.startDate ? formatProjectDateOnly(task.startDate) : '—'}
           {' → '}
-          {task.dueDate ? formatDateOnly(task.dueDate) : '—'}
+          {task.dueDate ? formatProjectDateOnly(task.dueDate) : '—'}
         </p>
       )}
     </article>

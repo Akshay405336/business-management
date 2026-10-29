@@ -2,7 +2,7 @@
 
 import { Badge } from '@/components/ui/badge';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { cn } from '@/shared/lib/utils';
 import type { ProjectTask } from '../types';
 import { labelProjectTaskStatus } from '../utils/labels';
@@ -50,9 +50,9 @@ export function ProjectTaskKanbanCardReadOnly({
       ) : null}
       {(task.startDate || task.dueDate) && (
         <p className="text-muted-foreground text-[10px] tabular-nums">
-          {task.startDate ? formatDateOnly(task.startDate) : '—'}
+          {task.startDate ? formatProjectDateOnly(task.startDate) : '—'}
           {' → '}
-          {task.dueDate ? formatDateOnly(task.dueDate) : '—'}
+          {task.dueDate ? formatProjectDateOnly(task.dueDate) : '—'}
         </p>
       )}
       {task.labels.length > 0 ? (

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { ProjectExecutionLifecycleBadge } from '@/features/admin/projects/components/project-execution-lifecycle-badge';
 import { ProjectPlanLockNotice } from '@/features/admin/projects/components/project-plan-lock-notice';
 import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
@@ -161,11 +161,11 @@ export function ProjectBoardOverview({
             ·
           </span>
           <p className="text-foreground text-xs font-medium tabular-nums">
-            Planned: {formatDateOnly(project.startDate)} – {formatDateOnly(project.expectedEndDate)}
+            Planned: {formatProjectDateOnly(project.startDate)} – {formatProjectDateOnly(project.expectedEndDate)}
           </p>
           {project.actualProductionStartedAt ? (
             <p className="text-muted-foreground text-xs tabular-nums">
-              Production started: {formatDateOnly(project.actualProductionStartedAt.slice(0, 10))}
+              Production started: {formatProjectDateOnly(project.actualProductionStartedAt.slice(0, 10))}
               {project.executionLifecycle === 'IN_PRODUCTION'
                 ? ` · ${formatElapsedCalendarDays(project.actualProductionStartedAt, new Date().toISOString())}`
                 : null}

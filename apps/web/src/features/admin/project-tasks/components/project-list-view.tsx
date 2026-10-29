@@ -16,7 +16,7 @@ import {
 } from '@/features/admin/components/data-table-presets';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
 import { ProjectProgressBar } from '@/features/admin/projects/components/project-progress-bar';
 import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
@@ -176,7 +176,7 @@ export function ProjectListView({
                 'text-muted-foreground align-middle text-sm tabular-nums whitespace-nowrap',
               )}
             >
-              {project.startDate ? formatDateOnly(project.startDate) : '—'}
+              {project.startDate ? formatProjectDateOnly(project.startDate) : '—'}
             </TableCell>
             <TableCell className={cn(CRM_PROJECTS_TABLE_COLUMN_CLASS.status, 'align-middle')}>
               <ProjectStatusBadge status={project.status} />

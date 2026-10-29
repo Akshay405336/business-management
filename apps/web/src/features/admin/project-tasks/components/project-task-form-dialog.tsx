@@ -32,7 +32,7 @@ import {
 import { CrmFieldLabel, CrmInlineFieldError } from '@/features/admin/crm/components/crm-feedback';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { EmployeeAssigneeSelect } from '@/features/admin/employees/components/employee-assignee-select';
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { zodIssuesToFieldMap } from '@/shared/form/zod-field-error';
@@ -207,7 +207,7 @@ export function ProjectTaskFormDialog({
     [form.phaseId, phases],
   );
   const phaseDateHint = selectedPhase
-    ? `Task dates must stay within ${formatDateOnly(selectedPhase.startDate)} – ${formatDateOnly(selectedPhase.expectedEndDate)}.`
+    ? `Task dates must stay within ${formatProjectDateOnly(selectedPhase.startDate)} – ${formatProjectDateOnly(selectedPhase.expectedEndDate)}.`
     : null;
 
   return (

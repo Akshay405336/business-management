@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
+import { formatProjectDateOnly } from '../utils/format-project-date';
 import { ProjectExecutionLifecycleBadge } from '@/features/admin/projects/components/project-execution-lifecycle-badge';
 import { ProjectPlanLockNotice } from '@/features/admin/projects/components/project-plan-lock-notice';
 import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
@@ -107,8 +107,8 @@ export function ProjectViewPlanModal({
           {project ? (
             <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
               <span className="text-foreground font-medium tabular-nums">
-                Planned: {formatDateOnly(project.startDate)} –{' '}
-                {formatDateOnly(project.expectedEndDate)}
+                Planned: {formatProjectDateOnly(project.startDate)} –{' '}
+                {formatProjectDateOnly(project.expectedEndDate)}
               </span>
               <span className="text-foreground font-medium tabular-nums">{progress}% complete</span>
               <div
