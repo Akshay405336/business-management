@@ -16,6 +16,7 @@ export function toEmployeeListItem(record: EmployeeRecord): EmployeeListItem {
     employmentStatus: record.employmentStatus,
     dateOfJoining: record.dateOfJoining,
     reportingManager: record.reportingManager,
+    platformAdminId: record.platformAdminId,
   };
 }
 

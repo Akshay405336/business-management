@@ -20,6 +20,7 @@ export function useProjectListActions(onRefresh: () => Promise<void>) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProjectActionTarget | null>(null);
+  const [statusToggleTarget, setStatusToggleTarget] = useState<ProjectActionTarget | null>(null);
 
   const openCreate = useCallback(() => {
     setEditingId(null);
@@ -31,21 +32,25 @@ export function useProjectListActions(onRefresh: () => Promise<void>) {
     setFormOpen(true);
   }, []);
 
-  const toggleActive = useCallback(
-    async (project: ProjectActionTarget) => {
-      const nextStatus: ProjectStatus = project.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-      try {
-        await run(() => changeProjectStatus(project.id, { status: nextStatus }));
-        toast.success(
-          nextStatus === 'ACTIVE' ? 'Project activated.' : 'Project marked inactive.',
-        );
-        await onRefresh();
-      } catch (failure) {
-        toast.error(describeCrmError(failure));
-      }
-    },
-    [onRefresh, run, toast],
-  );
+  const requestToggleActive = useCallback((project: ProjectActionTarget) => {
+    setStatusToggleTarget(project);
+  }, []);
+
+  const confirmToggleActive = useCallback(async () => {
+    if (!statusToggleTarget) return;
+    const project = statusToggleTarget;
+    setStatusToggleTarget(null);
+    const nextStatus: ProjectStatus = project.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    try {
+      await run(() => changeProjectStatus(project.id, { status: nextStatus }));
+      toast.success(
+        nextStatus === 'ACTIVE' ? 'Project activated.' : 'Project marked inactive.',
+      );
+      await onRefresh();
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  }, [onRefresh, run, statusToggleTarget, toast]);
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -70,6 +75,9 @@ export function useProjectListActions(onRefresh: () => Promise<void>) {
     deleteTarget,
     setDeleteTarget,
     confirmDelete,
-    toggleActive,
+    statusToggleTarget,
+    setStatusToggleTarget,
+    requestToggleActive,
+    confirmToggleActive,
   };
 }

@@ -35,19 +35,17 @@ import { Input } from '@/components/ui/input';
 import { formControlStateClass } from '@/shared/form/form-control-state';
 import { toDateInputValue } from '@/features/admin/crm/utils/format';
 import { cn } from '@/shared/lib/utils';
-import { CrmFormField } from '@/features/admin/crm/components/crm-feedback';
+import {
+  CrmFieldLabel,
+  CrmFormField,
+} from '@/features/admin/crm/components/crm-feedback';
+import { CRM_PIPELINE_FORM_FIELD_CLASS } from '@/features/admin/crm/constants';
 import {
   validatePhaseScheduleFieldErrors,
   type ProjectPhaseFormRow,
 } from '../utils/project-phase-schedule';
 
-/** Name + description + two date columns; dates get a sensible minimum width for native picker chrome. */
-const phasePrimaryFieldsClass =
-  'grid min-w-0 grid-cols-1 items-start gap-x-3 gap-y-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(9.5rem,1fr)_minmax(9.5rem,1fr)]';
-
-const compactFieldClass = 'gap-1.5';
-
-const phaseDateInputClass = 'min-w-[9.5rem]';
+const compactFieldClass = 'min-w-0 gap-1.5';
 
 function phaseFieldKey(index: number, field: string) {
   return `phases.${index}.${field}`;
@@ -65,6 +63,7 @@ function SortablePhaseCard({
   onChange,
   onDelete,
   onTouch,
+  variant = 'default',
 }: {
   row: ProjectPhaseFormRow;
   index: number;
@@ -81,7 +80,10 @@ function SortablePhaseCard({
   ) => void;
   onDelete: () => void;
   onTouch: (field: string) => void;
+  variant?: 'default' | 'pipeline';
 }) {
+  const pipelineVariant = variant === 'pipeline';
+  const fieldClass = pipelineVariant ? CRM_PIPELINE_FORM_FIELD_CLASS : undefined;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.key,
   });
@@ -140,11 +142,19 @@ function SortablePhaseCard({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'bg-muted/25 grid min-w-0 gap-2 rounded-md border border-border/70 px-2.5 py-2 shadow-xs',
+        'grid min-w-0 gap-3 rounded-lg border shadow-xs',
+        pipelineVariant
+          ? 'border-border bg-white p-3'
+          : 'border-border/70 bg-muted/25 px-2.5 py-2',
         isDragging && 'ring-primary z-10 opacity-95 ring-2',
       )}
     >
-      <div className="flex min-w-0 items-center gap-2 border-b border-border/50 pb-1.5">
+      <div
+        className={cn(
+          'flex min-w-0 items-center gap-2',
+          pipelineVariant ? 'pb-0' : 'border-b border-border/50 pb-1.5',
+        )}
+      >
         <button
           type="button"
           className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
@@ -163,7 +173,12 @@ function SortablePhaseCard({
           type="button"
           variant="ghost"
           size="sm"
-          className="text-muted-foreground hover:text-destructive h-8 shrink-0 px-2 text-xs"
+          className={cn(
+            'h-9 shrink-0 px-2 text-xs',
+            pipelineVariant
+              ? 'text-destructive hover:bg-destructive/10 hover:text-destructive'
+              : 'text-muted-foreground hover:text-destructive',
+          )}
           onClick={onDelete}
         >
           <Trash2 className="size-3.5" aria-hidden="true" />
@@ -171,7 +186,7 @@ function SortablePhaseCard({
         </Button>
       </div>
 
-      <div className={phasePrimaryFieldsClass}>
+      <div className="grid min-w-0 grid-cols-1 gap-3">
         <CrmFormField
           id={`phase-name-${row.key}`}
           label="Phase name"
@@ -184,76 +199,86 @@ function SortablePhaseCard({
             id={`phase-name-${row.key}`}
             value={row.name}
             placeholder="Requirement gathering"
-            className={formControlStateClass(nameError ? 'invalid' : 'neutral')}
+            className={cn(
+              fieldClass,
+              formControlStateClass(nameError ? 'invalid' : 'neutral'),
+            )}
             onBlur={() => onTouch('name')}
             onChange={(event) => onChange(row.key, { name: event.target.value })}
           />
         </CrmFormField>
-        <CrmFormField
-          id={`phase-desc-${row.key}`}
-          label="Description"
-          optional
-          className={compactFieldClass}
-        >
-          <Input
+        {!pipelineVariant ? (
+          <CrmFormField
             id={`phase-desc-${row.key}`}
-            value={row.description}
-            placeholder="Optional summary"
-            onChange={(event) => onChange(row.key, { description: event.target.value })}
-          />
-        </CrmFormField>
-        <CrmFormField
-          id={`phase-start-${row.key}`}
-          label="Start date"
-          required
-          validated={Boolean(startError)}
-          error={startError}
-          className={compactFieldClass}
-        >
-          <Input
+            label="Description"
+            optional
+            className={compactFieldClass}
+          >
+            <Input
+              id={`phase-desc-${row.key}`}
+              value={row.description}
+              placeholder="Optional summary"
+              className={fieldClass}
+              onChange={(event) => onChange(row.key, { description: event.target.value })}
+            />
+          </CrmFormField>
+        ) : null}
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+          <CrmFormField
             id={`phase-start-${row.key}`}
-            type="date"
-            value={row.startDate}
-            className={cn(
-              phaseDateInputClass,
-              formControlStateClass(startError ? 'invalid' : 'neutral'),
-            )}
-            onBlur={() => onTouch('startDate')}
-            onChange={(event) =>
-              onChange(
-                row.key,
-                { startDate: toDateInputValue(event.target.value) },
-                'startDate',
-              )
-            }
-          />
-        </CrmFormField>
-        <CrmFormField
-          id={`phase-end-${row.key}`}
-          label="Expected end"
-          required
-          validated={Boolean(endError)}
-          error={endError}
-          className={compactFieldClass}
-        >
-          <Input
+            label="Start date"
+            required
+            validated={Boolean(startError)}
+            error={startError}
+            className={compactFieldClass}
+          >
+            <Input
+              id={`phase-start-${row.key}`}
+              type="date"
+              value={row.startDate}
+              className={cn(
+                'min-w-0 w-full',
+                fieldClass,
+                formControlStateClass(startError ? 'invalid' : 'neutral'),
+              )}
+              onBlur={() => onTouch('startDate')}
+              onChange={(event) =>
+                onChange(
+                  row.key,
+                  { startDate: toDateInputValue(event.target.value) },
+                  'startDate',
+                )
+              }
+            />
+          </CrmFormField>
+          <CrmFormField
             id={`phase-end-${row.key}`}
-            type="date"
-            value={row.expectedEndDate}
-            className={cn(
-              phaseDateInputClass,
-              formControlStateClass(endError ? 'invalid' : 'neutral'),
-            )}
-            onBlur={() => onTouch('expectedEndDate')}
-            onChange={(event) =>
-              onChange(
-                row.key,
-                { expectedEndDate: toDateInputValue(event.target.value) },
-                'expectedEndDate',
-              )
-            }
-          />
-        </CrmFormField>
+            label="Expected end"
+            required
+            validated={Boolean(endError)}
+            error={endError}
+            className={compactFieldClass}
+          >
+            <Input
+              id={`phase-end-${row.key}`}
+              type="date"
+              value={row.expectedEndDate}
+              className={cn(
+                'min-w-0 w-full',
+                fieldClass,
+                formControlStateClass(endError ? 'invalid' : 'neutral'),
+              )}
+              onBlur={() => onTouch('expectedEndDate')}
+              onChange={(event) =>
+                onChange(
+                  row.key,
+                  { expectedEndDate: toDateInputValue(event.target.value) },
+                  'expectedEndDate',
+                )
+              }
+            />
+          </CrmFormField>
+        </div>
       </div>
     </div>
   );
@@ -269,12 +294,14 @@ export function ProjectPhasesEditor({
   onPatchPhase,
   onReorderPhases,
   onRemovePhases,
+  variant = 'default',
 }: {
   phases: readonly ProjectPhaseFormRow[];
   projectStartDate: string;
   projectExpectedEndDate: string;
   fieldErrors: Record<string, string>;
   submitAttempted: boolean;
+  variant?: 'default' | 'pipeline';
   onAddPhase: () => void;
   onPatchPhase: (
     key: string,
@@ -313,11 +340,27 @@ export function ProjectPhasesEditor({
     setDeleteTarget(null);
   };
 
+  const pipelineVariant = variant === 'pipeline';
+
   return (
-    <section className="grid gap-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold">Project phases</h3>
-        <Button type="button" variant="outline" size="sm" className="h-8" onClick={onAddPhase}>
+    <section className="grid gap-2">
+      <div className="flex items-center justify-between gap-2">
+        {pipelineVariant ? (
+          <CrmFieldLabel>Project phases</CrmFieldLabel>
+        ) : (
+          <h3 className="text-sm font-semibold">Project phases</h3>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={
+            pipelineVariant
+              ? 'h-11 rounded-lg border border-input bg-card shadow-none hover:bg-muted/50'
+              : 'h-8'
+          }
+          onClick={onAddPhase}
+        >
           <Plus className="size-4" aria-hidden="true" />
           Add phase
         </Button>
@@ -347,6 +390,7 @@ export function ProjectPhasesEditor({
                     if (row.persisted) setDeleteTarget(row);
                     else onRemovePhases(phases.filter((item) => item.key !== row.key));
                   }}
+                  variant={variant}
                 />
               ))}
             </div>

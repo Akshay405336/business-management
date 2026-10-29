@@ -1,5 +1,6 @@
 'use client';
 
+import { Layers } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -13,37 +14,48 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { CrmErrorAlert, CrmLoadingRows } from '@/features/admin/crm/components/crm-feedback';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
-import { formatDateOnly } from '@/features/admin/crm/utils/format';
-import { getProject, saveProjectPlan } from '@/features/admin/projects/api/projects';
-import { ProjectExecutionLifecycleBadge } from '@/features/admin/projects/components/project-execution-lifecycle-badge';
-import { ProjectPriorityBadge } from '@/features/admin/projects/components/project-priority-badge';
-import type { ProjectDetail } from '@/features/admin/projects/types';
+import {
+  changeProjectStatus,
+  deleteProject as deleteProjectApi,
+  getProject,
+  saveProjectPlan,
+} from '@/features/admin/projects/api/projects';
+import { ProjectDeleteDialog } from '@/features/admin/projects/components/project-delete-dialog';
+import { ProjectFormDialog } from '@/features/admin/projects/components/project-form-dialog';
 import { ProjectPlanLockNotice } from '@/features/admin/projects/components/project-plan-lock-notice';
 import {
   isProjectPlanLocked,
   PROJECT_PLAN_LOCKED_MESSAGE,
 } from '@/features/admin/projects/constants/plan-lock';
-import type { SaveProjectPlanRequest } from '@techwin/validation';
+import type { ProjectActionTarget } from '@/features/admin/projects/hooks/use-project-list-actions';
+import type { ProjectDetail } from '@/features/admin/projects/types';
+import { projectToForm, type ProjectPhaseFormRow } from '@/features/admin/projects/utils/project-form';
 import {
   createProjectTask,
   deleteProjectTask,
   getProjectTaskBoard,
   moveProjectTask,
+  reorderProjectPhases,
   updateProjectTask,
 } from '../api/project-tasks';
-import type { ProjectTask, ProjectTaskBoardResponse } from '../types';
+import type { ProjectTask, ProjectTaskBoardResponse, ProjectTaskStatus } from '../types';
+import { buildSavePlanPayload } from '../utils/build-save-plan-payload';
+import { reorderBoardPhasesWithSlotDates } from '../utils/reorder-phases-with-slot-dates';
+import { ProjectAddPhaseDialog } from './project-add-phase-dialog';
+import { ProjectManagePhasesDialog } from './project-manage-phases-dialog';
 import { ProjectTaskFormDialog } from './project-task-form-dialog';
 import { ProjectTaskKanbanBoard } from './project-task-kanban-board';
+import { ProjectWorkspaceShell } from './project-workspace-shell';
 
 export function ProjectPlanningPage({ projectId }: { projectId: string }) {
   const router = useRouter();
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
+
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [board, setBoard] = useState<ProjectTaskBoardResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,6 +64,12 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
   const [defaultPhaseId, setDefaultPhaseId] = useState<string | undefined>();
   const [editingTask, setEditingTask] = useState<ProjectTask | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ProjectTask | null>(null);
+  const [deleteProjectTarget, setDeleteProjectTarget] = useState<ProjectActionTarget | null>(null);
+  const [managePhasesOpen, setManagePhasesOpen] = useState(false);
+  const [addPhaseOpen, setAddPhaseOpen] = useState(false);
+  const [deletePhaseId, setDeletePhaseId] = useState<string | null>(null);
+  const [statusToggleTarget, setStatusToggleTarget] = useState<ProjectActionTarget | null>(null);
+  const [projectFormOpen, setProjectFormOpen] = useState(false);
 
   const readOnly = project ? isProjectPlanLocked(project.executionLifecycle) : false;
 
@@ -117,6 +135,20 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
     }
   };
 
+  const changeTaskStatus = async (taskId: string, status: ProjectTaskStatus) => {
+    if (readOnly) return;
+    const task = tasks.find((row) => row.id === taskId);
+    if (!task) return;
+    try {
+      await run(() =>
+        updateProjectTask(projectId, taskId, { status, labels: [...task.labels] }),
+      );
+      await load();
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
   const handleSaveTask = async (payload: Parameters<typeof createProjectTask>[1]) => {
     if (readOnly) return;
     if (editingTask) {
@@ -141,34 +173,20 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
     }
   };
 
-  const buildPlanPayload = (): SaveProjectPlanRequest | null => {
-    if (!project || !board) return null;
-    const ownerByPhaseId = new Map(project.phases.map((phase) => [phase.id, phase.ownerAdminId]));
-    return {
-      phases: board.phases.map((phase) => ({
-        id: phase.id,
-        name: phase.name,
-        description: phase.description,
-        startDate: phase.startDate,
-        expectedEndDate: phase.expectedEndDate,
-        ownerAdminId: ownerByPhaseId.get(phase.id) ?? null,
-        tasks: phase.tasks.map((task) => ({
-          id: task.id,
-          title: task.title,
-          description: task.description || undefined,
-          priority: task.priority,
-          assigneeAdminId: task.assigneeAdminId,
-          startDate: task.startDate,
-          dueDate: task.dueDate,
-        })),
-      })),
-    };
+  const persistPhaseRows = async (phaseRows: ProjectPhaseFormRow[]) => {
+    if (!project || !board) return;
+    const payload = buildSavePlanPayload(project, board.phases, phaseRows);
+    await run(() => saveProjectPlan(projectId, payload));
+    toast.success('Phases updated.');
+    await load();
+    setManagePhasesOpen(false);
+    setAddPhaseOpen(false);
   };
 
   const savePlan = async () => {
-    const payload = buildPlanPayload();
-    if (!payload) return;
+    if (!project || !board) return;
     try {
+      const payload = buildSavePlanPayload(project, board.phases);
       await run(() => saveProjectPlan(projectId, payload));
       toast.success('Plan saved. Project is now Planned.');
       await load();
@@ -176,6 +194,94 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
       toast.error(describeCrmError(failure));
     }
   };
+
+  const reorderPhasesOnBoard = async (orderedPhaseIds: readonly string[]) => {
+    if (!project || !board || readOnly) return;
+    const previousBoard = board;
+    const optimisticPhases = reorderBoardPhasesWithSlotDates(board.phases, orderedPhaseIds);
+    if (!optimisticPhases) return;
+
+    setBoard({ ...board, phases: optimisticPhases });
+    try {
+      const updated = await reorderProjectPhases(projectId, {
+        orderedPhaseIds: [...orderedPhaseIds],
+      });
+      setBoard(updated);
+    } catch (failure) {
+      setBoard(previousBoard);
+      toast.error(describeCrmError(failure));
+      throw failure;
+    }
+  };
+
+  const renamePhase = async (phaseId: string, name: string) => {
+    if (!project || readOnly) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const rows = projectToForm(project).phases.map((row) =>
+      row.id === phaseId ? { ...row, name: trimmed } : row,
+    );
+    try {
+      await persistPhaseRows(rows);
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
+  const confirmDeletePhase = async () => {
+    if (!project || !board || !deletePhaseId) return;
+    const phase = board.phases.find((p) => p.id === deletePhaseId);
+    if (phase && phase.taskCount > 0) {
+      toast.error('Move or delete tasks in this phase before removing it.');
+      setDeletePhaseId(null);
+      return;
+    }
+    const rows = projectToForm(project).phases.filter((row) => row.id !== deletePhaseId);
+    if (rows.length === 0) {
+      toast.error('A project plan must include at least one phase.');
+      setDeletePhaseId(null);
+      return;
+    }
+    try {
+      await persistPhaseRows(rows);
+      setDeletePhaseId(null);
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
+  const toggleActive = async (target: ProjectActionTarget) => {
+    const nextStatus = target.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    try {
+      await run(() => changeProjectStatus(target.id, { status: nextStatus }));
+      toast.success(nextStatus === 'ACTIVE' ? 'Project activated.' : 'Project marked inactive.');
+      await load();
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
+  const confirmToggleActive = async () => {
+    if (!statusToggleTarget) return;
+    const target = statusToggleTarget;
+    setStatusToggleTarget(null);
+    await toggleActive(target);
+  };
+
+  const confirmDeleteProject = async () => {
+    if (!deleteProjectTarget) return;
+    const target = deleteProjectTarget;
+    try {
+      await run(() => deleteProjectApi(target.id));
+      toast.success(`Project "${target.projectNumber}" deleted.`);
+      setDeleteProjectTarget(null);
+      router.push('/admin/project-tasks');
+    } catch (failure) {
+      toast.error(describeCrmError(failure));
+    }
+  };
+
+  const actionsBusy = pending;
 
   if (loading && !board) {
     return <CrmLoadingRows rows={8} />;
@@ -193,52 +299,16 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
   }
 
   return (
-    <div className="grid w-full min-w-0 max-w-full gap-2">
-      <AdminBreadcrumb
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/admin/dashboard' },
-          { label: 'Project Management', href: '/admin/project-tasks' },
-          { label: project.name, href: `/admin/project-tasks/${projectId}` },
-          { label: readOnly ? 'View plan' : 'Planning' },
-        ]}
-        className="mb-0"
-      />
-      <section className="workspace-toolbar px-3 py-3 sm:px-4">
-        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1">
-            <p className="text-muted-foreground text-xs font-medium tabular-nums">
-              {project.projectNumber}
-            </p>
-            <h1 className="text-lg font-semibold sm:text-xl">{project.name}</h1>
-            <p className="text-muted-foreground text-sm">{project.clientName}</p>
-            {project.projectManagerName ? (
-              <p className="text-muted-foreground text-xs">
-                Project manager: {project.projectManagerName}
-              </p>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <ProjectExecutionLifecycleBadge lifecycle={project.executionLifecycle} />
-              <ProjectPriorityBadge priority={project.priority} />
-            </div>
-            <p className="text-foreground text-xs tabular-nums">
-              Planned: {formatDateOnly(project.startDate)} –{' '}
-              {formatDateOnly(project.expectedEndDate)}
-            </p>
-            {project.scopeAndRequirements?.trim() ? (
-              <p className="text-muted-foreground line-clamp-3 text-xs">
-                {project.scopeAndRequirements}
-              </p>
-            ) : null}
-          </div>
-          {!readOnly ? (
-            <Button type="button" onClick={() => void savePlan()} disabled={pending}>
-              Save Plan
-            </Button>
-          ) : null}
-        </div>
+    <>
+      <ProjectWorkspaceShell
+        project={project}
+        actionsDisabled={actionsBusy || readOnly}
+        onToggleActive={(target) => setStatusToggleTarget(target)}
+        onEditProject={() => setProjectFormOpen(true)}
+        onDeleteProject={(target) => setDeleteProjectTarget(target)}
+      >
         {readOnly ? (
           <ProjectPlanLockNotice
-            className="mt-3"
             message={
               project.executionLifecycle === 'COMPLETED'
                 ? 'Completed projects are read-only.'
@@ -246,21 +316,67 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
             }
           />
         ) : null}
-      </section>
-      <ProjectTaskKanbanBoard
-        phases={phases}
-        tasks={tasks}
-        disabled={pending || readOnly}
-        onPersistMove={persistMove}
-        onView={openEdit}
-        onEdit={openEdit}
-        onDelete={(taskId) => {
-          if (readOnly) return;
-          const task = tasks.find((t) => t.id === taskId);
-          if (task) setDeleteTarget(task);
-        }}
-        onAddInPhase={readOnly ? () => {} : (phaseId) => openCreate(phaseId)}
-      />
+
+        <div className="border-border -mx-4 mb-4 border-y sm:-mx-5">
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-5">
+            <div className="min-w-0">
+              <h2 className="text-foreground text-lg font-semibold tracking-tight">Project Plan</h2>
+              <p className="text-muted-foreground mt-0.5 text-sm">
+                Manage project phases and tasks. Drag and drop tasks to update status.
+              </p>
+            </div>
+            {!readOnly ? (
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  onClick={() => setManagePhasesOpen(true)}
+                >
+                  <Layers className="size-4" aria-hidden="true" />
+                  Manage Phases
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+                  disabled={actionsBusy}
+                  onClick={() => void savePlan()}
+                >
+                  Save Plan
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <ProjectTaskKanbanBoard
+          phases={phases}
+          tasks={tasks}
+          columnVariant="plan"
+          cardVariant="plan"
+          disabled={readOnly}
+          dragDisabled={actionsBusy}
+          onPersistMove={persistMove}
+          onView={openEdit}
+          onEdit={openEdit}
+          onDelete={(taskId) => {
+            if (readOnly) return;
+            const task = tasks.find((t) => t.id === taskId);
+            if (task) setDeleteTarget(task);
+          }}
+          onAddInPhase={readOnly ? () => {} : (phaseId) => openCreate(phaseId)}
+          onManagePhases={readOnly ? undefined : () => setManagePhasesOpen(true)}
+          onDeletePhase={readOnly ? undefined : (phaseId) => setDeletePhaseId(phaseId)}
+          onRenamePhase={readOnly ? undefined : renamePhase}
+          renameDisabled={actionsBusy}
+          onAddPhase={readOnly ? undefined : () => setAddPhaseOpen(true)}
+          onPersistPhaseReorder={readOnly ? undefined : reorderPhasesOnBoard}
+          onTaskStatusChange={readOnly ? undefined : changeTaskStatus}
+        />
+      </ProjectWorkspaceShell>
+
       {!readOnly ? (
         <>
           <ProjectTaskFormDialog
@@ -270,6 +386,21 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
             editingTask={editingTask}
             defaultPhaseId={defaultPhaseId}
             onSubmit={handleSaveTask}
+          />
+          <ProjectManagePhasesDialog
+            open={managePhasesOpen}
+            onOpenChange={setManagePhasesOpen}
+            project={project}
+            boardPhases={board.phases}
+            saving={pending}
+            onSave={persistPhaseRows}
+          />
+          <ProjectAddPhaseDialog
+            open={addPhaseOpen}
+            onOpenChange={setAddPhaseOpen}
+            project={project}
+            saving={pending}
+            onAdd={persistPhaseRows}
           />
           <AlertDialog open={Boolean(deleteTarget)} onOpenChange={() => setDeleteTarget(null)}>
             <AlertDialogContent>
@@ -285,8 +416,63 @@ export function ProjectPlanningPage({ projectId }: { projectId: string }) {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+          <AlertDialog open={Boolean(deletePhaseId)} onOpenChange={() => setDeletePhaseId(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete phase?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This removes the phase from the plan. It must have no tasks.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void confirmDeletePhase()}>Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       ) : null}
-    </div>
+
+      <ProjectDeleteDialog
+        target={deleteProjectTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteProjectTarget(null);
+        }}
+        onConfirm={() => void confirmDeleteProject()}
+      />
+
+      <AlertDialog
+        open={Boolean(statusToggleTarget)}
+        onOpenChange={(open) => {
+          if (!open) setStatusToggleTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {statusToggleTarget?.status === 'ACTIVE' ? 'Deactivate project?' : 'Activate project?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {statusToggleTarget?.status === 'ACTIVE'
+                ? `Mark “${statusToggleTarget.name}” (${statusToggleTarget.projectNumber}) as inactive? It will be hidden from active workflows until you activate it again.`
+                : `Mark “${statusToggleTarget?.name}” (${statusToggleTarget?.projectNumber}) as active?`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmToggleActive()}>
+              {statusToggleTarget?.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ProjectFormDialog
+        open={projectFormOpen}
+        editingId={projectId}
+        onOpenChange={setProjectFormOpen}
+        onSaved={() => void load()}
+      />
+    </>
   );
 }

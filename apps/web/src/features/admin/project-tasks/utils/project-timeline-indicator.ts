@@ -190,6 +190,32 @@ export const projectCardTimelineToneClass: Record<ProjectCardTimelineTone, strin
 export type ProjectDaysLeftTone = 'neutral' | 'soon' | 'overdue';
 
 /** Days from today until expected end (for date row on cards). */
+/** Countdown to expected start before start day; until expected end once started. */
+export function getProjectRemainingTimeLabel(
+  startDate: string,
+  expectedEndDate: string,
+  todayIso: string = localDateOnlyIso(),
+): { readonly label: string; readonly tone: ProjectDaysLeftTone } | null {
+  const start = startDate.slice(0, 10);
+  if (!isValidDateOnly(start)) return null;
+
+  if (todayIso < start) {
+    const untilStart = calendarDaysBetween(todayIso, start);
+    if (untilStart <= 0) {
+      return { label: 'Starts today', tone: 'soon' };
+    }
+    if (untilStart === 1) {
+      return { label: '1 day left', tone: 'soon' };
+    }
+    if (untilStart <= 7) {
+      return { label: `${untilStart} days left`, tone: 'soon' };
+    }
+    return { label: `${untilStart} days left`, tone: 'neutral' };
+  }
+
+  return getProjectDaysLeftUntilEnd(expectedEndDate, todayIso);
+}
+
 export function getProjectDaysLeftUntilEnd(
   expectedEndDate: string,
   todayIso: string = localDateOnlyIso(),

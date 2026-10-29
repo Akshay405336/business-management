@@ -5,6 +5,7 @@ import { Decimal } from '@prisma/client/runtime/client';
 import { Prisma } from '../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../infrastructure/database/prisma.service.js';
 import { PROJECT_NUMBER_SEQUENCE_KEY } from '../../../domain/constants/project-sequence.js';
+import { assignProjectPhaseOrders } from './project-phase-order.js';
 import {
   ProjectNotFoundError,
   ProjectValidationError,
@@ -789,6 +790,71 @@ export class PrismaProjectRepository implements ProjectRepository {
     const updated = await this.getProject(organizationId, projectId);
     if (!updated) throw new ProjectNotFoundError('Project');
     return updated;
+  }
+
+  async reorderProjectPhases(
+    organizationId: string,
+    projectId: string,
+    orderedPhaseIds: readonly string[],
+    audit: { adminId: string | null },
+  ): Promise<void> {
+    const existing = await this.getProject(organizationId, projectId);
+    if (!existing) throw new ProjectNotFoundError('Project');
+    ProjectExecutionLifecyclePolicy.assertCanSavePlan(existing.executionLifecycle);
+
+    const phaseRows = await this.prisma.projectPhase.findMany({
+      where: { organizationId, projectId },
+      select: { id: true, startDate: true, expectedEndDate: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    const slotDates = phaseRows.map((row) => ({
+      startDate: row.startDate,
+      expectedEndDate: row.expectedEndDate,
+    }));
+    const phaseIds = new Set(phaseRows.map((row) => row.id));
+    if (orderedPhaseIds.length !== phaseIds.size) {
+      throw new ProjectValidationError(
+        'Phase reorder must include every project phase exactly once.',
+      );
+    }
+    const seen = new Set<string>();
+    for (const id of orderedPhaseIds) {
+      if (!phaseIds.has(id)) throw new ProjectNotFoundError('Project phase');
+      if (seen.has(id)) {
+        throw new ProjectValidationError('Phase reorder contains duplicate phase identifiers.');
+      }
+      seen.add(id);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const lifecycleRow = await tx.project.findFirst({
+        where: { id: projectId, organizationId },
+        select: { executionLifecycle: true },
+      });
+      if (!lifecycleRow) throw new ProjectNotFoundError('Project');
+      ProjectExecutionLifecyclePolicy.assertCanSavePlan(lifecycleRow.executionLifecycle);
+
+      await assignProjectPhaseOrders(tx, orderedPhaseIds);
+      for (let index = 0; index < orderedPhaseIds.length; index += 1) {
+        const phaseId = orderedPhaseIds[index]!;
+        const slot = slotDates[index];
+        if (!slot) {
+          throw new ProjectValidationError('Failed to resolve timeline slot for phase reorder.');
+        }
+        await tx.projectPhase.update({
+          where: { id: phaseId },
+          data: {
+            startDate: slot.startDate,
+            expectedEndDate: slot.expectedEndDate,
+          },
+        });
+      }
+      await this.writeAudit(tx, organizationId, {
+        adminId: audit.adminId,
+        type: 'PROJECT_UPDATED',
+        entityId: projectId,
+      });
+    });
   }
 
   async startProduction(

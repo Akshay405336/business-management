@@ -24,9 +24,11 @@ import {
   createProjectTaskRequestSchema,
   moveProjectTaskRequestSchema,
   parseProjectListQuery,
+  reorderProjectPhasesRequestSchema,
   updateProjectTaskRequestSchema,
   type CreateProjectTaskRequest,
   type MoveProjectTaskRequest,
+  type ReorderProjectPhasesRequest,
   type UpdateProjectTaskRequest,
 } from '@techwin/validation';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
@@ -44,6 +46,7 @@ import { DeleteProjectTaskHandler } from '../../../application/delete-project-ta
 import { GetProjectTaskBoardHandler } from '../../../application/get-project-task-board/get-project-task-board.handler.js';
 import { ListProjectTaskSummariesHandler } from '../../../application/list-project-task-summaries/list-project-task-summaries.handler.js';
 import { MoveProjectTaskHandler } from '../../../application/move-project-task/move-project-task.handler.js';
+import { ReorderProjectPhasesHandler } from '../../../application/reorder-project-phases/reorder-project-phases.handler.js';
 import { UpdateProjectTaskHandler } from '../../../application/update-project-task/update-project-task.handler.js';
 import { ProjectExceptionFilter } from '../filters/project-exception.filter.js';
 import { toProjectActor } from '../mappers/project-actor.mapper.js';
@@ -72,6 +75,8 @@ export class ProjectTasksController {
     @Inject(UpdateProjectTaskHandler) private readonly updateTask: UpdateProjectTaskHandler,
     @Inject(MoveProjectTaskHandler) private readonly moveTask: MoveProjectTaskHandler,
     @Inject(DeleteProjectTaskHandler) private readonly deleteTask: DeleteProjectTaskHandler,
+    @Inject(ReorderProjectPhasesHandler)
+    private readonly reorderPhases: ReorderProjectPhasesHandler,
   ) {}
 
   @RequirePermissions('tasks.read')
@@ -102,6 +107,21 @@ export class ProjectTasksController {
       actor: toProjectActor(ctx),
       projectId,
     });
+    return toProjectTaskBoardResponse(board);
+  }
+
+  @RequirePermissions('tasks.update')
+  @Post('projects/:projectId/phases/reorder')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reorder project plan phases' })
+  @ApiOkResponse({ schema: toOpenApiSchema(projectTaskBoardResponseSchema) })
+  async reorderProjectPhases(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('projectId') projectId: string,
+    @Body() raw: unknown,
+  ): Promise<ProjectTaskBoardResponse> {
+    const body: ReorderProjectPhasesRequest = reorderProjectPhasesRequestSchema.parse(raw);
+    const board = await this.reorderPhases.execute(toProjectActor(ctx), projectId, body);
     return toProjectTaskBoardResponse(board);
   }
 

@@ -32,6 +32,8 @@ export interface EmployeeListItem {
   readonly employmentStatus: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
   readonly reportingManager: EmployeeManagerSummary | null;
+  /** Linked platform admin account used for task assignment and login. */
+  readonly platformAdminId: string | null;
 }
 
 export interface EmployeeDetail extends EmployeeListItem {

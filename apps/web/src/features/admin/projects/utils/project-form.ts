@@ -194,6 +194,24 @@ export function reorderProjectPhases(
   );
 }
 
+export function reorderProjectPhaseRowsByIds(
+  phases: readonly ProjectPhaseFormRow[],
+  orderedIds: readonly string[],
+  projectStartDate: string,
+  projectExpectedEndDate: string,
+): ProjectPhaseFormRow[] {
+  const byId = new Map(
+    phases.filter((row) => row.id).map((row) => [row.id as string, row]),
+  );
+  const reordered = orderedIds
+    .map((id) => byId.get(id))
+    .filter((row): row is ProjectPhaseFormRow => Boolean(row));
+  if (reordered.length !== phases.length) {
+    return [...phases];
+  }
+  return reorderProjectPhases(reordered, projectStartDate, projectExpectedEndDate);
+}
+
 export function applyProjectTimelineChange(
   phases: readonly ProjectPhaseFormRow[],
   projectStartDate: string,

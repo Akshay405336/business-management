@@ -13,6 +13,7 @@ import { ListProjectsHandler } from './application/list-projects/list-projects.h
 import { PreviewProjectNumberHandler } from './application/preview-project-number/preview-project-number.handler.js';
 import { UpdateProjectHandler } from './application/update-project/update-project.handler.js';
 import { CompleteProjectHandler } from './application/complete-project/complete-project.handler.js';
+import { ReorderProjectPhasesHandler } from './application/reorder-project-phases/reorder-project-phases.handler.js';
 import { SaveProjectPlanHandler } from './application/save-project-plan/save-project-plan.handler.js';
 import { StartProjectProductionHandler } from './application/start-project-production/start-project-production.handler.js';
 import { CreateProjectTaskHandler } from './application/create-project-task/create-project-task.handler.js';
@@ -55,6 +56,7 @@ export const projectPersistenceProviders: Provider[] = [
     ListProjectManagersHandler,
     ListClientQuotationsHandler,
     SaveProjectPlanHandler,
+    ReorderProjectPhasesHandler,
     StartProjectProductionHandler,
     CompleteProjectHandler,
     ProjectExceptionFilter,

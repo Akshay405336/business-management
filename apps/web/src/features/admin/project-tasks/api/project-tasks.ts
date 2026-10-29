@@ -5,6 +5,7 @@ import type {
   CreateProjectTaskRequest,
   MoveProjectTaskRequest,
   ProjectListQuery,
+  ReorderProjectPhasesRequest,
   UpdateProjectTaskRequest,
 } from '@techwin/validation';
 import type {
@@ -30,6 +31,17 @@ export function getProjectTaskBoard(
   return apiRequest<ProjectTaskBoardResponse>(PROJECT_TASK_ROUTES.board(projectId), {
     auth: true,
     signal,
+  });
+}
+
+export function reorderProjectPhases(
+  projectId: string,
+  body: ReorderProjectPhasesRequest,
+): Promise<ProjectTaskBoardResponse> {
+  return apiRequest<ProjectTaskBoardResponse>(PROJECT_TASK_ROUTES.reorderPhases(projectId), {
+    method: 'POST',
+    auth: true,
+    body,
   });
 }
 

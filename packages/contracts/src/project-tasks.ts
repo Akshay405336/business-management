@@ -15,6 +15,8 @@ export const PROJECT_TASK_ROUTES = {
     `${API_PREFIX}/project-tasks/projects/${projectId}/tasks/${taskId}`,
   moveTask: (projectId: string, taskId: string) =>
     `${API_PREFIX}/project-tasks/projects/${projectId}/tasks/${taskId}/move`,
+  reorderPhases: (projectId: string) =>
+    `${API_PREFIX}/project-tasks/projects/${projectId}/phases/reorder`,
 } as const;
 
 export type ProjectTaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'COMPLETED';

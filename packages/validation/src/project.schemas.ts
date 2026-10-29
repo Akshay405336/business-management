@@ -288,3 +288,11 @@ export const saveProjectPlanRequestSchema = z
   .strict();
 
 export type SaveProjectPlanRequest = z.infer<typeof saveProjectPlanRequestSchema>;
+
+export const reorderProjectPhasesRequestSchema = z
+  .object({
+    orderedPhaseIds: z.array(uuid).min(1),
+  })
+  .strict();
+
+export type ReorderProjectPhasesRequest = z.infer<typeof reorderProjectPhasesRequestSchema>;

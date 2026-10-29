@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -25,15 +24,25 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { CrmFormField, CrmInlineFieldError } from '@/features/admin/crm/components/crm-feedback';
+import {
+  CRM_PIPELINE_FORM_FIELD_CLASS,
+  CRM_PIPELINE_FORM_TEXTAREA_CLASS,
+} from '@/features/admin/crm/constants';
+import { CrmFieldLabel, CrmInlineFieldError } from '@/features/admin/crm/components/crm-feedback';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
-import { listProjectManagers } from '@/features/admin/projects/api/projects';
-import { focusFirstInvalidField } from '@/shared/form/form-control-state';
-import { formGridClass, formGridFullWidthClass } from '@/shared/form/form-layout';
+import { EmployeeAssigneeSelect } from '@/features/admin/employees/components/employee-assignee-select';
+import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { zodIssuesToFieldMap } from '@/shared/form/zod-field-error';
+import { cn } from '@/shared/lib/utils';
 import { useAdminToast } from '@/features/admin/components/toast';
-import { PROJECT_TASK_FORM_DIALOG_CLASS, PROJECT_TASK_PRIORITIES, PROJECT_TASK_STATUSES } from '../constants';
+import {
+  PROJECT_TASK_FORM_DIALOG_CLASS,
+  PROJECT_TASK_FORM_PRIMARY_BTN,
+  PROJECT_TASK_FORM_SECONDARY_BTN,
+  PROJECT_TASK_PRIORITIES,
+  PROJECT_TASK_STATUSES,
+} from '../constants';
 import type { ProjectTask, ProjectTaskBoardPhase } from '../types';
 import { labelProjectTaskPriority, labelProjectTaskStatus } from '../utils/labels';
 
@@ -93,6 +102,11 @@ function formToPayload(form: FormState) {
   };
 }
 
+const SELECT_TRIGGER_CLASS = cn(
+  CRM_PIPELINE_FORM_FIELD_CLASS,
+  'w-full border-0 shadow-none data-[placeholder]:text-muted-foreground/55',
+);
+
 export type ProjectTaskFormMode = 'plan' | 'execution' | 'readonly';
 
 export function ProjectTaskFormDialog({
@@ -118,7 +132,6 @@ export function ProjectTaskFormDialog({
     emptyForm(defaultPhaseId ?? phases[0]?.id ?? ''),
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [managers, setManagers] = useState<readonly { id: string; displayName: string }[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -126,7 +139,6 @@ export function ProjectTaskFormDialog({
     setFieldErrors({});
     if (editingTask) setForm(taskToForm(editingTask));
     else setForm(emptyForm(defaultPhaseId ?? phases[0]?.id ?? ''));
-    void listProjectManagers().then((res) => setManagers(res.managers));
   }, [open, editingTask, defaultPhaseId, phases]);
 
   const executionOnly = mode === 'execution';
@@ -171,31 +183,56 @@ export function ProjectTaskFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={PROJECT_TASK_FORM_DIALOG_CLASS}>
-        <DialogHeader className="px-6 pt-6">
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {executionOnly
-              ? 'Update status and assignee during production. Planned task details stay locked.'
-              : 'Tasks belong to a project phase. Dates and assignee are optional.'}
-          </DialogDescription>
+        <DialogHeader className="shrink-0 space-y-0 px-6 pt-6 pb-2 text-left">
+          <DialogTitle className="text-foreground pr-10 text-xl font-semibold tracking-tight">
+            {title}
+          </DialogTitle>
+          {!viewOnly ? (
+            <p className="text-muted-foreground pt-1 text-sm">
+              {executionOnly
+                ? 'Update status and assignee during production. Planned task details stay locked.'
+                : 'Tasks belong to a project phase. Dates and assignee are optional.'}
+            </p>
+          ) : null}
         </DialogHeader>
-        <div className="overflow-y-auto px-6 pb-2">
-          <div className={formGridClass}>
-            <CrmFormField label="Title" required className={formGridFullWidthClass}>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <CrmFieldLabel htmlFor="task-title" required>
+                Title
+              </CrmFieldLabel>
               <Input
+                id="task-title"
                 value={form.title}
-                disabled={executionOnly || viewOnly}
+                disabled={executionOnly || viewOnly || pending}
+                aria-invalid={Boolean(fieldErrors.title)}
+                className={cn(
+                  CRM_PIPELINE_FORM_FIELD_CLASS,
+                  formControlStateClass(fieldErrors.title ? 'invalid' : 'neutral'),
+                )}
                 onChange={(e) => setForm((c) => ({ ...c, title: e.target.value }))}
               />
-              <CrmInlineFieldError message={fieldErrors.title} />
-            </CrmFormField>
-            <CrmFormField label="Phase" required className={formGridFullWidthClass}>
+              <CrmInlineFieldError message={fieldErrors.title} reserveSpace={false} />
+            </div>
+
+            <div className="grid gap-2">
+              <CrmFieldLabel htmlFor="task-phase" required>
+                Phase
+              </CrmFieldLabel>
               <Select
                 value={form.phaseId}
-                disabled={executionOnly || viewOnly}
+                disabled={executionOnly || viewOnly || pending}
                 onValueChange={(value) => setForm((c) => ({ ...c, phaseId: value }))}
               >
-                <SelectTrigger>
+                <SelectTrigger
+                  id="task-phase"
+                  aria-invalid={Boolean(fieldErrors.phaseId)}
+                  className={cn(
+                    SELECT_TRIGGER_CLASS,
+                    formControlStateClass(fieldErrors.phaseId ? 'invalid' : 'neutral'),
+                  )}
+                >
                   <SelectValue placeholder="Select phase" />
                 </SelectTrigger>
                 <SelectContent>
@@ -206,116 +243,170 @@ export function ProjectTaskFormDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <CrmInlineFieldError message={fieldErrors.phaseId} />
-            </CrmFormField>
-            <CrmFormField label="Priority" required>
-              <Select
-                value={form.priority}
-                disabled={executionOnly || viewOnly}
-                onValueChange={(value) =>
-                  setForm((c) => ({ ...c, priority: value as FormState['priority'] }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROJECT_TASK_PRIORITIES.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {labelProjectTaskPriority(p)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CrmFormField>
-            <CrmFormField label="Status" required>
-              <Select
-                value={form.status}
-                disabled={viewOnly}
-                onValueChange={(value) =>
-                  setForm((c) => ({ ...c, status: value as FormState['status'] }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROJECT_TASK_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {labelProjectTaskStatus(s)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CrmFormField>
-            <CrmFormField label="Assignee" className={formGridFullWidthClass}>
-              <Select
-                value={form.assigneeAdminId || '__none__'}
-                disabled={viewOnly}
-                onValueChange={(value) =>
-                  setForm((c) => ({
-                    ...c,
-                    assigneeAdminId: value === '__none__' ? '' : value,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Unassigned" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">Unassigned</SelectItem>
-                  {managers.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CrmFormField>
-            <CrmFormField label="Start date">
-              <Input
-                type="date"
-                value={form.startDate}
-                disabled={executionOnly || viewOnly}
-                onChange={(e) => setForm((c) => ({ ...c, startDate: e.target.value }))}
+              <CrmInlineFieldError message={fieldErrors.phaseId} reserveSpace={false} />
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+              <div className="grid gap-2">
+                <CrmFieldLabel htmlFor="task-priority" required>
+                  Priority
+                </CrmFieldLabel>
+                <Select
+                  value={form.priority}
+                  disabled={executionOnly || viewOnly || pending}
+                  onValueChange={(value) =>
+                    setForm((c) => ({ ...c, priority: value as FormState['priority'] }))
+                  }
+                >
+                  <SelectTrigger id="task-priority" className={SELECT_TRIGGER_CLASS}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_TASK_PRIORITIES.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {labelProjectTaskPriority(p)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <CrmFieldLabel htmlFor="task-status" required>
+                  Status
+                </CrmFieldLabel>
+                <Select
+                  value={form.status}
+                  disabled={viewOnly || pending}
+                  onValueChange={(value) =>
+                    setForm((c) => ({ ...c, status: value as FormState['status'] }))
+                  }
+                >
+                  <SelectTrigger id="task-status" className={SELECT_TRIGGER_CLASS}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_TASK_STATUSES.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {labelProjectTaskStatus(s)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <CrmFieldLabel htmlFor="task-assignee" optional>
+                Assignee
+              </CrmFieldLabel>
+              <EmployeeAssigneeSelect
+                id="task-assignee"
+                value={form.assigneeAdminId}
+                disabled={viewOnly || pending}
+                invalid={Boolean(fieldErrors.assigneeAdminId)}
+                onChange={(assigneeAdminId) => setForm((c) => ({ ...c, assigneeAdminId }))}
               />
-              <CrmInlineFieldError message={fieldErrors.startDate} />
-            </CrmFormField>
-            <CrmFormField label="Due date">
-              <Input
-                type="date"
-                value={form.dueDate}
-                disabled={executionOnly || viewOnly}
-                onChange={(e) => setForm((c) => ({ ...c, dueDate: e.target.value }))}
-              />
-              <CrmInlineFieldError message={fieldErrors.dueDate} />
-            </CrmFormField>
-            <CrmFormField label="Description" className={formGridFullWidthClass}>
+              <CrmInlineFieldError message={fieldErrors.assigneeAdminId} reserveSpace={false} />
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 sm:gap-3">
+              <div className="grid gap-2">
+                <CrmFieldLabel htmlFor="task-start" optional>
+                  Start date
+                </CrmFieldLabel>
+                <Input
+                  id="task-start"
+                  type="date"
+                  value={form.startDate}
+                  disabled={executionOnly || viewOnly || pending}
+                  aria-invalid={Boolean(fieldErrors.startDate)}
+                  className={cn(
+                    CRM_PIPELINE_FORM_FIELD_CLASS,
+                    formControlStateClass(fieldErrors.startDate ? 'invalid' : 'neutral'),
+                  )}
+                  onChange={(e) => setForm((c) => ({ ...c, startDate: e.target.value }))}
+                />
+                <CrmInlineFieldError message={fieldErrors.startDate} reserveSpace={false} />
+              </div>
+              <div className="grid gap-2">
+                <CrmFieldLabel htmlFor="task-due" optional>
+                  Due date
+                </CrmFieldLabel>
+                <Input
+                  id="task-due"
+                  type="date"
+                  value={form.dueDate}
+                  disabled={executionOnly || viewOnly || pending}
+                  aria-invalid={Boolean(fieldErrors.dueDate)}
+                  className={cn(
+                    CRM_PIPELINE_FORM_FIELD_CLASS,
+                    formControlStateClass(fieldErrors.dueDate ? 'invalid' : 'neutral'),
+                  )}
+                  onChange={(e) => setForm((c) => ({ ...c, dueDate: e.target.value }))}
+                />
+                <CrmInlineFieldError message={fieldErrors.dueDate} reserveSpace={false} />
+              </div>
+            </div>
+
+            <div className="grid gap-2">
+              <CrmFieldLabel htmlFor="task-description" optional>
+                Description
+              </CrmFieldLabel>
               <Textarea
+                id="task-description"
                 rows={3}
                 value={form.description}
-                disabled={executionOnly || viewOnly}
+                disabled={executionOnly || viewOnly || pending}
+                className={CRM_PIPELINE_FORM_TEXTAREA_CLASS}
                 onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))}
               />
-            </CrmFormField>
-            <CrmFormField label="Labels" className={formGridFullWidthClass}>
+            </div>
+
+            <div className="grid gap-2">
+              <CrmFieldLabel htmlFor="task-labels" optional>
+                Labels
+              </CrmFieldLabel>
               <Input
+                id="task-labels"
                 placeholder="Comma-separated labels"
                 value={form.labelsText}
-                disabled={viewOnly}
+                disabled={viewOnly || pending}
+                className={CRM_PIPELINE_FORM_FIELD_CLASS}
                 onChange={(e) => setForm((c) => ({ ...c, labelsText: e.target.value }))}
               />
-            </CrmFormField>
+            </div>
           </div>
         </div>
-        <DialogFooter className="px-6 pb-6">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+
+        <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className={PROJECT_TASK_FORM_SECONDARY_BTN}
+            disabled={pending}
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           {!viewOnly ? (
-            <Button type="button" disabled={pending} onClick={() => void handleSave()}>
-              {pending ? <Loader2 className="size-4 animate-spin" /> : null}
-              {executionOnly ? 'Save progress' : 'Save task'}
+            <Button
+              type="button"
+              className={cn(PROJECT_TASK_FORM_PRIMARY_BTN)}
+              disabled={pending}
+              onClick={() => void handleSave()}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Saving…
+                </>
+              ) : executionOnly ? (
+                'Save progress'
+              ) : editingTask ? (
+                'Save changes'
+              ) : (
+                'Add task'
+              )}
             </Button>
           ) : null}
         </DialogFooter>

@@ -193,6 +193,12 @@ export interface ProjectRepository {
     input: SaveProjectPlanInput,
     audit: { adminId: string | null },
   ): Promise<ProjectDetailRecord>;
+  reorderProjectPhases(
+    organizationId: string,
+    projectId: string,
+    orderedPhaseIds: readonly string[],
+    audit: { adminId: string | null },
+  ): Promise<void>;
   startProduction(
     organizationId: string,
     projectId: string,

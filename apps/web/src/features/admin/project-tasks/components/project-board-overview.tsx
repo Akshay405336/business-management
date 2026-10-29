@@ -57,6 +57,7 @@ export function ProjectBoardOverview({
   onCompleteProject,
   completeDisabled,
   onViewPlan,
+  onEditProject,
   className,
 }: {
   board: ProjectTaskBoardResponse;
@@ -65,6 +66,7 @@ export function ProjectBoardOverview({
   onCompleteProject?: () => void;
   completeDisabled?: boolean;
   onViewPlan: () => void;
+  onEditProject: () => void;
   className?: string;
 }) {
   const { project } = board;

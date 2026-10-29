@@ -4,6 +4,16 @@ import { projectListQuerySchema } from '@techwin/validation';
 import { ListFilter, Plus, Search, SignalHigh } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
@@ -401,7 +411,7 @@ export function ProjectTasksPage() {
           onToggleActive={(target) => void toggleActive(target)}
           onEdit={openEdit}
           onDelete={setDeleteTarget}
-          onClearFilters={clearFilters}
+          onToggleActive={requestToggleActive}
           onRetry={() => void load()}
         />
       ) : (

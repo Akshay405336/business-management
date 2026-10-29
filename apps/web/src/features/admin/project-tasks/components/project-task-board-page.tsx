@@ -19,6 +19,7 @@ import { CrmErrorAlert, CrmLoadingRows } from '@/features/admin/crm/components/c
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { completeProject } from '@/features/admin/projects/api/projects';
+import { ProjectFormDialog } from '@/features/admin/projects/components/project-form-dialog';
 import { isProjectPlanLocked } from '@/features/admin/projects/constants/plan-lock';
 import {
   createProjectTask,
