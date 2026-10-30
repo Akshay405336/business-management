@@ -12,6 +12,9 @@ out/
 # Generated Prisma Client (regenerate with `pnpm db:generate`)
 apps/api/src/generated/
 
+# Local employee profile uploads (API)
+apps/api/data/uploads/
+
 # Environment
 .env
 .env.*

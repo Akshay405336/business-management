@@ -29,6 +29,17 @@ export interface AppConfig {
   readonly swagger: { readonly enabled: boolean };
   readonly rateLimit: { readonly globalPerMinute: number };
   readonly logging: { readonly level: Env['LOG_LEVEL']; readonly pretty: boolean };
+  readonly storage: {
+    readonly provider: 'local' | 's3';
+    readonly presignedTtlSeconds: number;
+    readonly employeeProfileMaxBytes: number;
+    readonly s3: {
+      readonly region: string;
+      readonly bucket: string;
+      readonly accessKeyId: string | null;
+      readonly secretAccessKey: string | null;
+    };
+  };
 }
 
 export class InvalidEnvironmentError extends Error {
@@ -92,5 +103,17 @@ export function loadAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfi
     swagger: { enabled: env.SWAGGER_ENABLED ?? !isProduction },
     rateLimit: { globalPerMinute: env.RATE_LIMIT_GLOBAL_PER_MINUTE },
     logging: { level: env.LOG_LEVEL, pretty: env.LOG_PRETTY },
+    storage: {
+      provider:
+        env.STORAGE_PROVIDER ?? (env.NODE_ENV === 'production' ? 's3' : ('local' as const)),
+      presignedTtlSeconds: env.STORAGE_PRESIGNED_TTL_SECONDS,
+      employeeProfileMaxBytes: env.STORAGE_EMPLOYEE_PROFILE_MAX_BYTES,
+      s3: {
+        region: env.AWS_REGION,
+        bucket: env.AWS_S3_BUCKET,
+        accessKeyId: env.AWS_ACCESS_KEY_ID ?? null,
+        secretAccessKey: env.AWS_SECRET_ACCESS_KEY ?? null,
+      },
+    },
   };
 }

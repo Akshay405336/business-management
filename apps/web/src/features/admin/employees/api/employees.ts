@@ -1,6 +1,7 @@
 import { EMPLOYEE_ROUTES } from '@techwin/contracts';
 import { apiRequest } from '@/shared/api/api-client';
 import { buildQueryString } from '@/features/admin/crm/utils/query-string';
+import type { EmployeeProfileImageUploadResponse } from '@techwin/contracts';
 import type {
   ChangeEmployeeStatusRequest,
   CreateEmployeeRequest,
@@ -8,9 +9,11 @@ import type {
   EmployeeDetail,
   EmployeeListQuery,
   EmployeeListResponse,
-  EmployeeManagerOptionsResponse,
   UpdateEmployeeRequest,
 } from '../types';
+import { accessTokenStore } from '@/shared/api/api-client';
+import { apiConfig } from '@/shared/api/api-config';
+import { readCookie } from '@/shared/lib/cookies';
 
 export function listEmployees(
   query: Partial<EmployeeListQuery> = {},
@@ -27,17 +30,6 @@ export function previewEmployeeCode(signal?: AbortSignal): Promise<EmployeeCodeP
     auth: true,
     signal,
   });
-}
-
-export function listEmployeeManagerOptions(
-  excludeEmployeeId?: string,
-  signal?: AbortSignal,
-): Promise<EmployeeManagerOptionsResponse> {
-  const query = excludeEmployeeId ? buildQueryString({ excludeEmployeeId }) : '';
-  return apiRequest<EmployeeManagerOptionsResponse>(
-    `${EMPLOYEE_ROUTES.employeeManagerOptions}${query}`,
-    { auth: true, signal },
-  );
 }
 
 export function getEmployee(id: string, signal?: AbortSignal): Promise<EmployeeDetail> {
@@ -65,4 +57,27 @@ export function changeEmployeeStatus(
 
 export function deleteEmployee(id: string): Promise<void> {
   return apiRequest<void>(EMPLOYEE_ROUTES.employee(id), { method: 'DELETE', auth: true });
+}
+
+export async function uploadEmployeeProfileImage(
+  file: File,
+): Promise<EmployeeProfileImageUploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers = new Headers();
+  const token = accessTokenStore.get();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const csrf = readCookie(apiConfig.csrfCookie);
+  if (csrf) headers.set(apiConfig.csrfHeader, csrf);
+  const url = `${apiConfig.baseUrl}${EMPLOYEE_ROUTES.employeeProfileImageUpload}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    body: formData,
+    credentials: 'include',
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error('Profile image upload failed.');
+  }
+  return (await response.json()) as EmployeeProfileImageUploadResponse;
 }

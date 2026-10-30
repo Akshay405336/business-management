@@ -5,17 +5,33 @@ export const EMPLOYEE_ROUTES = {
   employee: (id: string) => `${API_PREFIX}/employees/${id}`,
   employeeStatus: (id: string) => `${API_PREFIX}/employees/${id}/status`,
   employeeCodePreview: `${API_PREFIX}/employees/code-preview`,
-  employeeManagerOptions: `${API_PREFIX}/employees/manager-options`,
+  employeeProfileImageUpload: `${API_PREFIX}/employees/profile-image`,
+  employeeStoredProfileImageContent: (storedObjectId: string) =>
+    `${API_PREFIX}/employees/profile-stored-objects/${storedObjectId}/content`,
+  employeeProfileImage: (organizationId: string, fileName: string) =>
+    `${API_PREFIX}/employees/profile-images/${organizationId}/${fileName}`,
 } as const;
 
 export type EmployeeEmploymentStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' | 'TERMINATED';
 
 export type EmployeeEmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
 
-export interface EmployeeManagerSummary {
-  readonly id: string;
-  readonly displayName: string;
-  readonly employeeCode: string;
+export type EmployeeSalaryFrequency = 'MONTHLY' | 'ANNUAL';
+
+export interface EmployeeSalaryStructure {
+  readonly currency: string;
+  readonly frequency: EmployeeSalaryFrequency;
+  readonly basicSalary: number;
+  readonly houseRentAllowance: number;
+  readonly otherAllowances: number;
+  readonly bonus: number;
+  readonly otherEarnings: number;
+  readonly providentFund: number;
+  readonly professionalTax: number;
+  readonly otherDeductions: number;
+  readonly totalEarnings: number;
+  readonly totalDeductions: number;
+  readonly estimatedNetSalary: number;
 }
 
 export interface EmployeeListItem {
@@ -27,26 +43,29 @@ export interface EmployeeListItem {
   readonly workEmail: string;
   readonly phone: string;
   readonly jobTitle: string;
-  readonly department: string;
   readonly employmentType: EmployeeEmploymentType;
   readonly employmentStatus: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
-  readonly reportingManager: EmployeeManagerSummary | null;
+  readonly profileImageUrl: string | null;
   /** Linked platform admin account used for task assignment and login. */
   readonly platformAdminId: string | null;
 }
 
 export interface EmployeeDetail extends EmployeeListItem {
   readonly alternatePhone: string | null;
-  readonly profileImageUrl: string | null;
   readonly probationEndDate: string | null;
   readonly employmentEndDate: string | null;
   readonly workLocation: string | null;
   readonly notes: string;
-  readonly platformAdminId: string | null;
   readonly deactivatedAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly salaryStructure: EmployeeSalaryStructure | null;
+}
+
+export interface EmployeeProfileImageUploadResponse {
+  readonly profileImageStoredObjectId: string;
+  readonly profileImageUrl: string;
 }
 
 export interface EmployeeListResponse {
@@ -61,6 +80,3 @@ export interface EmployeeCodePreviewResponse {
   readonly isPreview: true;
 }
 
-export interface EmployeeManagerOptionsResponse {
-  readonly managers: readonly EmployeeManagerSummary[];
-}

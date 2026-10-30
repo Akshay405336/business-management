@@ -127,8 +127,7 @@ export function EmployeeAssigneeSelect({
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="h-9 text-xs">Code</TableHead>
                   <TableHead className="h-9 text-xs">Name</TableHead>
-                  <TableHead className="hidden h-9 text-xs sm:table-cell">Department</TableHead>
-                  <TableHead className="hidden h-9 text-xs md:table-cell">Job title</TableHead>
+                  <TableHead className="hidden h-9 text-xs sm:table-cell">Job title</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -140,13 +139,13 @@ export function EmployeeAssigneeSelect({
                     setOpen(false);
                   }}
                 >
-                  <TableCell colSpan={4} className="text-muted-foreground py-2 text-sm">
+                  <TableCell colSpan={3} className="text-muted-foreground py-2 text-sm">
                     Unassigned
                   </TableCell>
                 </TableRow>
                 {visibleEmployees.length === 0 ? (
                   <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={4} className="text-muted-foreground py-6 text-center text-sm">
+                    <TableCell colSpan={3} className="text-muted-foreground py-6 text-center text-sm">
                       No employees with a login account found.
                     </TableCell>
                   </TableRow>
@@ -163,8 +162,7 @@ export function EmployeeAssigneeSelect({
                     >
                       <TableCell className="py-2 text-xs tabular-nums">{employee.employeeCode}</TableCell>
                       <TableCell className="py-2 text-sm font-medium">{employee.displayName}</TableCell>
-                      <TableCell className="hidden py-2 text-xs sm:table-cell">{employee.department}</TableCell>
-                      <TableCell className="hidden py-2 text-xs md:table-cell">{employee.jobTitle}</TableCell>
+                      <TableCell className="hidden py-2 text-xs sm:table-cell">{employee.jobTitle}</TableCell>
                     </TableRow>
                   ))
                 )}

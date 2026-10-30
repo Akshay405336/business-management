@@ -1,5 +1,14 @@
-import type { EmployeeDetail, EmployeeListItem } from '@techwin/contracts';
+import type { EmployeeDetail, EmployeeListItem, EmployeeSalaryStructure } from '@techwin/contracts';
+import { computeEmployeeSalaryTotals } from '@techwin/validation';
 import type { EmployeeRecord } from '../../../domain/repositories/employee.repository.js';
+
+function toSalaryStructure(
+  record: EmployeeRecord['salaryStructure'],
+): EmployeeSalaryStructure | null {
+  if (!record) return null;
+  const totals = computeEmployeeSalaryTotals(record);
+  return { ...record, ...totals };
+}
 
 export function toEmployeeListItem(record: EmployeeRecord): EmployeeListItem {
   return {
@@ -11,16 +20,19 @@ export function toEmployeeListItem(record: EmployeeRecord): EmployeeListItem {
     workEmail: record.workEmail,
     phone: record.phone,
     jobTitle: record.jobTitle,
-    department: record.department,
     employmentType: record.employmentType,
     employmentStatus: record.employmentStatus,
     dateOfJoining: record.dateOfJoining,
-    reportingManager: record.reportingManager,
+    profileImageUrl: record.profileImageUrl,
     platformAdminId: record.platformAdminId,
   };
 }
 
-export function toEmployeeDetail(record: EmployeeRecord): EmployeeDetail {
+export function toEmployeeDetail(
+  record: EmployeeRecord,
+  options?: { readonly includeCompensation?: boolean },
+): EmployeeDetail {
+  const includeCompensation = options?.includeCompensation ?? false;
   return {
     ...toEmployeeListItem(record),
     alternatePhone: record.alternatePhone,
@@ -33,5 +45,6 @@ export function toEmployeeDetail(record: EmployeeRecord): EmployeeDetail {
     deactivatedAt: record.deactivatedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+    salaryStructure: includeCompensation ? toSalaryStructure(record.salaryStructure) : null,
   };
 }

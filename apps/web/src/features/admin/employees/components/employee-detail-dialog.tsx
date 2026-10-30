@@ -14,6 +14,8 @@ import type { EmployeeDetail } from '../types';
 import { labelEmploymentType, labelEmployeeStatus } from '../utils/labels';
 import { describeEmployeeError } from '../utils/errors';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
+import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { EmployeeAvatar } from './employee-avatar';
 import { EmployeeStatusBadge } from './employee-status-badge';
 
 type Props = {
@@ -33,6 +35,8 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 }
 
 export function EmployeeDetailDialog({ employeeId, open, onOpenChange }: Props) {
+  const { has } = useAdminAccess();
+  const canReadCompensation = has('employees.compensation.read');
   const [detail, setDetail] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,23 +85,39 @@ export function EmployeeDetailDialog({ employeeId, open, onOpenChange }: Props) 
           <CrmErrorAlert message={error} />
         ) : detail ? (
           <dl className="grid gap-4">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-3">
+              <EmployeeAvatar
+                displayName={detail.displayName}
+                profileImageUrl={detail.profileImageUrl}
+                lazyLoad={false}
+              />
+              <div className="flex flex-wrap items-center gap-2">
               <EmployeeStatusBadge status={detail.employmentStatus} />
               <span className="text-muted-foreground text-sm">{labelEmploymentType(detail.employmentType)}</span>
+              </div>
             </div>
+            {canReadCompensation && detail.salaryStructure ? (
+              <div className="bg-muted/40 border-border/60 rounded-lg border p-3 text-sm">
+                <p className="text-foreground mb-2 text-xs font-semibold uppercase tracking-wide">
+                  Salary ({detail.salaryStructure.frequency === 'MONTHLY' ? 'Monthly' : 'Annual'})
+                </p>
+                <p className="tabular-nums">
+                  Estimated net:{' '}
+                  <span className="font-semibold">
+                    {detail.salaryStructure.currency}{' '}
+                    {detail.salaryStructure.estimatedNetSalary.toFixed(2)}
+                  </span>
+                </p>
+                <p className="text-muted-foreground mt-1 text-xs tabular-nums">
+                  Earnings {detail.salaryStructure.totalEarnings.toFixed(2)} · Deductions{' '}
+                  {detail.salaryStructure.totalDeductions.toFixed(2)}
+                </p>
+              </div>
+            ) : null}
             <DetailRow label="Work email" value={detail.workEmail} />
             <DetailRow label="Phone" value={detail.phone} />
             <DetailRow label="Alternate phone" value={detail.alternatePhone} />
             <DetailRow label="Job title" value={detail.jobTitle} />
-            <DetailRow label="Department" value={detail.department} />
-            <DetailRow
-              label="Reporting manager"
-              value={
-                detail.reportingManager
-                  ? `${detail.reportingManager.displayName} (${detail.reportingManager.employeeCode})`
-                  : null
-              }
-            />
             <DetailRow label="Date joined" value={detail.dateOfJoining} />
             <DetailRow label="Probation ends" value={detail.probationEndDate} />
             <DetailRow label="Employment ends" value={detail.employmentEndDate} />

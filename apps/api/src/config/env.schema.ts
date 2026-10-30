@@ -60,6 +60,22 @@ export const envSchema = z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
     LOG_PRETTY: booleanFlag.default(false),
+
+    /** `local` for development disk storage; `s3` for AWS S3. Defaults to `local` when unset. */
+    STORAGE_PROVIDER: z.enum(['local', 's3']).optional(),
+    AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
+    AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    AWS_REGION: z.string().min(1).default('ap-south-1'),
+    AWS_S3_BUCKET: z.string().min(1).default('techwin-s3'),
+    /** Presigned download URL lifetime in seconds. */
+    STORAGE_PRESIGNED_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
+    /** Employee profile image max upload size in bytes (default 5 MB). */
+    STORAGE_EMPLOYEE_PROFILE_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024)
+      .max(20 * 1024 * 1024)
+      .default(5 * 1024 * 1024),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === 'production' && env.JWT_ACCESS_SECRET.length < 48) {
@@ -68,6 +84,23 @@ export const envSchema = z
         path: ['JWT_ACCESS_SECRET'],
         message: 'must be at least 48 characters in production',
       });
+    }
+    const storageProvider = env.STORAGE_PROVIDER ?? (env.NODE_ENV === 'production' ? 's3' : 'local');
+    if (storageProvider === 's3') {
+      if (!env.AWS_ACCESS_KEY_ID) {
+        context.addIssue({
+          code: 'custom',
+          path: ['AWS_ACCESS_KEY_ID'],
+          message: 'is required when STORAGE_PROVIDER is s3',
+        });
+      }
+      if (!env.AWS_SECRET_ACCESS_KEY) {
+        context.addIssue({
+          code: 'custom',
+          path: ['AWS_SECRET_ACCESS_KEY'],
+          message: 'is required when STORAGE_PROVIDER is s3',
+        });
+      }
     }
   });
 

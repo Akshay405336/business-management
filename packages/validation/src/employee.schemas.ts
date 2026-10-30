@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { employeeSalaryStructureSchema } from './employee-salary.js';
+import { profileImageStoredObjectIdSchema } from './stored-object.js';
 import { leadEmailSchema, leadPhoneSchema } from './lead-contact.js';
 
 const uuid = z.string().uuid();
@@ -31,14 +33,13 @@ const employeeContactFields = {
 
 const employeeEmploymentFields = {
   jobTitle: z.string().trim().min(1, 'Enter a job title.').max(120),
-  department: z.string().trim().min(1, 'Enter a department.').max(120),
   employmentType: employeeEmploymentTypeSchema,
   dateOfJoining: dateOnly,
   probationEndDate: dateOnly.nullable().optional(),
   employmentEndDate: dateOnly.nullable().optional(),
   workLocation: z.string().max(160).nullable().optional(),
-  reportingManagerId: uuid.nullable().optional(),
   profileImageUrl: z.string().url().max(512).nullable().optional(),
+  profileImageStoredObjectId: profileImageStoredObjectIdSchema,
   notes: z.string().max(4000).optional(),
   platformAdminId: uuid.nullable().optional(),
 };
@@ -47,17 +48,10 @@ export const createEmployeeRequestSchema = z
   .object({
     ...employeeContactFields,
     ...employeeEmploymentFields,
-    employmentStatus: employeeEmploymentStatusSchema.optional(),
+    salaryStructure: employeeSalaryStructureSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (value.employmentStatus === 'TERMINATED') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['employmentStatus'],
-        message: 'New employees cannot be created with a terminated status.',
-      });
-    }
     if (value.probationEndDate && value.probationEndDate < value.dateOfJoining) {
       ctx.addIssue({
         code: 'custom',
@@ -82,16 +76,16 @@ const updateEmployeeFieldsSchema = z
     phone: employeeContactFields.phone.optional(),
     alternatePhone: employeeContactFields.alternatePhone,
     jobTitle: employeeEmploymentFields.jobTitle.optional(),
-    department: employeeEmploymentFields.department.optional(),
     employmentType: employeeEmploymentFields.employmentType.optional(),
     dateOfJoining: employeeEmploymentFields.dateOfJoining.optional(),
     probationEndDate: employeeEmploymentFields.probationEndDate,
     employmentEndDate: employeeEmploymentFields.employmentEndDate,
     workLocation: employeeEmploymentFields.workLocation,
-    reportingManagerId: employeeEmploymentFields.reportingManagerId,
     profileImageUrl: employeeEmploymentFields.profileImageUrl,
+    profileImageStoredObjectId: employeeEmploymentFields.profileImageStoredObjectId,
     notes: employeeEmploymentFields.notes,
     platformAdminId: employeeEmploymentFields.platformAdminId,
+    salaryStructure: employeeSalaryStructureSchema.optional(),
   })
   .strict();
 
@@ -120,7 +114,6 @@ export const employeeListQuerySchema = z
     pageSize: z.coerce.number().int().min(1).max(100).optional(),
     search: z.string().max(200).optional(),
     status: employeeEmploymentStatusSchema.optional(),
-    department: z.string().max(120).optional(),
     employmentType: employeeEmploymentTypeSchema.optional(),
     sortBy: employeeListSortBySchema.optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
@@ -130,16 +123,7 @@ export const employeeListQuerySchema = z
 export function parseEmployeeListQuery(input: unknown): z.infer<typeof employeeListQuerySchema> {
   const record =
     input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
-  const keys = [
-    'page',
-    'pageSize',
-    'search',
-    'status',
-    'department',
-    'employmentType',
-    'sortBy',
-    'sortDir',
-  ] as const;
+  const keys = ['page', 'pageSize', 'search', 'status', 'employmentType', 'sortBy', 'sortDir'] as const;
   const picked: Record<string, unknown> = {};
   for (const key of keys) {
     if (key in record) picked[key] = record[key];

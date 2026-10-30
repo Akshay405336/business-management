@@ -84,6 +84,7 @@ model PlatformAdmin {
   memberships          OrganizationMembership[] @relation("MembershipAdmin")
   invitedMemberships   OrganizationMembership[] @relation("MembershipInvitedBy")
   sentInvitations      OrganizationInvitation[] @relation("InvitationInvitedBy")
+  createdStoredObjects StoredObject[]           @relation("StoredObjectCreatedBy")
 
   @@index([organizationId])
   @@map("platform_admins")
@@ -183,6 +184,9 @@ model Organization {
   projectTaskStatusEvents    ProjectTaskStatusEvent[]
   projectPhaseProductionEvents ProjectPhaseProductionEvent[]
   employees       Employee[]
+  employeeSalaryStructures EmployeeSalaryStructure[]
+  storedObjects   StoredObject[]
+  storageCleanupJobs StorageCleanupJob[]
   sequences       OrganizationSequence[]
   auditEvents     CrmAuditEvent[]
   memberships     OrganizationMembership[]
@@ -694,7 +698,7 @@ model ProjectPhaseProductionEvent {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   phase        ProjectPhase @relation(fields: [phaseId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, phaseId, occurredAt])
+  @@index([organizationId, phaseId, occurredAt], map: "project_phase_production_events_organization_id_phase_id_oc_idx")
   @@map("project_phase_production_events")
 }
 
@@ -756,7 +760,7 @@ model ProjectTaskStatusEvent {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   task         ProjectTask  @relation(fields: [projectTaskId], references: [id], onDelete: Cascade)
 
-  @@index([organizationId, projectTaskId, occurredAt])
+  @@index([organizationId, projectTaskId, occurredAt], map: "project_task_status_events_organization_id_project_task_id__idx")
   @@map("project_task_status_events")
 }
 
@@ -829,6 +833,75 @@ enum EmployeeEmploymentType {
   INTERN
 }
 
+enum EmployeeSalaryFrequency {
+  MONTHLY
+  ANNUAL
+}
+
+enum StoredObjectProvider {
+  S3
+  LOCAL
+}
+
+enum StoredObjectCategory {
+  EMPLOYEE_PROFILE_IMAGE
+}
+
+enum StoredObjectStatus {
+  ACTIVE
+  DELETED
+}
+
+enum StorageCleanupStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model StoredObject {
+  id               String               @id @db.Uuid
+  organizationId   String               @map("organization_id") @db.Uuid
+  provider         StoredObjectProvider
+  bucket           String               @db.VarChar(128)
+  objectKey        String               @map("object_key") @db.VarChar(512)
+  originalFileName String               @map("original_file_name") @db.VarChar(255)
+  displayFileName  String               @map("display_file_name") @db.VarChar(255)
+  mimeType         String               @map("mime_type") @db.VarChar(128)
+  sizeBytes        Int                  @map("size_bytes")
+  checksumSha256   String?              @map("checksum_sha256") @db.Char(64)
+  category         StoredObjectCategory
+  status           StoredObjectStatus   @default(ACTIVE)
+  createdByAdminId String               @map("created_by_admin_id") @db.Uuid
+  deletedAt        DateTime?            @map("deleted_at") @db.Timestamptz(3)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    PlatformAdmin @relation("StoredObjectCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  employeeProfileImage Employee? @relation("EmployeeProfileImage")
+
+  @@unique([provider, bucket, objectKey])
+  @@index([organizationId, category, status])
+  @@map("stored_objects")
+}
+
+model StorageCleanupJob {
+  id             String               @id @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  storedObjectId String               @map("stored_object_id") @db.Uuid
+  status         StorageCleanupStatus @default(PENDING)
+  attemptCount   Int                  @default(0) @map("attempt_count")
+  lastError      String               @default("") @map("last_error") @db.VarChar(2000)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
+  @@index([organizationId, storedObjectId])
+  @@map("storage_cleanup_jobs")
+}
+
 model Employee {
   id                 String                   @id @db.Uuid
   organizationId     String                   @map("organization_id") @db.Uuid
@@ -839,16 +912,15 @@ model Employee {
   workEmail          String                   @map("work_email") @db.VarChar(254)
   phone              String                   @db.VarChar(32)
   alternatePhone     String?                  @map("alternate_phone") @db.VarChar(32)
-  profileImageUrl    String?                  @map("profile_image_url") @db.VarChar(512)
+  profileImageUrl            String?                  @map("profile_image_url") @db.VarChar(512)
+  profileImageStoredObjectId String?                  @unique @map("profile_image_stored_object_id") @db.Uuid
   jobTitle           String                   @map("job_title") @db.VarChar(120)
-  department         String                   @db.VarChar(120)
   employmentType     EmployeeEmploymentType   @map("employment_type")
   employmentStatus   EmployeeEmploymentStatus @default(ACTIVE) @map("employment_status")
   dateOfJoining      DateTime                 @map("date_of_joining") @db.Date
   probationEndDate   DateTime?                @map("probation_end_date") @db.Date
   employmentEndDate  DateTime?                @map("employment_end_date") @db.Date
   workLocation       String?                  @map("work_location") @db.VarChar(160)
-  reportingManagerId String?                  @map("reporting_manager_id") @db.Uuid
   notes              String                   @default("") @db.VarChar(4000)
   platformAdminId    String?                  @unique @map("platform_admin_id") @db.Uuid
   deactivatedAt      DateTime?                @map("deactivated_at") @db.Timestamptz(3)
@@ -858,20 +930,43 @@ model Employee {
   updatedAt          DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organization     Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  reportingManager Employee?      @relation("EmployeeReportingLine", fields: [reportingManagerId], references: [id], onDelete: SetNull)
-  directReports    Employee[]     @relation("EmployeeReportingLine")
   platformAdmin    PlatformAdmin? @relation(fields: [platformAdminId], references: [id], onDelete: SetNull)
   createdBy        PlatformAdmin  @relation("EmployeeCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
   updatedBy        PlatformAdmin? @relation("EmployeeUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+  salaryStructure  EmployeeSalaryStructure?
+  profileImageStoredObject StoredObject? @relation("EmployeeProfileImage", fields: [profileImageStoredObjectId], references: [id], onDelete: SetNull)
 
   @@unique([organizationId, employeeCode])
   @@unique([organizationId, workEmail])
   @@unique([organizationId, phone])
   @@index([organizationId, employmentStatus])
-  @@index([organizationId, department])
   @@index([organizationId, dateOfJoining])
   @@index([organizationId, updatedAt])
   @@map("employees")
+}
+
+model EmployeeSalaryStructure {
+  id                String                  @id @db.Uuid
+  organizationId    String                  @map("organization_id") @db.Uuid
+  employeeId        String                  @unique @map("employee_id") @db.Uuid
+  currency          String                  @default("INR") @db.Char(3)
+  frequency         EmployeeSalaryFrequency @default(MONTHLY)
+  basicSalary       Decimal                 @default(0) @map("basic_salary") @db.Decimal(12, 2)
+  houseRentAllowance Decimal                @default(0) @map("house_rent_allowance") @db.Decimal(12, 2)
+  otherAllowances   Decimal                 @default(0) @map("other_allowances") @db.Decimal(12, 2)
+  bonus             Decimal                 @default(0) @db.Decimal(12, 2)
+  otherEarnings     Decimal                 @default(0) @map("other_earnings") @db.Decimal(12, 2)
+  providentFund     Decimal                 @default(0) @map("provident_fund") @db.Decimal(12, 2)
+  professionalTax   Decimal                 @default(0) @map("professional_tax") @db.Decimal(12, 2)
+  otherDeductions   Decimal                 @default(0) @map("other_deductions") @db.Decimal(12, 2)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, employeeId])
+  @@map("employee_salary_structures")
 }
 
 // --- Organization access (memberships, roles, permissions) ---

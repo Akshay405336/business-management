@@ -7,7 +7,6 @@ export function toEmployeeListFilters(query: EmployeeListQuery): EmployeeListFil
     pageSize: query.pageSize ?? 10,
     search: query.search?.trim() || undefined,
     status: query.status,
-    department: query.department?.trim() || undefined,
     employmentType: query.employmentType,
     sortBy: query.sortBy ?? 'displayName',
     sortDir: query.sortDir ?? 'asc',

@@ -16,16 +16,20 @@ export function DataTableFrame({
   footer,
   className,
   frame = 'surface',
+  frameClassName,
 }: {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
   /** `flush`: no outer card; use inside a parent surface. */
   frame?: 'surface' | 'flush';
+  frameClassName?: string;
 }) {
   const tableBlock =
     frame === 'flush' ? (
-      <div className="max-w-full min-h-[8rem] min-w-0 bg-card">{children}</div>
+      <div className={cn('max-w-full min-h-[8rem] min-w-0 bg-card', frameClassName)}>
+        {children}
+      </div>
     ) : (
       <div className="workspace-surface max-w-full min-h-[8rem] min-w-0">
         <div className="overflow-hidden rounded-lg">{children}</div>
@@ -57,6 +61,7 @@ export function DataTable({
   tableClassName,
   tableBodyClassName,
   frame = 'surface',
+  frameClassName,
 }: {
   phase: DataTablePhase;
   colSpan: number;
@@ -74,12 +79,19 @@ export function DataTable({
   className?: string;
   tableClassName?: string;
   tableBodyClassName?: string;
+  /** Applied to the inner wrapper when `frame="flush"`. */
+  frameClassName?: string;
 }) {
   const showFooter =
     footer && (phase === 'success' || phase === 'initial-loading' || phase === 'empty');
 
   return (
-    <DataTableFrame footer={showFooter ? footer : undefined} className={className} frame={frame}>
+    <DataTableFrame
+      footer={showFooter ? footer : undefined}
+      className={className}
+      frame={frame}
+      frameClassName={frameClassName}
+    >
       <DataTableBodyRefreshOverlay active={refreshing && phase === 'success'}>
         <Table className={cn('bg-card', tableClassName)}>
           <TableHeader variant={headerVariant}>{header}</TableHeader>

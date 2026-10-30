@@ -2,10 +2,19 @@ export type EmployeeEmploymentStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' | 'TER
 
 export type EmployeeEmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
 
-export interface EmployeeManagerSummary {
-  readonly id: string;
-  readonly displayName: string;
-  readonly employeeCode: string;
+export type EmployeeSalaryFrequency = 'MONTHLY' | 'ANNUAL';
+
+export interface EmployeeSalaryRecord {
+  readonly currency: string;
+  readonly frequency: EmployeeSalaryFrequency;
+  readonly basicSalary: number;
+  readonly houseRentAllowance: number;
+  readonly otherAllowances: number;
+  readonly bonus: number;
+  readonly otherEarnings: number;
+  readonly providentFund: number;
+  readonly professionalTax: number;
+  readonly otherDeductions: number;
 }
 
 export interface EmployeeRecord {
@@ -19,19 +28,18 @@ export interface EmployeeRecord {
   readonly alternatePhone: string | null;
   readonly profileImageUrl: string | null;
   readonly jobTitle: string;
-  readonly department: string;
   readonly employmentType: EmployeeEmploymentType;
   readonly employmentStatus: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
   readonly probationEndDate: string | null;
   readonly employmentEndDate: string | null;
   readonly workLocation: string | null;
-  readonly reportingManager: EmployeeManagerSummary | null;
   readonly notes: string;
   readonly platformAdminId: string | null;
   readonly deactivatedAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly salaryStructure: EmployeeSalaryRecord | null;
 }
 
 export interface EmployeeListFilters {
@@ -39,7 +47,6 @@ export interface EmployeeListFilters {
   readonly pageSize: number;
   readonly search?: string;
   readonly status?: EmployeeEmploymentStatus;
-  readonly department?: string;
   readonly employmentType?: EmployeeEmploymentType;
   readonly sortBy: 'displayName' | 'employeeCode' | 'dateOfJoining' | 'updatedAt';
   readonly sortDir: 'asc' | 'desc';
@@ -59,17 +66,16 @@ export interface CreateEmployeeInput {
   readonly phone: string;
   readonly alternatePhone?: string | null;
   readonly profileImageUrl?: string | null;
+  readonly profileImageStoredObjectId?: string | null;
   readonly jobTitle: string;
-  readonly department: string;
   readonly employmentType: EmployeeEmploymentType;
-  readonly employmentStatus?: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
   readonly probationEndDate?: string | null;
   readonly employmentEndDate?: string | null;
   readonly workLocation?: string | null;
-  readonly reportingManagerId?: string | null;
   readonly notes?: string;
   readonly platformAdminId?: string | null;
+  readonly salaryStructure?: EmployeeSalaryRecord | null;
 }
 
 export interface UpdateEmployeeInput {
@@ -79,21 +85,25 @@ export interface UpdateEmployeeInput {
   readonly phone?: string;
   readonly alternatePhone?: string | null;
   readonly profileImageUrl?: string | null;
+  readonly profileImageStoredObjectId?: string | null;
   readonly jobTitle?: string;
-  readonly department?: string;
   readonly employmentType?: EmployeeEmploymentType;
   readonly dateOfJoining?: string;
   readonly probationEndDate?: string | null;
   readonly employmentEndDate?: string | null;
   readonly workLocation?: string | null;
-  readonly reportingManagerId?: string | null;
   readonly notes?: string;
   readonly platformAdminId?: string | null;
+  readonly salaryStructure?: EmployeeSalaryRecord | null;
 }
 
 export interface EmployeeRepository {
   listEmployees(organizationId: string, filters: EmployeeListFilters): Promise<PaginatedEmployees>;
   getEmployee(organizationId: string, employeeId: string): Promise<EmployeeRecord | null>;
+  getProfileImageStoredObjectId(
+    organizationId: string,
+    employeeId: string,
+  ): Promise<string | null>;
   previewEmployeeCode(organizationId: string): Promise<string>;
   findEmployeeIdByWorkEmail(
     organizationId: string,
@@ -105,12 +115,6 @@ export interface EmployeeRepository {
     phone: string,
     excludeEmployeeId?: string,
   ): Promise<string | null>;
-  getReportingManagerId(organizationId: string, employeeId: string): Promise<string | null>;
-  countDirectReports(organizationId: string, employeeId: string): Promise<number>;
-  listManagerOptions(
-    organizationId: string,
-    excludeEmployeeId?: string,
-  ): Promise<readonly EmployeeManagerSummary[]>;
   createEmployee(
     organizationId: string,
     employeeId: string,

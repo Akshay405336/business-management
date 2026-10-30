@@ -19,12 +19,6 @@ type SchemaObject = ApiResponseSchemaHost['schema'];
 export const toOpenApiSchema = (schema: z.ZodType): SchemaObject =>
   z.toJSONSchema(schema, { target: 'openapi-3.0', io: 'output' }) as SchemaObject;
 
-const managerSummarySchema = z.object({
-  id: z.uuid(),
-  displayName: z.string(),
-  employeeCode: z.string(),
-});
-
 export const employeeListItemSchema = z.object({
   id: z.uuid(),
   employeeCode: z.string(),
@@ -34,11 +28,11 @@ export const employeeListItemSchema = z.object({
   workEmail: z.string(),
   phone: z.string(),
   jobTitle: z.string(),
-  department: z.string(),
   employmentType: employeeEmploymentTypeSchema,
   employmentStatus: employeeEmploymentStatusSchema,
   dateOfJoining: z.string(),
-  reportingManager: managerSummarySchema.nullable(),
+  profileImageUrl: z.string().nullable(),
+  platformAdminId: z.uuid().nullable(),
 });
 
 export const employeeListResponseSchema = z.object({
@@ -64,8 +58,4 @@ export const employeeDetailResponseSchema = employeeListItemSchema.extend({
 export const employeeCodePreviewResponseSchema = z.object({
   employeeCode: z.string(),
   isPreview: z.literal(true),
-});
-
-export const employeeManagerOptionsResponseSchema = z.object({
-  managers: z.array(managerSummarySchema),
 });

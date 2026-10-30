@@ -127,3 +127,28 @@ export const CRM_PACKAGES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
   { variant: 'badge' },
   { variant: 'actions', headClassName: 'w-[7.5rem] text-right' },
 ];
+
+/** Width classes for the HRM employees listing table (`table-fixed`). */
+export const CRM_EMPLOYEES_TABLE_COLUMN_CLASS = {
+  employee: 'w-[22%] min-w-[11rem]',
+  jobTitle: 'w-[16%] min-w-[8rem]',
+  email: 'w-[18%] min-w-[9rem]',
+  phone: 'w-[12%] min-w-[6.5rem]',
+  joined: 'w-[11%] min-w-[6.25rem] pr-4',
+  status: 'w-[11%] min-w-[6.5rem] pl-2 pr-3',
+  actions: 'w-[12%] min-w-[10rem]',
+} as const;
+
+export const CRM_EMPLOYEES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
+  { variant: 'textWide', className: CRM_EMPLOYEES_TABLE_COLUMN_CLASS.employee },
+  { variant: 'text', className: CRM_EMPLOYEES_TABLE_COLUMN_CLASS.jobTitle },
+  { variant: 'text', className: CRM_EMPLOYEES_TABLE_COLUMN_CLASS.email },
+  { variant: 'text', className: CRM_EMPLOYEES_TABLE_COLUMN_CLASS.phone },
+  { variant: 'text', className: CRM_EMPLOYEES_TABLE_COLUMN_CLASS.joined },
+  { variant: 'badge', className: CRM_EMPLOYEES_TABLE_COLUMN_CLASS.status },
+  {
+    variant: 'actions',
+    className: CRM_EMPLOYEES_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${CRM_EMPLOYEES_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
+];

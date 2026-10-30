@@ -26,6 +26,10 @@ export const PROJECT_MANAGER_PERMISSIONS: readonly PermissionKey[] = [
   'employees.read',
   'employees.create',
   'employees.update',
+  'employees.compensation.read',
+  'employees.compensation.manage',
+  'media.read',
+  'media.upload',
   'settings.read',
 ];
 
@@ -39,6 +43,8 @@ export const SALES_PERMISSIONS: readonly PermissionKey[] = [
 ];
 
 export const FINANCIAL_PERMISSIONS: readonly PermissionKey[] = [
+  'employees.compensation.read',
+  'employees.compensation.manage',
   'finance.read',
   'finance.manage',
   'expenses.read',
@@ -50,6 +56,7 @@ export const FINANCIAL_PERMISSIONS: readonly PermissionKey[] = [
 
 export const MEMBER_PERMISSIONS: readonly PermissionKey[] = [
   'employees.read',
+  'media.read',
   'leads.read',
   'clients.read',
   'projects.read',

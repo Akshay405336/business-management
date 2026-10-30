@@ -5,8 +5,6 @@ export type {
   EmployeeEmploymentType,
   EmployeeListItem,
   EmployeeListResponse,
-  EmployeeManagerOptionsResponse,
-  EmployeeManagerSummary,
 } from '@techwin/contracts';
 
 export type {

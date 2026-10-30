@@ -16,4 +16,6 @@ export * from './project-phase-schedule.js';
 export * from './project-number.js';
 export * from './employee-code.js';
 export * from './employee.schemas.js';
+export * from './employee-salary.js';
+export * from './stored-object.js';
 export * from './org-access.schemas.js';

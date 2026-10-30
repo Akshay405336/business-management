@@ -1,22 +1,27 @@
+import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import { EMPLOYEE_ROUTES } from '@techwin/contracts';
 import { formatEmployeeCode } from '@techwin/validation';
 import { Prisma } from '../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../infrastructure/database/prisma.service.js';
 import { EMPLOYEE_SEQUENCE_KEY } from '../../../domain/constants/employee-sequence.js';
 import {
-  EmployeeConflictError,
   EmployeeNotFoundError,
   EmployeeValidationError,
 } from '../../../domain/errors/employee.errors.js';
 import type {
   CreateEmployeeInput,
   EmployeeListFilters,
-  EmployeeManagerSummary,
   EmployeeRecord,
   EmployeeRepository,
   PaginatedEmployees,
   UpdateEmployeeInput,
 } from '../../../domain/repositories/employee.repository.js';
+import {
+  salaryCreateData,
+  salaryUpdateData,
+  toSalaryRecord,
+} from './employee-salary.mapper.js';
 import { rethrowEmployeeUniqueViolation } from './employee-unique-violation.js';
 
 const dateOnly = (value: Date): string => value.toISOString().slice(0, 10);
@@ -29,17 +34,17 @@ const parseDateOnly = (value: string): Date => {
   return parsed;
 };
 
-const managerSelect = {
-  select: { id: true, displayName: true, employeeCode: true },
-} as const;
+type EmployeeRow = Prisma.EmployeeGetPayload<{ include: { salaryStructure: true } }>;
 
-type EmployeeRow = Prisma.EmployeeGetPayload<{ include: { reportingManager: typeof managerSelect } }>;
+type EmployeeListRow = Prisma.EmployeeGetPayload<Record<string, never>>;
 
 @Injectable()
 export class PrismaEmployeeRepository implements EmployeeRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  private toRecord(row: EmployeeRow): EmployeeRecord {
+  private toRecord(row: EmployeeListRow | EmployeeRow): EmployeeRecord {
+    const salaryRow =
+      'salaryStructure' in row ? row.salaryStructure : null;
     return {
       id: row.id,
       employeeCode: row.employeeCode,
@@ -49,27 +54,22 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
       workEmail: row.workEmail,
       phone: row.phone,
       alternatePhone: row.alternatePhone,
-      profileImageUrl: row.profileImageUrl,
+      profileImageUrl: row.profileImageStoredObjectId
+        ? EMPLOYEE_ROUTES.employeeStoredProfileImageContent(row.profileImageStoredObjectId)
+        : row.profileImageUrl,
       jobTitle: row.jobTitle,
-      department: row.department,
       employmentType: row.employmentType,
       employmentStatus: row.employmentStatus,
       dateOfJoining: dateOnly(row.dateOfJoining),
       probationEndDate: row.probationEndDate ? dateOnly(row.probationEndDate) : null,
       employmentEndDate: row.employmentEndDate ? dateOnly(row.employmentEndDate) : null,
       workLocation: row.workLocation,
-      reportingManager: row.reportingManager
-        ? {
-            id: row.reportingManager.id,
-            displayName: row.reportingManager.displayName,
-            employeeCode: row.reportingManager.employeeCode,
-          }
-        : null,
       notes: row.notes,
       platformAdminId: row.platformAdminId,
       deactivatedAt: row.deactivatedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
+      salaryStructure: toSalaryRecord(salaryRow),
     };
   }
 
@@ -126,36 +126,6 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
     return row?.id ?? null;
   }
 
-  async getReportingManagerId(organizationId: string, employeeId: string): Promise<string | null> {
-    const row = await this.prisma.employee.findFirst({
-      where: { id: employeeId, organizationId },
-      select: { reportingManagerId: true },
-    });
-    return row?.reportingManagerId ?? null;
-  }
-
-  async countDirectReports(organizationId: string, employeeId: string): Promise<number> {
-    return this.prisma.employee.count({
-      where: { organizationId, reportingManagerId: employeeId },
-    });
-  }
-
-  async listManagerOptions(
-    organizationId: string,
-    excludeEmployeeId?: string,
-  ): Promise<readonly EmployeeManagerSummary[]> {
-    const rows = await this.prisma.employee.findMany({
-      where: {
-        organizationId,
-        employmentStatus: { in: ['ACTIVE', 'ON_LEAVE'] },
-        ...(excludeEmployeeId ? { id: { not: excludeEmployeeId } } : {}),
-      },
-      orderBy: { displayName: 'asc' },
-      select: { id: true, displayName: true, employeeCode: true },
-    });
-    return rows;
-  }
-
   async listEmployees(
     organizationId: string,
     filters: EmployeeListFilters,
@@ -163,9 +133,6 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
     const where: Prisma.EmployeeWhereInput = {
       organizationId,
       ...(filters.status ? { employmentStatus: filters.status } : {}),
-      ...(filters.department
-        ? { department: { equals: filters.department, mode: 'insensitive' } }
-        : {}),
       ...(filters.employmentType ? { employmentType: filters.employmentType } : {}),
       ...(filters.search?.trim()
         ? {
@@ -196,7 +163,6 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
         orderBy,
         skip,
         take: filters.pageSize,
-        include: { reportingManager: managerSelect },
       }),
     ]);
 
@@ -211,9 +177,20 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
   async getEmployee(organizationId: string, employeeId: string): Promise<EmployeeRecord | null> {
     const row = await this.prisma.employee.findFirst({
       where: { id: employeeId, organizationId },
-      include: { reportingManager: managerSelect },
+      include: { salaryStructure: true },
     });
     return row ? this.toRecord(row) : null;
+  }
+
+  async getProfileImageStoredObjectId(
+    organizationId: string,
+    employeeId: string,
+  ): Promise<string | null> {
+    const row = await this.prisma.employee.findFirst({
+      where: { id: employeeId, organizationId },
+      select: { profileImageStoredObjectId: true },
+    });
+    return row?.profileImageStoredObjectId ?? null;
   }
 
   async createEmployee(
@@ -239,26 +216,41 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
             workEmail: input.workEmail,
             phone: input.phone,
             alternatePhone: input.alternatePhone ?? null,
-            profileImageUrl: input.profileImageUrl ?? null,
+            profileImageUrl: input.profileImageStoredObjectId
+              ? null
+              : (input.profileImageUrl ?? null),
+            profileImageStoredObjectId: input.profileImageStoredObjectId ?? null,
             jobTitle: input.jobTitle.trim(),
-            department: input.department.trim(),
             employmentType: input.employmentType,
-            employmentStatus: input.employmentStatus ?? 'ACTIVE',
+            employmentStatus: 'ACTIVE',
             dateOfJoining: parseDateOnly(input.dateOfJoining),
             probationEndDate: input.probationEndDate ? parseDateOnly(input.probationEndDate) : null,
             employmentEndDate: input.employmentEndDate
               ? parseDateOnly(input.employmentEndDate)
               : null,
             workLocation: input.workLocation?.trim() || null,
-            reportingManagerId: input.reportingManagerId ?? null,
             notes: input.notes?.trim() ?? '',
             platformAdminId: input.platformAdminId ?? null,
             createdByAdminId: adminId,
             updatedByAdminId: adminId,
           },
-          include: { reportingManager: managerSelect },
+          include: { salaryStructure: true },
         });
-        return created;
+        if (input.salaryStructure) {
+          await tx.employeeSalaryStructure.create({
+            data: salaryCreateData(
+              organizationId,
+              employeeId,
+              randomUUID(),
+              input.salaryStructure,
+            ),
+          });
+        }
+        const withSalary = await tx.employee.findFirstOrThrow({
+          where: { id: employeeId },
+          include: { salaryStructure: true },
+        });
+        return withSalary;
       });
     } catch (error) {
       rethrowEmployeeUniqueViolation(error);
@@ -291,11 +283,15 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
           ...(input.workEmail !== undefined ? { workEmail: input.workEmail } : {}),
           ...(input.phone !== undefined ? { phone: input.phone } : {}),
           ...(input.alternatePhone !== undefined ? { alternatePhone: input.alternatePhone } : {}),
-          ...(input.profileImageUrl !== undefined
-            ? { profileImageUrl: input.profileImageUrl }
-            : {}),
+          ...(input.profileImageStoredObjectId !== undefined
+            ? {
+                profileImageStoredObjectId: input.profileImageStoredObjectId,
+                profileImageUrl: null,
+              }
+            : input.profileImageUrl !== undefined
+              ? { profileImageUrl: input.profileImageUrl }
+              : {}),
           ...(input.jobTitle !== undefined ? { jobTitle: input.jobTitle.trim() } : {}),
-          ...(input.department !== undefined ? { department: input.department.trim() } : {}),
           ...(input.employmentType !== undefined ? { employmentType: input.employmentType } : {}),
           ...(input.dateOfJoining !== undefined
             ? { dateOfJoining: parseDateOnly(input.dateOfJoining) }
@@ -317,15 +313,35 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
           ...(input.workLocation !== undefined
             ? { workLocation: input.workLocation?.trim() || null }
             : {}),
-          ...(input.reportingManagerId !== undefined
-            ? { reportingManagerId: input.reportingManagerId }
-            : {}),
           ...(input.notes !== undefined ? { notes: input.notes.trim() } : {}),
           ...(input.platformAdminId !== undefined ? { platformAdminId: input.platformAdminId } : {}),
           updatedByAdminId: adminId,
         },
-        include: { reportingManager: managerSelect },
+        include: { salaryStructure: true },
       });
+      if (input.salaryStructure !== undefined) {
+        if (input.salaryStructure === null) {
+          await this.prisma.employeeSalaryStructure.deleteMany({
+            where: { employeeId, organizationId },
+          });
+        } else {
+          await this.prisma.employeeSalaryStructure.upsert({
+            where: { employeeId },
+            create: salaryCreateData(
+              organizationId,
+              employeeId,
+              randomUUID(),
+              input.salaryStructure,
+            ),
+            update: salaryUpdateData(input.salaryStructure),
+          });
+        }
+        const refreshed = await this.prisma.employee.findFirstOrThrow({
+          where: { id: employeeId },
+          include: { salaryStructure: true },
+        });
+        return this.toRecord(refreshed);
+      }
     } catch (error) {
       rethrowEmployeeUniqueViolation(error);
       throw error;
@@ -358,7 +374,6 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
         deactivatedAt,
         updatedByAdminId: adminId,
       },
-      include: { reportingManager: managerSelect },
     });
     return this.toRecord(row);
   }
@@ -366,12 +381,6 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
   async deleteEmployee(organizationId: string, employeeId: string): Promise<void> {
     const existing = await this.getEmployee(organizationId, employeeId);
     if (!existing) throw new EmployeeNotFoundError();
-    const directReports = await this.countDirectReports(organizationId, employeeId);
-    if (directReports > 0) {
-      throw new EmployeeConflictError(
-        'This employee has direct reports. Reassign them before deleting this record.',
-      );
-    }
     await this.prisma.employee.delete({ where: { id: employeeId } });
   }
 }

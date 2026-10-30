@@ -125,6 +125,10 @@ Access tokens last 15 minutes. Refresh sessions last 7 days and rotate on every 
 | `/admin/verify-totp` | Authenticator code                           |
 | `/admin/dashboard`   | Signed-in shell (session restored on reload) |
 
+## File storage (S3)
+
+Employee profile images and future attachments use the centralized media module. Configure optional AWS variables in `.env` and see [docs/STORAGE.md](docs/STORAGE.md) for IAM, Coolify, presigned previews, and cleanup recovery.
+
 ## Workspace scripts
 
 | Script                    | Action                                    |
