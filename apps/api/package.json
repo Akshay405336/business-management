@@ -26,6 +26,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:status": "prisma migrate status",
+    "db:migrate:unlock": "node prisma/scripts/release-migrate-lock.mjs",
     "db:seed": "prisma db seed",
     "db:setup": "prisma generate && prisma migrate deploy && prisma db seed",
     "admin:bootstrap": "tsx src/modules/auth/cli/bootstrap-super-admin.ts",

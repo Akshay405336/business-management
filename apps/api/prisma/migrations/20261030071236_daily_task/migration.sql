@@ -1,0 +1,5 @@
+-- RenameIndex
+ALTER INDEX "daily_task_activities_organization_id_daily_task_id_occurred_at" RENAME TO "daily_task_activities_organization_id_daily_task_id_occurre_idx";
+
+-- RenameIndex
+ALTER INDEX "daily_task_reschedules_organization_id_daily_task_id_occurred_a" RENAME TO "daily_task_reschedules_organization_id_daily_task_id_occurr_idx";

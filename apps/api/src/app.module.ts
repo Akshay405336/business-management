@@ -10,6 +10,7 @@ import { ProjectsModule } from './modules/projects/index.js';
 import { EmployeesModule } from './modules/employees/index.js';
 import { OrgAccessModule } from './modules/org-access/index.js';
 import { MediaModule } from './modules/media/index.js';
+import { DailyTasksModule } from './modules/daily-tasks/index.js';
 import { HealthModule } from './modules/health/health.module.js';
 
 @Module({
@@ -24,6 +25,7 @@ import { HealthModule } from './modules/health/health.module.js';
     EmployeesModule,
     MediaModule,
     OrgAccessModule,
+    DailyTasksModule,
   ],
 })
 export class AppModule implements NestModule {

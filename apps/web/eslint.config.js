@@ -11,6 +11,7 @@ const config = [
     files: [
       'src/features/admin/crm/**/*.tsx',
       'src/features/admin/projects/**/*.tsx',
+      'src/features/admin/daily-tasks/**/*.tsx',
       'src/features/admin/auth/components/admin-shell.tsx',
     ],
     rules: { 'react-hooks/set-state-in-effect': 'off' },

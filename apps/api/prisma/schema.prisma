@@ -85,6 +85,10 @@ model PlatformAdmin {
   invitedMemberships   OrganizationMembership[] @relation("MembershipInvitedBy")
   sentInvitations      OrganizationInvitation[] @relation("InvitationInvitedBy")
   createdStoredObjects StoredObject[]           @relation("StoredObjectCreatedBy")
+  createdDailyTasks    DailyTask[]              @relation("DailyTaskCreatedBy")
+  completedDailyTasks  DailyTask[]              @relation("DailyTaskCompletedBy")
+  dailyTaskActivities  DailyTaskActivity[]      @relation("DailyTaskActivityActor")
+  dailyTaskReschedules DailyTaskReschedule[]    @relation("DailyTaskRescheduledBy")
 
   @@index([organizationId])
   @@map("platform_admins")
@@ -185,6 +189,11 @@ model Organization {
   projectPhaseProductionEvents ProjectPhaseProductionEvent[]
   employees       Employee[]
   employeeSalaryStructures EmployeeSalaryStructure[]
+  dailyTaskWorkflowStages DailyTaskWorkflowStage[]
+  dailyTasks              DailyTask[]
+  dailyTaskAssignees      DailyTaskAssignee[]
+  dailyTaskActivities     DailyTaskActivity[]
+  dailyTaskReschedules    DailyTaskReschedule[]
   storedObjects   StoredObject[]
   storageCleanupJobs StorageCleanupJob[]
   sequences       OrganizationSequence[]
@@ -647,6 +656,7 @@ model Project {
   createdBy       PlatformAdmin     @relation("ProjectCreator", fields: [createdByAdminId], references: [id], onDelete: Restrict)
   phases          ProjectPhase[]
   tasks           ProjectTask[]
+  dailyTasks      DailyTask[]
 
   @@unique([organizationId, projectNumber])
   @@index([organizationId, status, currentPhase])
@@ -677,6 +687,7 @@ model ProjectPhase {
   owner        PlatformAdmin? @relation("PhaseOwner", fields: [ownerAdminId], references: [id], onDelete: SetNull)
   tasks             ProjectTask[]
   productionEvents  ProjectPhaseProductionEvent[]
+  dailyTasks        DailyTask[]
 
   @@index([organizationId, projectId])
   @@map("project_phases")
@@ -741,6 +752,7 @@ model ProjectTask {
   phase        ProjectPhase  @relation(fields: [phaseId], references: [id], onDelete: Cascade)
   assignee     PlatformAdmin? @relation("ProjectTaskAssignee", fields: [assigneeAdminId], references: [id], onDelete: SetNull)
   statusEvents ProjectTaskStatusEvent[]
+  linkedDailyTasks DailyTask[]
 
   @@index([organizationId, projectId])
   @@index([organizationId, phaseId, sortOrder])
@@ -935,6 +947,7 @@ model Employee {
   updatedBy        PlatformAdmin? @relation("EmployeeUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
   salaryStructure  EmployeeSalaryStructure?
   profileImageStoredObject StoredObject? @relation("EmployeeProfileImage", fields: [profileImageStoredObjectId], references: [id], onDelete: SetNull)
+  dailyTaskAssignments     DailyTaskAssignee[]
 
   @@unique([organizationId, employeeCode])
   @@unique([organizationId, workEmail])
@@ -1085,4 +1098,158 @@ model OrganizationInvitationRole {
 
   @@id([invitationId, roleId])
   @@map("organization_invitation_roles")
+}
+
+// --- Daily tasks (separate from project phase tasks) ---
+
+enum DailyTaskType {
+  GENERAL
+  PROJECT
+}
+
+enum DailyTaskCategory {
+  DEVELOPMENT
+  DESIGN
+  TESTING
+  DOCUMENTATION
+  MEETING
+  SUPPORT
+  ADMINISTRATION
+  RESEARCH
+  OTHER
+}
+
+enum DailyTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum DailyTaskActivityType {
+  CREATED
+  UPDATED
+  STAGE_CHANGED
+  PRIORITY_CHANGED
+  ASSIGNEES_CHANGED
+  RESCHEDULED
+  COMPLETED
+  REOPENED
+  COMMENT_ADDED
+}
+
+model DailyTaskWorkflowStage {
+  id               String   @id @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  stageKey         String   @map("stage_key") @db.VarChar(64)
+  name             String   @db.VarChar(120)
+  sortOrder        Int      @map("sort_order")
+  colorToken       String   @default("slate") @map("color_token") @db.VarChar(32)
+  isActive         Boolean  @default(true) @map("is_active")
+  isCompletedStage Boolean  @default(false) @map("is_completed_stage")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tasks          DailyTask[]
+
+  @@unique([organizationId, stageKey])
+  @@index([organizationId, sortOrder])
+  @@map("daily_task_workflow_stages")
+}
+
+model DailyTask {
+  id                  String            @id @db.Uuid
+  organizationId      String            @map("organization_id") @db.Uuid
+  type                DailyTaskType
+  title               String            @db.VarChar(200)
+  description         String            @default("") @db.VarChar(4000)
+  category            DailyTaskCategory?
+  workflowStageId     String?           @map("workflow_stage_id") @db.Uuid
+  projectPhaseId      String?           @map("project_phase_id") @db.Uuid
+  priority            DailyTaskPriority @default(MEDIUM)
+  assignDate          DateTime          @map("assign_date") @db.Date
+  dueDate             DateTime?         @map("due_date") @db.Date
+  startTimeMinutes    Int?              @map("start_time_minutes")
+  dueTimeMinutes      Int?              @map("due_time_minutes")
+  estimatedHours      Decimal?          @map("estimated_hours") @db.Decimal(6, 2)
+  projectId           String?           @map("project_id") @db.Uuid
+  linkedProjectTaskId String?           @map("linked_project_task_id") @db.Uuid
+  instructions        String            @default("") @db.VarChar(4000)
+  referenceUrl        String?           @map("reference_url") @db.VarChar(512)
+  completedAt         DateTime?         @map("completed_at") @db.Timestamptz(3)
+  completedByAdminId  String?           @map("completed_by_admin_id") @db.Uuid
+  createdByAdminId    String            @map("created_by_admin_id") @db.Uuid
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workflowStage  DailyTaskWorkflowStage? @relation(fields: [workflowStageId], references: [id], onDelete: Restrict)
+  projectPhase   ProjectPhase?           @relation(fields: [projectPhaseId], references: [id], onDelete: Restrict)
+  project        Project?               @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  linkedProjectTask ProjectTask?        @relation(fields: [linkedProjectTaskId], references: [id], onDelete: SetNull)
+  createdBy      PlatformAdmin          @relation("DailyTaskCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  completedBy    PlatformAdmin?         @relation("DailyTaskCompletedBy", fields: [completedByAdminId], references: [id], onDelete: SetNull)
+  assignees      DailyTaskAssignee[]
+  activities     DailyTaskActivity[]
+  reschedules    DailyTaskReschedule[]
+
+  @@index([organizationId, assignDate])
+  @@index([organizationId, workflowStageId, assignDate])
+  @@index([organizationId, projectPhaseId, assignDate])
+  @@index([organizationId, projectId])
+  @@map("daily_tasks")
+}
+
+model DailyTaskAssignee {
+  id             String    @id @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  dailyTaskId    String    @map("daily_task_id") @db.Uuid
+  employeeId     String    @map("employee_id") @db.Uuid
+  startedAt      DateTime? @map("started_at") @db.Timestamptz(3)
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dailyTask    DailyTask    @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([dailyTaskId, employeeId])
+  @@index([organizationId, employeeId])
+  @@map("daily_task_assignees")
+}
+
+model DailyTaskActivity {
+  id             String                @id @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  dailyTaskId    String                @map("daily_task_id") @db.Uuid
+  actorAdminId   String                @map("actor_admin_id") @db.Uuid
+  eventType      DailyTaskActivityType @map("event_type")
+  metadata       Json?
+  occurredAt     DateTime              @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dailyTask    DailyTask    @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+  actor        PlatformAdmin @relation("DailyTaskActivityActor", fields: [actorAdminId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, dailyTaskId, occurredAt])
+  @@map("daily_task_activities")
+}
+
+model DailyTaskReschedule {
+  id                   String   @id @db.Uuid
+  organizationId       String   @map("organization_id") @db.Uuid
+  dailyTaskId          String   @map("daily_task_id") @db.Uuid
+  fromAssignDate       DateTime @map("from_assign_date") @db.Date
+  toAssignDate         DateTime @map("to_assign_date") @db.Date
+  rescheduledByAdminId String   @map("rescheduled_by_admin_id") @db.Uuid
+  note                 String   @default("") @db.VarChar(1000)
+  occurredAt           DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dailyTask     DailyTask     @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+  rescheduledBy PlatformAdmin @relation("DailyTaskRescheduledBy", fields: [rescheduledByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, dailyTaskId, occurredAt])
+  @@map("daily_task_reschedules")
 }

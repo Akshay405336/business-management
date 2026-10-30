@@ -19,3 +19,4 @@ export * from './employee.schemas.js';
 export * from './employee-salary.js';
 export * from './stored-object.js';
 export * from './org-access.schemas.js';
+export * from './daily-task.schemas.js';

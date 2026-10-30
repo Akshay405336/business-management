@@ -104,6 +104,27 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     ],
   },
   {
+    id: 'tasks',
+    label: 'Tasks',
+    icon: ClipboardList,
+    items: [
+      {
+        kind: 'link',
+        href: '/admin/daily-tasks',
+        label: 'Daily Tasks',
+        icon: ClipboardList,
+        requiredPermissions: ['tasks.read'],
+      },
+      {
+        kind: 'link',
+        href: '/admin/task-calendar',
+        label: 'Task Calendar',
+        icon: CalendarDays,
+        requiredPermissions: ['tasks.read'],
+      },
+    ],
+  },
+  {
     id: 'projects',
     label: 'Project Management',
     icon: FolderKanban,

@@ -13,6 +13,9 @@ export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, readonly Permissio
   '/admin/clients': ['clients.read'],
   '/admin/projects': ['projects.read'],
   '/admin/project-tasks': ['tasks.read', 'projects.read'],
+  '/admin/daily-tasks': ['tasks.read'],
+  '/admin/my-tasks': ['tasks.read'],
+  '/admin/task-calendar': ['tasks.read'],
 };
 
 export function permissionsForAdminPath(pathname: string): readonly PermissionKey[] {
