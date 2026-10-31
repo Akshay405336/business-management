@@ -21,12 +21,20 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
     bodyParser: false,
+    // Keeps the exact request bytes on `req.rawBody` for webhook signature checks.
+    rawBody: true,
   });
   const config = app.get<AppConfig>(APP_CONFIG);
   app.useLogger(app.get(Logger));
 
   app.set('trust proxy', config.http.trustProxy);
   app.disable('x-powered-by');
+  const whatsappWebhookPath = `${API_PREFIX}/webhooks/whatsapp/`;
+  // Meta batches can exceed the general body limit; scoped to the signed webhook path only.
+  app.useBodyParser('json', {
+    limit: '2mb',
+    type: (req: { url?: string }) => (req.url ?? '').startsWith(whatsappWebhookPath),
+  });
   app.useBodyParser('json', { limit: config.http.bodyLimit });
   app.use(cookieParser());
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));

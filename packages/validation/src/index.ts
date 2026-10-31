@@ -20,3 +20,4 @@ export * from './employee-salary.js';
 export * from './stored-object.js';
 export * from './org-access.schemas.js';
 export * from './daily-task.schemas.js';
+export * from './whatsapp.schemas.js';

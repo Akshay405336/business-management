@@ -194,6 +194,15 @@ model Organization {
   dailyTaskAssignees      DailyTaskAssignee[]
   dailyTaskActivities     DailyTaskActivity[]
   dailyTaskReschedules    DailyTaskReschedule[]
+  whatsappChannels             WhatsAppChannel[]
+  whatsappWebhookEvents        WhatsAppWebhookEvent[]
+  whatsappContacts             WhatsAppContact[]
+  whatsappConversations        WhatsAppConversation[]
+  whatsappMessages             WhatsAppMessage[]
+  whatsappConversationEvents   WhatsAppConversationEvent[]
+  whatsappTemplates            WhatsAppTemplate[]
+  whatsappBroadcasts           WhatsAppBroadcast[]
+  whatsappBroadcastRecipients  WhatsAppBroadcastRecipient[]
   storedObjects   StoredObject[]
   storageCleanupJobs StorageCleanupJob[]
   sequences       OrganizationSequence[]
@@ -329,6 +338,7 @@ model Lead {
   convertedBy      PlatformAdmin?     @relation("LeadConvertedBy", fields: [convertedByAdminId], references: [id], onDelete: SetNull)
   activities       LeadActivity[]
   proposals        ProposalDocument[]
+  whatsappContacts WhatsAppContact[]
 
   @@unique([organizationId, referenceNumber])
   @@index([organizationId, archivedAt, createdAt])
@@ -411,6 +421,7 @@ model Client {
   convertedFromLead Lead?              @relation("LeadConvertedClient")
   proposals         ProposalDocument[]
   projects          Project[]
+  whatsappContacts  WhatsAppContact[]
 
   @@unique([organizationId, referenceNumber])
   @@index([organizationId, status, createdAt])
@@ -812,6 +823,18 @@ enum CrmAuditEventType {
   ROLE_UPDATED
   ROLE_DELETED
   ROLE_PERMISSIONS_UPDATED
+  WHATSAPP_CHANNEL_CREATED
+  WHATSAPP_CHANNEL_UPDATED
+  WHATSAPP_CHANNEL_CREDENTIALS_ROTATED
+  WHATSAPP_CHANNEL_DISCONNECTED
+  WHATSAPP_CHANNEL_DELETED
+  WHATSAPP_TEMPLATES_SYNCED
+  WHATSAPP_TEMPLATE_SUBMITTED
+  WHATSAPP_BROADCAST_CREATED
+  WHATSAPP_BROADCAST_CONFIRMED
+  WHATSAPP_BROADCAST_CANCELLED
+  WHATSAPP_CONTACT_CONSENT_CHANGED
+  WHATSAPP_CONVERSATION_ASSIGNED
 }
 
 model CrmAuditEvent {
@@ -857,6 +880,7 @@ enum StoredObjectProvider {
 
 enum StoredObjectCategory {
   EMPLOYEE_PROFILE_IMAGE
+  WHATSAPP_MEDIA
 }
 
 enum StoredObjectStatus {
@@ -948,6 +972,7 @@ model Employee {
   salaryStructure  EmployeeSalaryStructure?
   profileImageStoredObject StoredObject? @relation("EmployeeProfileImage", fields: [profileImageStoredObjectId], references: [id], onDelete: SetNull)
   dailyTaskAssignments     DailyTaskAssignee[]
+  whatsappConversations    WhatsAppConversation[]
 
   @@unique([organizationId, employeeCode])
   @@unique([organizationId, workEmail])
@@ -1252,4 +1277,390 @@ model DailyTaskReschedule {
 
   @@index([organizationId, dailyTaskId, occurredAt])
   @@map("daily_task_reschedules")
+}
+
+// --- WhatsApp Business Cloud API (official Meta integration) ---
+
+enum WhatsAppChannelStatus {
+  PENDING_SETUP
+  CONNECTED
+  WEBHOOK_NOT_VERIFIED
+  CONNECTION_ERROR
+  DISCONNECTED
+}
+
+enum WhatsAppConnectionMethod {
+  MANUAL
+  EMBEDDED_SIGNUP
+}
+
+/// One WhatsApp business phone number connected through the Meta Cloud API.
+/// Credentials are stored only as AES-256-GCM envelopes bound to the channel id.
+model WhatsAppChannel {
+  id                    String                   @id @db.Uuid
+  organizationId        String                   @map("organization_id") @db.Uuid
+  name                  String                   @db.VarChar(120)
+  webhookKey            String                   @unique @map("webhook_key") @db.VarChar(64)
+  connectionMethod      WhatsAppConnectionMethod @default(MANUAL) @map("connection_method")
+  status                WhatsAppChannelStatus    @default(PENDING_SETUP)
+  metaAppId             String?                  @map("meta_app_id") @db.VarChar(32)
+  businessAccountId     String                   @map("business_account_id") @db.VarChar(32)
+  phoneNumberId         String                   @map("phone_number_id") @db.VarChar(32)
+  displayPhoneNumber    String                   @default("") @map("display_phone_number") @db.VarChar(32)
+  verifiedName          String                   @default("") @map("verified_name") @db.VarChar(160)
+  qualityRating         String?                  @map("quality_rating") @db.VarChar(32)
+  messagingLimitTier    String?                  @map("messaging_limit_tier") @db.VarChar(32)
+  accessTokenCiphertext String?                  @map("access_token_ciphertext") @db.Text
+  accessTokenLast4      String?                  @map("access_token_last4") @db.VarChar(4)
+  appSecretCiphertext   String?                  @map("app_secret_ciphertext") @db.Text
+  verifyTokenHash       String?                  @map("verify_token_hash") @db.Char(64)
+  credentialsUpdatedAt  DateTime?                @map("credentials_updated_at") @db.Timestamptz(3)
+  lastVerifiedAt        DateTime?                @map("last_verified_at") @db.Timestamptz(3)
+  lastErrorCode         String?                  @map("last_error_code") @db.VarChar(64)
+  lastErrorMessage      String?                  @map("last_error_message") @db.VarChar(500)
+  webhookVerifiedAt     DateTime?                @map("webhook_verified_at") @db.Timestamptz(3)
+  lastWebhookAt         DateTime?                @map("last_webhook_at") @db.Timestamptz(3)
+  templatesSyncedAt     DateTime?                @map("templates_synced_at") @db.Timestamptz(3)
+  disconnectedAt        DateTime?                @map("disconnected_at") @db.Timestamptz(3)
+  deletedAt             DateTime?                @map("deleted_at") @db.Timestamptz(3)
+  createdByAdminId      String                   @map("created_by_admin_id") @db.Uuid
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization  Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  webhookEvents WhatsAppWebhookEvent[]
+  conversations WhatsAppConversation[]
+  messages      WhatsAppMessage[]
+  templates     WhatsAppTemplate[]
+  broadcasts    WhatsAppBroadcast[]
+
+  @@index([organizationId, deletedAt])
+  @@index([phoneNumberId])
+  @@map("whatsapp_channels")
+}
+
+enum WhatsAppWebhookEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+/// Durable webhook inbox: events are persisted before acknowledgement and processed asynchronously.
+model WhatsAppWebhookEvent {
+  id             String                     @id @db.Uuid
+  organizationId String                     @map("organization_id") @db.Uuid
+  channelId      String                     @map("channel_id") @db.Uuid
+  payloadSha256  String                     @map("payload_sha256") @db.Char(64)
+  payload        Json?
+  status         WhatsAppWebhookEventStatus @default(PENDING)
+  attemptCount   Int                        @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime                   @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  lockedUntil    DateTime?                  @map("locked_until") @db.Timestamptz(3)
+  lastError      String?                    @map("last_error") @db.VarChar(500)
+  receivedAt     DateTime                   @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt    DateTime?                  @map("processed_at") @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      WhatsAppChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, payloadSha256])
+  @@index([status, nextAttemptAt])
+  @@index([organizationId, receivedAt])
+  @@map("whatsapp_webhook_events")
+}
+
+enum WhatsAppConsentStatus {
+  UNKNOWN
+  OPTED_IN
+  OPTED_OUT
+}
+
+model WhatsAppContact {
+  id                      String                @id @db.Uuid
+  organizationId          String                @map("organization_id") @db.Uuid
+  waId                    String                @map("wa_id") @db.VarChar(32)
+  phoneE164               String                @map("phone_e164") @db.VarChar(20)
+  profileName             String                @default("") @map("profile_name") @db.VarChar(160)
+  leadId                  String?               @map("lead_id") @db.Uuid
+  clientId                String?               @map("client_id") @db.Uuid
+  consentStatus           WhatsAppConsentStatus @default(UNKNOWN) @map("consent_status")
+  consentSource           String                @default("") @map("consent_source") @db.VarChar(160)
+  consentUpdatedAt        DateTime?             @map("consent_updated_at") @db.Timestamptz(3)
+  consentUpdatedByAdminId String?               @map("consent_updated_by_admin_id") @db.Uuid
+  lastInboundAt           DateTime?             @map("last_inbound_at") @db.Timestamptz(3)
+  createdAt               DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt               DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead                Lead?                        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  client              Client?                      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  conversations       WhatsAppConversation[]
+  messages            WhatsAppMessage[]
+  broadcastRecipients WhatsAppBroadcastRecipient[]
+
+  @@unique([organizationId, waId])
+  @@index([organizationId, leadId])
+  @@index([organizationId, clientId])
+  @@index([organizationId, consentStatus])
+  @@map("whatsapp_contacts")
+}
+
+enum WhatsAppConversationStatus {
+  NEW
+  OPEN
+  RESOLVED
+  SPAM
+}
+
+enum WhatsAppMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model WhatsAppConversation {
+  id                   String                     @id @db.Uuid
+  organizationId       String                     @map("organization_id") @db.Uuid
+  channelId            String                     @map("channel_id") @db.Uuid
+  contactId            String                     @map("contact_id") @db.Uuid
+  status               WhatsAppConversationStatus @default(NEW)
+  assignedEmployeeId   String?                    @map("assigned_employee_id") @db.Uuid
+  unreadCount          Int                        @default(0) @map("unread_count")
+  lastMessageAt        DateTime                   @default(now()) @map("last_message_at") @db.Timestamptz(3)
+  lastMessagePreview   String                     @default("") @map("last_message_preview") @db.VarChar(280)
+  lastMessageDirection WhatsAppMessageDirection?  @map("last_message_direction")
+  lastInboundAt        DateTime?                  @map("last_inbound_at") @db.Timestamptz(3)
+  firstResponseAt      DateTime?                  @map("first_response_at") @db.Timestamptz(3)
+  resolvedAt           DateTime?                  @map("resolved_at") @db.Timestamptz(3)
+  resolvedByAdminId    String?                    @map("resolved_by_admin_id") @db.Uuid
+  createdAt            DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel          WhatsAppChannel             @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  contact          WhatsAppContact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  assignedEmployee Employee?                   @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+  messages         WhatsAppMessage[]
+  events           WhatsAppConversationEvent[]
+
+  @@unique([channelId, contactId])
+  @@index([organizationId, status, lastMessageAt])
+  @@index([organizationId, assignedEmployeeId, lastMessageAt])
+  @@map("whatsapp_conversations")
+}
+
+enum WhatsAppMessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  STICKER
+  LOCATION
+  CONTACTS
+  INTERACTIVE
+  BUTTON
+  REACTION
+  TEMPLATE
+  UNSUPPORTED
+}
+
+enum WhatsAppMessageStatus {
+  RECEIVED
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum WhatsAppMediaStatus {
+  NONE
+  PENDING
+  READY
+  FAILED
+}
+
+model WhatsAppMessage {
+  id                  String                   @id @db.Uuid
+  organizationId      String                   @map("organization_id") @db.Uuid
+  channelId           String                   @map("channel_id") @db.Uuid
+  conversationId      String                   @map("conversation_id") @db.Uuid
+  contactId           String                   @map("contact_id") @db.Uuid
+  direction           WhatsAppMessageDirection
+  type                WhatsAppMessageType
+  status              WhatsAppMessageStatus
+  providerMessageId   String?                  @map("provider_message_id") @db.VarChar(128)
+  idempotencyKey      String?                  @map("idempotency_key") @db.VarChar(64)
+  body                String                   @default("") @db.Text
+  payload             Json?
+  mediaStatus         WhatsAppMediaStatus      @default(NONE) @map("media_status")
+  mediaProviderId     String?                  @map("media_provider_id") @db.VarChar(128)
+  mediaStoredObjectId String?                  @map("media_stored_object_id") @db.Uuid
+  mediaMimeType       String?                  @map("media_mime_type") @db.VarChar(128)
+  mediaFileName       String?                  @map("media_file_name") @db.VarChar(255)
+  mediaSizeBytes      Int?                     @map("media_size_bytes")
+  templateId          String?                  @map("template_id") @db.Uuid
+  broadcastId         String?                  @map("broadcast_id") @db.Uuid
+  sentByAdminId       String?                  @map("sent_by_admin_id") @db.Uuid
+  errorCode           String?                  @map("error_code") @db.VarChar(64)
+  errorMessage        String?                  @map("error_message") @db.VarChar(500)
+  attemptCount        Int                      @default(0) @map("attempt_count")
+  nextAttemptAt       DateTime?                @map("next_attempt_at") @db.Timestamptz(3)
+  providerTimestamp   DateTime?                @map("provider_timestamp") @db.Timestamptz(3)
+  sentAt              DateTime?                @map("sent_at") @db.Timestamptz(3)
+  deliveredAt         DateTime?                @map("delivered_at") @db.Timestamptz(3)
+  readAt              DateTime?                @map("read_at") @db.Timestamptz(3)
+  failedAt            DateTime?                @map("failed_at") @db.Timestamptz(3)
+  createdAt           DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      WhatsAppChannel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  conversation WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  contact      WhatsAppContact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, providerMessageId])
+  @@unique([organizationId, idempotencyKey])
+  @@index([conversationId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([status, nextAttemptAt])
+  @@index([mediaStoredObjectId])
+  @@map("whatsapp_messages")
+}
+
+enum WhatsAppConversationEventType {
+  CONVERSATION_CREATED
+  MESSAGE_RECEIVED
+  MESSAGE_SENT
+  MESSAGE_UPDATED
+  NOTE_ADDED
+  ASSIGNED
+  STATUS_CHANGED
+  CONTACT_UPDATED
+}
+
+/// Ordered per-organization event log: conversation timeline (notes, assignment, status)
+/// and the cursor for realtime catch-up after reconnects.
+model WhatsAppConversationEvent {
+  id             BigInt                        @id @default(autoincrement())
+  organizationId String                        @map("organization_id") @db.Uuid
+  channelId      String                        @map("channel_id") @db.Uuid
+  conversationId String                        @map("conversation_id") @db.Uuid
+  messageId      String?                       @map("message_id") @db.Uuid
+  type           WhatsAppConversationEventType
+  actorAdminId   String?                       @map("actor_admin_id") @db.Uuid
+  body           String?                       @db.Text
+  metadata       Json?
+  createdAt      DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversation WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, id])
+  @@index([conversationId, id])
+  @@map("whatsapp_conversation_events")
+}
+
+/// Message templates mirrored from Meta. Status is whatever Meta last reported.
+model WhatsAppTemplate {
+  id                 String    @id @db.Uuid
+  organizationId     String    @map("organization_id") @db.Uuid
+  channelId          String    @map("channel_id") @db.Uuid
+  providerTemplateId String?   @map("provider_template_id") @db.VarChar(64)
+  name               String    @db.VarChar(512)
+  language           String    @db.VarChar(16)
+  category           String    @db.VarChar(32)
+  status             String    @db.VarChar(32)
+  rejectedReason     String?   @map("rejected_reason") @db.VarChar(255)
+  qualityScore       String?   @map("quality_score") @db.VarChar(32)
+  components         Json
+  bodyText           String    @default("") @map("body_text") @db.Text
+  variableCount      Int       @default(0) @map("variable_count")
+  lastSyncedAt       DateTime? @map("last_synced_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      WhatsAppChannel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  broadcasts   WhatsAppBroadcast[]
+
+  @@unique([channelId, name, language])
+  @@index([organizationId, status])
+  @@map("whatsapp_templates")
+}
+
+enum WhatsAppBroadcastStatus {
+  DRAFT
+  SCHEDULED
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum WhatsAppBroadcastRecipientStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  SKIPPED
+}
+
+model WhatsAppBroadcast {
+  id                 String                  @id @db.Uuid
+  organizationId     String                  @map("organization_id") @db.Uuid
+  channelId          String                  @map("channel_id") @db.Uuid
+  templateId         String                  @map("template_id") @db.Uuid
+  name               String                  @db.VarChar(160)
+  templateVariables  Json                    @map("template_variables")
+  audience           Json
+  status             WhatsAppBroadcastStatus @default(DRAFT)
+  scheduledAt        DateTime?               @map("scheduled_at") @db.Timestamptz(3)
+  startedAt          DateTime?               @map("started_at") @db.Timestamptz(3)
+  completedAt        DateTime?               @map("completed_at") @db.Timestamptz(3)
+  cancelledAt        DateTime?               @map("cancelled_at") @db.Timestamptz(3)
+  totalRecipients    Int                     @default(0) @map("total_recipients")
+  createdByAdminId   String                  @map("created_by_admin_id") @db.Uuid
+  confirmedByAdminId String?                 @map("confirmed_by_admin_id") @db.Uuid
+  confirmedAt        DateTime?               @map("confirmed_at") @db.Timestamptz(3)
+  idempotencyKey     String?                 @map("idempotency_key") @db.VarChar(64)
+  createdAt          DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      WhatsAppChannel              @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  template     WhatsAppTemplate             @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  recipients   WhatsAppBroadcastRecipient[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, createdAt])
+  @@index([status, scheduledAt])
+  @@map("whatsapp_broadcasts")
+}
+
+model WhatsAppBroadcastRecipient {
+  id             String                           @id @db.Uuid
+  organizationId String                           @map("organization_id") @db.Uuid
+  broadcastId    String                           @map("broadcast_id") @db.Uuid
+  contactId      String                           @map("contact_id") @db.Uuid
+  status         WhatsAppBroadcastRecipientStatus @default(PENDING)
+  messageId      String?                          @unique @map("message_id") @db.Uuid
+  errorMessage   String?                          @map("error_message") @db.VarChar(500)
+  attemptCount   Int                              @default(0) @map("attempt_count")
+  nextAttemptAt  DateTime                         @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  lockedUntil    DateTime?                        @map("locked_until") @db.Timestamptz(3)
+  createdAt      DateTime                         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime                         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  broadcast    WhatsAppBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  contact      WhatsAppContact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([broadcastId, contactId])
+  @@index([broadcastId, status])
+  @@index([status, nextAttemptAt])
+  @@map("whatsapp_broadcast_recipients")
 }

@@ -70,7 +70,7 @@ export class MediaController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id') id: string,
   ): Promise<StoredObjectMetadataResponse> {
-    const record = await this.storedFiles.getAuthorizedRecord(ctx.organizationId, id);
+    const record = await this.storedFiles.getGenericRecord(ctx.organizationId, id);
     return {
       id: record.id,
       previewUrl: this.storedFiles.previewPath(record.id),

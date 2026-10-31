@@ -10,3 +10,4 @@ export * from './media.js';
 export * from './permissions.js';
 export * from './org-access.js';
 export * from './daily-tasks.js';
+export * from './whatsapp.js';

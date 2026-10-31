@@ -93,11 +93,17 @@ export class PrismaStoredObjectRepository implements StoredObjectRepository {
   }
 
   async isReferenced(storedObjectId: string): Promise<boolean> {
-    const employee = await this.prisma.employee.findFirst({
-      where: { profileImageStoredObjectId: storedObjectId },
-      select: { id: true },
-    });
-    return employee !== null;
+    const [employee, whatsappMessage] = await Promise.all([
+      this.prisma.employee.findFirst({
+        where: { profileImageStoredObjectId: storedObjectId },
+        select: { id: true },
+      }),
+      this.prisma.whatsAppMessage.findFirst({
+        where: { mediaStoredObjectId: storedObjectId },
+        select: { id: true },
+      }),
+    ]);
+    return employee !== null || whatsappMessage !== null;
   }
 
   async findEmployeeIdUsingProfileImage(storedObjectId: string): Promise<string | null> {

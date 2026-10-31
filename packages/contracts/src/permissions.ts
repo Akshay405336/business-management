@@ -49,6 +49,13 @@ export const PERMISSION_KEYS = [
   'expenses.delete',
   'settings.read',
   'settings.manage',
+  'whatsapp.read',
+  'whatsapp.view_all',
+  'whatsapp.reply',
+  'whatsapp.assign',
+  'whatsapp.channels.manage',
+  'whatsapp.templates.manage',
+  'whatsapp.broadcasts.manage',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -138,6 +145,48 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: 'expenses.delete', module: 'Expenses', action: 'Delete', description: 'Delete expense records.' },
   { key: 'settings.read', module: 'Settings', action: 'View', description: 'View organization settings and catalogs.' },
   { key: 'settings.manage', module: 'Settings', action: 'Manage', description: 'Change organization settings and catalogs.' },
+  {
+    key: 'whatsapp.read',
+    module: 'WhatsApp',
+    action: 'View inbox',
+    description: 'View WhatsApp conversations assigned to you or unassigned.',
+  },
+  {
+    key: 'whatsapp.view_all',
+    module: 'WhatsApp',
+    action: 'View all conversations',
+    description: 'View every WhatsApp conversation in the organization.',
+  },
+  {
+    key: 'whatsapp.reply',
+    module: 'WhatsApp',
+    action: 'Reply',
+    description: 'Send WhatsApp messages, templates and internal notes.',
+  },
+  {
+    key: 'whatsapp.assign',
+    module: 'WhatsApp',
+    action: 'Assign',
+    description: 'Assign or reassign WhatsApp conversations to employees.',
+  },
+  {
+    key: 'whatsapp.channels.manage',
+    module: 'WhatsApp',
+    action: 'Manage channels',
+    description: 'Connect, rotate credentials, disconnect and delete WhatsApp channels.',
+  },
+  {
+    key: 'whatsapp.templates.manage',
+    module: 'WhatsApp',
+    action: 'Manage templates',
+    description: 'Sync and submit WhatsApp message templates.',
+  },
+  {
+    key: 'whatsapp.broadcasts.manage',
+    module: 'WhatsApp',
+    action: 'Manage broadcasts',
+    description: 'Create, schedule and cancel WhatsApp template broadcasts.',
+  },
 ] as const;
 
 export const PERMISSION_KEY_SET: ReadonlySet<string> = new Set(PERMISSION_KEYS);

@@ -16,6 +16,11 @@ export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, readonly Permissio
   '/admin/daily-tasks': ['tasks.read'],
   '/admin/my-tasks': ['tasks.read'],
   '/admin/task-calendar': ['tasks.read'],
+  '/admin/whatsapp/inbox': ['whatsapp.read'],
+  '/admin/whatsapp/channels': ['whatsapp.channels.manage'],
+  '/admin/whatsapp/templates': ['whatsapp.templates.manage', 'whatsapp.broadcasts.manage'],
+  '/admin/whatsapp/broadcasts': ['whatsapp.broadcasts.manage'],
+  '/admin/whatsapp/reports': ['whatsapp.view_all', 'whatsapp.channels.manage'],
 };
 
 export function permissionsForAdminPath(pathname: string): readonly PermissionKey[] {

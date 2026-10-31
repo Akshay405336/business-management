@@ -40,6 +40,18 @@ export interface AppConfig {
       readonly secretAccessKey: string | null;
     };
   };
+  readonly whatsapp: {
+    readonly metaAppId: string | null;
+    readonly metaAppSecret: string | null;
+    readonly embeddedSignupConfigId: string | null;
+    readonly graphApiVersion: string;
+    readonly graphApiBaseUrl: string;
+    readonly webhookBaseUrl: string | null;
+    readonly credentialsEncryptionKey: Buffer | null;
+    readonly previousCredentialsEncryptionKeys: readonly Buffer[];
+    readonly mediaMaxBytes: number;
+    readonly workerEnabled: boolean;
+  };
 }
 
 export class InvalidEnvironmentError extends Error {
@@ -114,6 +126,22 @@ export function loadAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfi
         accessKeyId: env.AWS_ACCESS_KEY_ID ?? null,
         secretAccessKey: env.AWS_SECRET_ACCESS_KEY ?? null,
       },
+    },
+    whatsapp: {
+      metaAppId: env.META_APP_ID ?? null,
+      metaAppSecret: env.META_APP_SECRET ?? null,
+      embeddedSignupConfigId: env.META_EMBEDDED_SIGNUP_CONFIG_ID ?? null,
+      graphApiVersion: env.META_GRAPH_API_VERSION,
+      graphApiBaseUrl: env.META_GRAPH_API_BASE_URL.replace(/\/+$/, ''),
+      webhookBaseUrl: env.WHATSAPP_WEBHOOK_BASE_URL?.replace(/\/+$/, '') ?? null,
+      credentialsEncryptionKey: env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY
+        ? Buffer.from(env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY, 'base64')
+        : null,
+      previousCredentialsEncryptionKeys: (env.WHATSAPP_CREDENTIALS_PREVIOUS_KEYS ?? []).map((key) =>
+        Buffer.from(key, 'base64'),
+      ),
+      mediaMaxBytes: env.WHATSAPP_MEDIA_MAX_BYTES,
+      workerEnabled: env.WHATSAPP_WORKER_ENABLED,
     },
   };
 }

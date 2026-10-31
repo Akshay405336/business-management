@@ -28,6 +28,11 @@ import {
   type StoredObjectRepository,
 } from '../domain/repositories/stored-object.repository.js';
 
+/** Categories readable only through their owning module's authorization (never the generic media API). */
+const CONVERSATION_SCOPED_CATEGORIES: ReadonlySet<StoredObjectCategory> = new Set([
+  'WHATSAPP_MEDIA',
+]);
+
 export type StoredFileUploadResult = {
   readonly id: string;
   readonly previewUrl: string;
@@ -173,6 +178,76 @@ export class StoredFileService {
     }
   }
 
+  /**
+   * Stores a buffer produced server-side (e.g. media fetched from a provider API).
+   * Callers are responsible for MIME and size policy before calling this.
+   */
+  async storeBuffer(params: {
+    organizationId: string;
+    adminId: string;
+    category: StoredObjectCategory;
+    buffer: Buffer;
+    mimeType: string;
+    fileName: string;
+    extension: string;
+  }): Promise<{ id: string; sizeBytes: number; mimeType: string; displayFileName: string }> {
+    const { provider, bucket } = this.bucketForProvider();
+    const objectKey = this.objectKey(params.organizationId, params.category, params.extension);
+    const id = randomUUID();
+    try {
+      await this.storage.putObject({
+        bucket,
+        key: objectKey,
+        body: params.buffer,
+        contentType: params.mimeType,
+        contentLength: params.buffer.length,
+      });
+    } catch {
+      throw new MediaStorageError();
+    }
+    try {
+      const record = await this.repository.create({
+        id,
+        organizationId: params.organizationId,
+        provider,
+        bucket,
+        objectKey,
+        originalFileName: params.fileName.slice(0, 255),
+        displayFileName: sanitizeDisplayFileName(params.fileName),
+        mimeType: params.mimeType,
+        sizeBytes: params.buffer.length,
+        checksumSha256: createHash('sha256').update(params.buffer).digest('hex'),
+        category: params.category,
+        createdByAdminId: params.adminId,
+      });
+      return {
+        id: record.id,
+        sizeBytes: record.sizeBytes,
+        mimeType: record.mimeType,
+        displayFileName: record.displayFileName,
+      };
+    } catch (error) {
+      await this.storage.deleteObject({ bucket, key: objectKey }).catch((cleanupError: unknown) => {
+        this.logger.warn(
+          { storedObjectId: id, organizationId: params.organizationId, err: cleanupError },
+          'storage.store_buffer.db_failed.compensating_delete_failed',
+        );
+      });
+      throw error;
+    }
+  }
+
+  /** Opens content of a category-restricted object for a caller that already authorized access. */
+  async openCategoryObject(
+    organizationId: string,
+    id: string,
+    category: StoredObjectCategory,
+  ): Promise<{ redirectUrl?: string; stream?: { body: Buffer; contentType: string } }> {
+    const record = await this.getAuthorizedRecord(organizationId, id);
+    if (record.category !== category) throw new MediaForbiddenError();
+    return this.openRecord(record);
+  }
+
   async assertAssignableProfileImage(
     organizationId: string,
     storedObjectId: string,
@@ -193,6 +268,13 @@ export class StoredFileService {
   async getAuthorizedRecord(organizationId: string, id: string): Promise<StoredObjectRecord> {
     const record = await this.repository.findActiveById(organizationId, id);
     if (!record) throw new MediaNotFoundError();
+    return record;
+  }
+
+  /** Metadata lookup for the generic media API; conversation-scoped files are excluded. */
+  async getGenericRecord(organizationId: string, id: string): Promise<StoredObjectRecord> {
+    const record = await this.getAuthorizedRecord(organizationId, id);
+    if (CONVERSATION_SCOPED_CATEGORIES.has(record.category)) throw new MediaForbiddenError();
     return record;
   }
 
@@ -239,6 +321,13 @@ export class StoredFileService {
     id: string,
   ): Promise<{ redirectUrl?: string; stream?: { body: Buffer; contentType: string } }> {
     const record = await this.getAuthorizedRecord(organizationId, id);
+    if (CONVERSATION_SCOPED_CATEGORIES.has(record.category)) throw new MediaForbiddenError();
+    return this.openRecord(record);
+  }
+
+  private async openRecord(
+    record: StoredObjectRecord,
+  ): Promise<{ redirectUrl?: string; stream?: { body: Buffer; contentType: string } }> {
     if (record.provider === 'S3') {
       const redirectUrl = await this.storage.getPresignedDownloadUrl({
         bucket: record.bucket,

@@ -12,6 +12,7 @@ import { OrgAccessModule } from './modules/org-access/index.js';
 import { MediaModule } from './modules/media/index.js';
 import { DailyTasksModule } from './modules/daily-tasks/index.js';
 import { HealthModule } from './modules/health/health.module.js';
+import { WhatsAppModule } from './modules/whatsapp/index.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { HealthModule } from './modules/health/health.module.js';
     MediaModule,
     OrgAccessModule,
     DailyTasksModule,
+    WhatsAppModule,
   ],
 })
 export class AppModule implements NestModule {
@@ -38,6 +40,8 @@ export class AppModule implements NestModule {
       .exclude(
         { path: 'health', method: RequestMethod.GET },
         { path: 'ready', method: RequestMethod.GET },
+        // Meta delivers from shared IPs; the webhook has its own per-channel limit.
+        { path: 'webhooks/whatsapp/{*splat}', method: RequestMethod.ALL },
       )
       .forRoutes({ path: '{*splat}', method: RequestMethod.ALL });
   }

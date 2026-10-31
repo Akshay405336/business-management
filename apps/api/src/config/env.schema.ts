@@ -15,6 +15,13 @@ const httpOrigin = z
   .url({ protocol: /^https?$/, error: 'must be an absolute http(s) origin' })
   .transform((value) => new URL(value).origin);
 
+/** Optional setting where a blank value (`KEY=` in .env) means unset; non-blank values must pass `schema`. */
+const optionalUnlessBlank = <T extends z.ZodType>(schema: T) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    schema.optional(),
+  );
+
 /** A base64-encoded 256-bit key. */
 const aes256Key = z.string().refine((value) => Buffer.from(value, 'base64').length === 32, {
   message: 'must be a base64-encoded 32-byte key (generate with `pnpm secrets:generate`)',
@@ -76,6 +83,40 @@ export const envSchema = z
       .min(1024)
       .max(20 * 1024 * 1024)
       .default(5 * 1024 * 1024),
+
+    /**
+     * WhatsApp Business Cloud API (official Meta Graph API). All optional until a channel is connected;
+     * Embedded Signup stays disabled unless META_APP_ID, META_EMBEDDED_SIGNUP_CONFIG_ID and META_APP_SECRET are set.
+     * META_APP_SECRET is only a fallback for channels saved without their own encrypted app secret.
+     */
+    META_APP_ID: optionalUnlessBlank(
+      z.string().regex(/^\d{5,32}$/, 'must be a numeric Meta app id'),
+    ),
+    META_APP_SECRET: optionalUnlessBlank(
+      z.string().regex(/^[a-f0-9]{32}$/i, 'must be the 32-character Meta app secret'),
+    ),
+    META_EMBEDDED_SIGNUP_CONFIG_ID: optionalUnlessBlank(
+      z.string().regex(/^\d{5,32}$/, 'must be a numeric Meta configuration id'),
+    ),
+    META_GRAPH_API_VERSION: z
+      .string()
+      .regex(/^v\d+\.\d+$/, 'must look like v23.0')
+      .default('v23.0'),
+    META_GRAPH_API_BASE_URL: z
+      .url({ protocol: /^https$/, error: 'must be an https URL' })
+      .default('https://graph.facebook.com'),
+    WHATSAPP_WEBHOOK_BASE_URL: optionalUnlessBlank(
+      z.url({ protocol: /^https?$/, error: 'must be an absolute http(s) URL' }),
+    ),
+    WHATSAPP_CREDENTIALS_ENCRYPTION_KEY: optionalUnlessBlank(aes256Key),
+    WHATSAPP_CREDENTIALS_PREVIOUS_KEYS: commaSeparated.pipe(z.array(aes256Key)).optional(),
+    WHATSAPP_MEDIA_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024 * 1024)
+      .max(100 * 1024 * 1024)
+      .default(16 * 1024 * 1024),
+    WHATSAPP_WORKER_ENABLED: booleanFlag.default(true),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === 'production' && env.JWT_ACCESS_SECRET.length < 48) {
@@ -85,7 +126,8 @@ export const envSchema = z
         message: 'must be at least 48 characters in production',
       });
     }
-    const storageProvider = env.STORAGE_PROVIDER ?? (env.NODE_ENV === 'production' ? 's3' : 'local');
+    const storageProvider =
+      env.STORAGE_PROVIDER ?? (env.NODE_ENV === 'production' ? 's3' : 'local');
     if (storageProvider === 's3') {
       if (!env.AWS_ACCESS_KEY_ID) {
         context.addIssue({

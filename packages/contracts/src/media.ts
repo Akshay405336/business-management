@@ -6,7 +6,7 @@ export const MEDIA_ROUTES = {
   storedObjectContent: (id: string) => `${API_PREFIX}/media/objects/${id}/content`,
 } as const;
 
-export type StoredObjectCategory = 'EMPLOYEE_PROFILE_IMAGE';
+export type StoredObjectCategory = 'EMPLOYEE_PROFILE_IMAGE' | 'WHATSAPP_MEDIA';
 
 export interface StoredObjectUploadResponse {
   readonly id: string;

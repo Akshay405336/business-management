@@ -31,6 +31,10 @@ export const PROJECT_MANAGER_PERMISSIONS: readonly PermissionKey[] = [
   'media.read',
   'media.upload',
   'settings.read',
+  'whatsapp.read',
+  'whatsapp.view_all',
+  'whatsapp.reply',
+  'whatsapp.assign',
 ];
 
 export const SALES_PERMISSIONS: readonly PermissionKey[] = [
@@ -40,6 +44,8 @@ export const SALES_PERMISSIONS: readonly PermissionKey[] = [
   'leads.delete',
   'clients.read',
   'settings.read',
+  'whatsapp.read',
+  'whatsapp.reply',
 ];
 
 export const FINANCIAL_PERMISSIONS: readonly PermissionKey[] = [
