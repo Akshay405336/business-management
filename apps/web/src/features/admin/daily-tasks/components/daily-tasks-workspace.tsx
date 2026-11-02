@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, Folder, ListFilter, Plus, Search, Users } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,7 @@ import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants'
 import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
 import { listAssignableEmployees } from '@/features/admin/employees/api/employees';
 import { listProjects } from '@/features/admin/projects/api/projects';
+import { listAllDailyTasksInRange } from '../api/list-all-daily-tasks';
 import {
   fetchDailyTaskBoard,
   fetchDailyTaskWorkflowStages,
@@ -31,6 +32,11 @@ import type {
   DailyTaskWorkflowStage,
 } from '../types';
 import { addDaysToDateInput, localDateInputValue } from '../utils/local-date';
+import {
+  filterTasksByAssignment,
+  filterTasksByStatusBucket,
+  type TaskStatusBucket,
+} from '../utils/task-metrics';
 import { DailyTaskAssignDialog } from './daily-task-assign-dialog';
 import { DailyTaskCalendarView } from './daily-task-calendar-view';
 import { DailyTaskDetailDrawer } from './daily-task-detail-drawer';
@@ -50,7 +56,7 @@ const TOOLBAR_ROW_SCROLL_CLASS =
 
 export function DailyTasksWorkspace({
   title = 'Daily Tasks',
-  description = 'Manage, assign and track daily employee work.',
+  description = 'Organization-wide daily task management and monitoring.',
   defaultView = 'kanban',
 }: {
   title?: string;
@@ -58,13 +64,23 @@ export function DailyTasksWorkspace({
   defaultView?: WorkspaceView;
 }) {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const { has } = useAdminAccess();
   const canAssignTasks = has('tasks.create') && has('tasks.assign');
   const canManageWorkflow = has('tasks.update');
   const workspaceMode = searchParams.get('workspace') === 'my' ? 'my' : 'team';
   const clientToday = useMemo(() => localDateInputValue(), []);
-  const [assignDate, setAssignDate] = useState(clientToday);
-  const [view, setView] = useState<WorkspaceView>(defaultView);
+  const [assignDate, setAssignDate] = useState(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) return dateParam;
+    return clientToday;
+  });
+  const [view, setView] = useState<WorkspaceView>(() => {
+    const viewParam = searchParams.get('view');
+    if (viewParam === 'kanban' || viewParam === 'list' || viewParam === 'calendar') return viewParam;
+    return defaultView;
+  });
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'GENERAL' | 'PROJECT'>('ALL');
   const [employeeId, setEmployeeId] = useState('');
@@ -80,12 +96,36 @@ export function DailyTasksWorkspace({
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState(false);
 
-  const [calendarTasks, setCalendarTasks] = useState<readonly DailyTaskListItem[]>([]);
+  const [calendarRawTasks, setCalendarRawTasks] = useState<readonly DailyTaskListItem[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarAnchor, setCalendarAnchor] = useState(assignDate);
+  const [calendarStatusFilter, setCalendarStatusFilter] = useState<
+    'ALL' | TaskStatusBucket | 'COMPLETED' | 'OVERDUE'
+  >('ALL');
+  const [calendarPriorityFilter, setCalendarPriorityFilter] = useState<
+    'ALL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
+  >('ALL');
+  const [calendarAssignmentFilter, setCalendarAssignmentFilter] = useState<
+    'ALL' | 'ASSIGNED' | 'UNASSIGNED'
+  >('ALL');
+  const [calendarWorkflowStageId, setCalendarWorkflowStageId] = useState('');
 
   useEffect(() => {
     setCalendarAnchor(assignDate);
   }, [assignDate]);
+
+  const openDailyTasksForDate = useCallback(
+    (date: string) => {
+      setAssignDate(date);
+      setCalendarAnchor(date);
+      setView('kanban');
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('date', date);
+      params.set('view', 'kanban');
+      router.push(`${pathname}?${params.toString()}`);
+    },
+    [pathname, router, searchParams],
+  );
 
   const [stages, setStages] = useState<readonly DailyTaskWorkflowStage[]>([]);
   const [employees, setEmployees] = useState<readonly { id: string; displayName: string }[]>([]);
@@ -151,22 +191,50 @@ export function DailyTasksWorkspace({
     const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
     const assignDateFrom = localDateInputValue(start);
     const assignDateTo = localDateInputValue(end);
+    setCalendarLoading(true);
     try {
-      const response = await listDailyTasks({
+      const response = await listAllDailyTasksInRange({
         assignDateFrom,
         assignDateTo,
         clientToday,
-        pageSize: 100,
         search: filterQuery.search,
         type: filterQuery.type,
         employeeId: filterQuery.employeeId,
         projectId: filterQuery.projectId,
+        priority: calendarPriorityFilter === 'ALL' ? undefined : calendarPriorityFilter,
+        workflowStageId: calendarWorkflowStageId || undefined,
+        completedOnly: calendarStatusFilter === 'COMPLETED' ? true : undefined,
+        overdueOnly: calendarStatusFilter === 'OVERDUE' ? true : undefined,
       });
-      setCalendarTasks(response.items);
+      setCalendarRawTasks(response.items);
     } catch {
-      setCalendarTasks([]);
+      setCalendarRawTasks([]);
+    } finally {
+      setCalendarLoading(false);
     }
-  }, [calendarAnchor, clientToday, filterQuery]);
+  }, [
+    calendarAnchor,
+    calendarPriorityFilter,
+    calendarStatusFilter,
+    calendarWorkflowStageId,
+    clientToday,
+    filterQuery,
+  ]);
+
+  const calendarTasks = useMemo(() => {
+    let items = [...calendarRawTasks];
+    if (calendarStatusFilter === 'in_progress' || calendarStatusFilter === 'pending') {
+      items = filterTasksByStatusBucket(items, calendarStatusFilter);
+    } else if (
+      calendarStatusFilter !== 'ALL' &&
+      calendarStatusFilter !== 'COMPLETED' &&
+      calendarStatusFilter !== 'OVERDUE'
+    ) {
+      items = filterTasksByStatusBucket(items, calendarStatusFilter);
+    }
+    items = filterTasksByAssignment(items, calendarAssignmentFilter);
+    return items;
+  }, [calendarRawTasks, calendarStatusFilter, calendarAssignmentFilter]);
 
   useEffect(() => {
     void fetchDailyTaskWorkflowStages().then((r) => setStages(r.stages));
@@ -252,10 +320,25 @@ export function DailyTasksWorkspace({
             toolbar={
               <div className="flex w-max max-w-full flex-nowrap items-center justify-end gap-2 pl-1">
                 <Tabs value={view} onValueChange={(v) => setView(v as WorkspaceView)} className="shrink-0">
-                  <TabsList className="h-9 shrink-0">
-                    <TabsTrigger value="kanban">Kanban</TabsTrigger>
-                    <TabsTrigger value="list">List</TabsTrigger>
-                    <TabsTrigger value="calendar">Calendar</TabsTrigger>
+                  <TabsList className="h-9 shrink-0 border border-[#E8E8EF] bg-[#F8F9FC] p-0.5">
+                    <TabsTrigger
+                      value="kanban"
+                      className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
+                    >
+                      Kanban
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="list"
+                      className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
+                    >
+                      List
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="calendar"
+                      className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
+                    >
+                      Calendar
+                    </TabsTrigger>
                   </TabsList>
                 </Tabs>
                 {canAssignTasks ? (
@@ -278,42 +361,46 @@ export function DailyTasksWorkspace({
                   TOOLBAR_ROW_SCROLL_CLASS,
                 )}
               >
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="size-9 shrink-0"
-                  aria-label="Previous day"
-                  onClick={() => setAssignDate(addDaysToDateInput(assignDate, -1))}
-                >
-                  <ChevronLeft className="size-4" aria-hidden="true" />
-                </Button>
-                <Button
-                  type="button"
-                  variant={assignDate === clientToday ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-9 shrink-0 px-3"
-                  onClick={() => setAssignDate(clientToday)}
-                >
-                  Today
-                </Button>
-                <Input
-                  type="date"
-                  aria-label="Selected date"
-                  className="h-9 w-[9.75rem] shrink-0 rounded-lg sm:w-[10.5rem]"
-                  value={assignDate}
-                  onChange={(e) => setAssignDate(e.target.value)}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="size-9 shrink-0"
-                  aria-label="Next day"
-                  onClick={() => setAssignDate(addDaysToDateInput(assignDate, 1))}
-                >
-                  <ChevronRight className="size-4" aria-hidden="true" />
-                </Button>
+                {view !== 'calendar' ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-9 shrink-0"
+                      aria-label="Previous day"
+                      onClick={() => setAssignDate(addDaysToDateInput(assignDate, -1))}
+                    >
+                      <ChevronLeft className="size-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={assignDate === clientToday ? 'default' : 'outline'}
+                      size="sm"
+                      className="h-9 shrink-0 px-3"
+                      onClick={() => setAssignDate(clientToday)}
+                    >
+                      Today
+                    </Button>
+                    <Input
+                      type="date"
+                      aria-label="Selected date"
+                      className="h-9 w-[9.75rem] shrink-0 rounded-lg sm:w-[10.5rem]"
+                      value={assignDate}
+                      onChange={(e) => setAssignDate(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-9 shrink-0"
+                      aria-label="Next day"
+                      onClick={() => setAssignDate(addDaysToDateInput(assignDate, 1))}
+                    >
+                      <ChevronRight className="size-4" aria-hidden="true" />
+                    </Button>
+                  </>
+                ) : null}
                 <div className="min-w-0 flex-1 basis-[10rem]">
                   <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 w-full">
                     <Input
@@ -371,6 +458,78 @@ export function DailyTasksWorkspace({
                     ))}
                   </SelectContent>
                 </Select>
+                {view === 'calendar' ? (
+                  <>
+                    <Select
+                      value={calendarStatusFilter}
+                      onValueChange={(v) => {
+                        setCalendarStatusFilter(v as typeof calendarStatusFilter);
+                        setCalendarWorkflowStageId('');
+                      }}
+                    >
+                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Task status">
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All statuses</SelectItem>
+                        <SelectItem value="COMPLETED">Completed</SelectItem>
+                        <SelectItem value="in_progress">In progress</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="OVERDUE">Overdue</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={calendarPriorityFilter}
+                      onValueChange={(v) => setCalendarPriorityFilter(v as typeof calendarPriorityFilter)}
+                    >
+                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Priority">
+                        <SelectValue placeholder="All priorities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All priorities</SelectItem>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                        <SelectItem value="URGENT">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={calendarAssignmentFilter}
+                      onValueChange={(v) => setCalendarAssignmentFilter(v as typeof calendarAssignmentFilter)}
+                    >
+                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Assignment">
+                        <SelectValue placeholder="All assignments" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Assigned & unassigned</SelectItem>
+                        <SelectItem value="ASSIGNED">Assigned only</SelectItem>
+                        <SelectItem value="UNASSIGNED">Unassigned only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={calendarWorkflowStageId || '__all__'}
+                      onValueChange={(v) => {
+                        setCalendarWorkflowStageId(v === '__all__' ? '' : v);
+                        if (v !== '__all__') setCalendarStatusFilter('ALL');
+                      }}
+                    >
+                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Workflow stage">
+                        <SelectValue placeholder="All workflow stages" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All workflow stages</SelectItem>
+                        {stages
+                          .filter((s) => s.isActive)
+                          .map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                ) : null}
               </div>
             }
           />
@@ -423,18 +582,14 @@ export function DailyTasksWorkspace({
           ) : null}
 
           {view === 'calendar' ? (
-            <div className="min-w-0 px-4 pb-4 sm:px-5">
+            <div className="flex min-h-[calc(100vh-14rem)] min-w-0 flex-col px-4 pb-4 sm:px-5">
               <DailyTaskCalendarView
                 anchorDate={calendarAnchor}
+                selectedDate={assignDate}
                 tasks={calendarTasks}
+                loading={calendarLoading}
                 onAnchorChange={setCalendarAnchor}
-                onSelectDate={(date) => {
-                  setAssignDate(date);
-                  setCalendarAnchor(date);
-                  setView('kanban');
-                }}
-                onOpenTask={(task) => openTask(task)}
-                onCreateForDate={canAssignTasks ? (date) => openAssign({ date }) : undefined}
+                onSelectDate={openDailyTasksForDate}
               />
             </div>
           ) : null}

@@ -7,6 +7,7 @@ import {
 } from '../../infrastructure/storage/object-storage.types.js';
 import { StorageModule } from '../../infrastructure/storage/storage.module.js';
 import { AuthModule } from '../auth/index.js';
+import { CrmModule } from '../crm/index.js';
 import { OrgAccessModule } from '../org-access/index.js';
 import { DeleteFileHandler } from './application/delete-file/delete-file.handler.js';
 import { GetFileMetadataHandler } from './application/get-file-metadata/get-file-metadata.handler.js';
@@ -45,7 +46,7 @@ const mediaUseCaseHandlers = [
 ] as const;
 
 @Module({
-  imports: [DatabaseModule, StorageModule, CacheModule, AuthModule, OrgAccessModule],
+  imports: [DatabaseModule, StorageModule, CacheModule, AuthModule, CrmModule, OrgAccessModule],
   controllers: [MediaController],
   providers: [
     ...mediaPersistenceProviders,

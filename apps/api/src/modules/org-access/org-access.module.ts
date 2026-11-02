@@ -1,9 +1,10 @@
-import { Module, type Provider } from '@nestjs/common';
+import { Module, forwardRef, type Provider } from '@nestjs/common';
 import { CacheModule } from '../../infrastructure/cache/cache.module.js';
 import { DatabaseModule } from '../../infrastructure/database/database.module.js';
 import { PasswordHashingModule } from '../../infrastructure/security/password-hashing/password-hashing.module.js';
 import { TotpModule } from '../../infrastructure/security/totp/totp.module.js';
 import { AuthModule } from '../auth/index.js';
+import { CrmModule } from '../crm/index.js';
 import { AcceptInvitationHandler } from './application/accept-invitation/accept-invitation.handler.js';
 import { AssignMemberRolesHandler } from './application/assign-member-roles/assign-member-roles.handler.js';
 import { ChangeMemberStatusHandler } from './application/change-member-status/change-member-status.handler.js';
@@ -64,7 +65,14 @@ const orgAccessUseCaseHandlers = [
 ] as const;
 
 @Module({
-  imports: [DatabaseModule, CacheModule, AuthModule, PasswordHashingModule, TotpModule],
+  imports: [
+    DatabaseModule,
+    CacheModule,
+    AuthModule,
+    PasswordHashingModule,
+    TotpModule,
+    forwardRef(() => CrmModule),
+  ],
   controllers: [OrgAccessController],
   providers: [
     ...orgAccessPersistenceProviders,

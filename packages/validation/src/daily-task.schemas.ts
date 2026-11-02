@@ -150,6 +150,7 @@ export const dailyTaskListQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).optional(),
     pageSize: z.coerce.number().int().min(1).max(100).optional(),
+    clientToday: dateOnly.optional(),
     search: z.string().max(200).optional(),
     assignDate: dateOnly.optional(),
     assignDateFrom: dateOnly.optional(),
@@ -200,7 +201,31 @@ export function parseDailyTaskBoardQuery(input: unknown): z.infer<typeof dailyTa
 export function parseDailyTaskListQuery(input: unknown): z.infer<typeof dailyTaskListQuerySchema> {
   const record =
     input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
-  return dailyTaskListQuerySchema.parse(record);
+  const keys = [
+    'page',
+    'pageSize',
+    'clientToday',
+    'search',
+    'assignDate',
+    'assignDateFrom',
+    'assignDateTo',
+    'type',
+    'employeeId',
+    'projectId',
+    'priority',
+    'workflowStageId',
+    'projectPhaseId',
+    'category',
+    'completedOnly',
+    'overdueOnly',
+    'sortBy',
+    'sortDir',
+  ] as const;
+  const picked: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (key in record) picked[key] = record[key];
+  }
+  return dailyTaskListQuerySchema.parse(picked);
 }
 
 export function parseMyDailyTasksQuery(input: unknown): z.infer<typeof myDailyTasksQuerySchema> {

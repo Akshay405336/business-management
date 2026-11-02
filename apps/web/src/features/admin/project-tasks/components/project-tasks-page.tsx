@@ -105,20 +105,28 @@ export function ProjectTasksPage() {
     return projectListQuerySchema.parse(candidate);
   }, [search, statusFilter, priorityFilter, lifecycleTab, page, pageSize]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await listProjectTaskSummaries(query);
-      setItems(response.items);
-      setTotal(response.total);
-      setTabCounts(response.tabCounts);
-    } catch {
-      setError('Unable to load projects. Check your connection and try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [query]);
+  const load = useCallback(
+    async (options?: { page?: number }) => {
+      if (options?.page !== undefined && options.page !== page) {
+        setPage(options.page);
+      }
+      const listQuery =
+        options?.page !== undefined ? { ...query, page: options.page } : query;
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await listProjectTaskSummaries(listQuery);
+        setItems(response.items);
+        setTotal(response.total);
+        setTabCounts(response.tabCounts);
+      } catch {
+        setError('Unable to load projects. Check your connection and try again.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, query],
+  );
 
   const {
     pending: actionPending,
@@ -134,7 +142,7 @@ export function ProjectTasksPage() {
     setStatusToggleTarget,
     requestToggleActive,
     confirmToggleActive,
-  } = useProjectListActions(load);
+  } = useProjectListActions(load, () => ({ page, itemCount: items.length }));
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on filter change

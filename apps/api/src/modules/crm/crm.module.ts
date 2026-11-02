@@ -1,4 +1,4 @@
-import { Module, type Provider } from '@nestjs/common';
+import { Module, forwardRef, type Provider } from '@nestjs/common';
 import { DatabaseModule } from '../../infrastructure/database/database.module.js';
 import { AuthModule } from '../auth/index.js';
 import { OrgAccessModule } from '../org-access/index.js';
@@ -111,7 +111,7 @@ const crmUseCaseHandlers = [
 ] as const;
 
 @Module({
-  imports: [DatabaseModule, AuthModule, OrgAccessModule],
+  imports: [DatabaseModule, AuthModule, forwardRef(() => OrgAccessModule)],
   controllers: [
     PipelineController,
     LeadsController,

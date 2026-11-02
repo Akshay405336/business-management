@@ -670,7 +670,46 @@ export class PrismaProjectRepository implements ProjectRepository {
     const existing = await this.getProject(organizationId, projectId);
     if (!existing) throw new ProjectNotFoundError('Project');
     await this.prisma.$transaction(async (tx) => {
-      await tx.project.delete({ where: { id: projectId } });
+      const phaseIds = (
+        await tx.projectPhase.findMany({
+          where: { organizationId, projectId },
+          select: { id: true },
+        })
+      ).map((phase) => phase.id);
+      if (phaseIds.length > 0) {
+        // Phase ids are scoped to this project; unlink any daily task still pointing at them.
+        await tx.dailyTask.updateMany({
+          where: { projectPhaseId: { in: phaseIds } },
+          data: { projectPhaseId: null },
+        });
+      }
+
+      const taskIds = (
+        await tx.projectTask.findMany({
+          where: { organizationId, projectId },
+          select: { id: true },
+        })
+      ).map((task) => task.id);
+      if (taskIds.length > 0) {
+        await tx.dailyTask.updateMany({
+          where: { linkedProjectTaskId: { in: taskIds } },
+          data: { linkedProjectTaskId: null },
+        });
+      }
+
+      await tx.dailyTask.updateMany({
+        where: { organizationId, projectId },
+        data: {
+          projectId: null,
+          projectPhaseId: null,
+          linkedProjectTaskId: null,
+        },
+      });
+
+      const deleted = await tx.project.deleteMany({
+        where: { id: projectId, organizationId },
+      });
+      if (deleted.count === 0) throw new ProjectNotFoundError('Project');
       await this.writeAudit(tx, organizationId, {
         adminId: audit.adminId,
         type: 'PROJECT_DELETED',

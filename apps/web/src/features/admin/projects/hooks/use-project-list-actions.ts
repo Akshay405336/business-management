@@ -14,7 +14,15 @@ export type ProjectActionTarget = {
   readonly status: ProjectStatus;
 };
 
-export function useProjectListActions(onRefresh: () => Promise<void>) {
+export type ProjectListRefreshOptions = {
+  /** Use when the current page may be empty after a delete (e.g. last item on page 2). */
+  readonly page?: number;
+};
+
+export function useProjectListActions(
+  onRefresh: (options?: ProjectListRefreshOptions) => Promise<void>,
+  getRefreshContext?: () => { readonly page: number; readonly itemCount: number },
+) {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
   const [formOpen, setFormOpen] = useState(false);
@@ -58,12 +66,19 @@ export function useProjectListActions(onRefresh: () => Promise<void>) {
     setDeleteTarget(null);
     try {
       await run(() => deleteProject(target.id));
+      if (editingId === target.id) {
+        setEditingId(null);
+        setFormOpen(false);
+      }
       toast.success(`Project "${target.projectNumber}" deleted.`);
-      await onRefresh();
+      const context = getRefreshContext?.();
+      const refreshPage =
+        context && context.page > 1 && context.itemCount <= 1 ? 1 : undefined;
+      await onRefresh(refreshPage !== undefined ? { page: refreshPage } : undefined);
     } catch (failure) {
       toast.error(describeCrmError(failure));
     }
-  }, [deleteTarget, onRefresh, run, toast]);
+  }, [deleteTarget, editingId, getRefreshContext, onRefresh, run, toast]);
 
   return {
     pending,
