@@ -83,6 +83,10 @@ export const envSchema = z
       .min(1024)
       .max(20 * 1024 * 1024)
       .default(5 * 1024 * 1024),
+    /** Background worker that drains `storage_cleanup_jobs` (S3 delete retries). */
+    MEDIA_CLEANUP_WORKER_ENABLED: booleanFlag.default(true),
+    MEDIA_CLEANUP_INTERVAL_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(60_000),
+    MEDIA_CLEANUP_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
 
     /**
      * WhatsApp Business Cloud API (official Meta Graph API). All optional until a channel is connected;
@@ -117,6 +121,13 @@ export const envSchema = z
       .max(100 * 1024 * 1024)
       .default(16 * 1024 * 1024),
     WHATSAPP_WORKER_ENABLED: booleanFlag.default(true),
+
+    /**
+     * When true, background job locks skip work if Redis is unavailable or the lock is held elsewhere.
+     * Default false preserves Phase 4B behavior (run without lock when Redis SET fails).
+     * Recommended true for multi-replica production when workers are enabled.
+     */
+    DISTRIBUTED_LOCK_STRICT: booleanFlag.default(false),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === 'production' && env.JWT_ACCESS_SECRET.length < 48) {
@@ -142,6 +153,105 @@ export const envSchema = z
           path: ['AWS_SECRET_ACCESS_KEY'],
           message: 'is required when STORAGE_PROVIDER is s3',
         });
+      }
+    }
+    const whatsappIntegrationConfigured =
+      Boolean(env.META_APP_ID) ||
+      Boolean(env.META_APP_SECRET) ||
+      Boolean(env.WHATSAPP_CREDENTIALS_ENCRYPTION_KEY);
+    const isLocalDevHost = (hostname: string): boolean => {
+      const h = hostname.toLowerCase();
+      return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+    };
+
+    if (env.NODE_ENV === 'production') {
+      try {
+        const webOrigin = new URL(env.WEB_ORIGIN);
+        if (webOrigin.protocol !== 'https:' && !isLocalDevHost(webOrigin.hostname)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['WEB_ORIGIN'],
+            message:
+              'must use HTTPS in production (http is allowed only for localhost / 127.0.0.1)',
+          });
+        }
+      } catch {
+        context.addIssue({
+          code: 'custom',
+          path: ['WEB_ORIGIN'],
+          message: 'must be a valid absolute URL',
+        });
+      }
+      for (const [index, origin] of (env.CORS_ALLOWED_ORIGINS ?? []).entries()) {
+        try {
+          const parsed = new URL(origin);
+          if (parsed.protocol !== 'https:' && !isLocalDevHost(parsed.hostname)) {
+            context.addIssue({
+              code: 'custom',
+              path: ['CORS_ALLOWED_ORIGINS', index],
+              message:
+                'each origin must use HTTPS in production (http allowed only for localhost / 127.0.0.1)',
+            });
+          }
+        } catch {
+          context.addIssue({
+            code: 'custom',
+            path: ['CORS_ALLOWED_ORIGINS', index],
+            message: 'must be a valid absolute URL',
+          });
+        }
+      }
+      const trust = env.TRUST_PROXY.trim().toLowerCase();
+      if (trust === 'false' || trust === 'loopback') {
+        context.addIssue({
+          code: 'custom',
+          path: ['TRUST_PROXY'],
+          message:
+            'must be enabled in production behind a reverse proxy (use 1 or true, or a subnet list)',
+        });
+      }
+      if (env.LOG_PRETTY) {
+        context.addIssue({
+          code: 'custom',
+          path: ['LOG_PRETTY'],
+          message: 'must be false in production (structured JSON logs)',
+        });
+      }
+      const placeholderTotpKey = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+      if (env.TOTP_ENCRYPTION_KEY === placeholderTotpKey) {
+        context.addIssue({
+          code: 'custom',
+          path: ['TOTP_ENCRYPTION_KEY'],
+          message: 'must not be the placeholder value from .env.example in production',
+        });
+      }
+    }
+    if (env.NODE_ENV === 'production' && whatsappIntegrationConfigured) {
+      const webhookBase = env.WHATSAPP_WEBHOOK_BASE_URL?.trim();
+      if (!webhookBase) {
+        context.addIssue({
+          code: 'custom',
+          path: ['WHATSAPP_WEBHOOK_BASE_URL'],
+          message:
+            'is required in production when WhatsApp is configured (Meta app id/secret or credentials encryption key is set)',
+        });
+      } else {
+        try {
+          const origin = new URL(webhookBase).origin;
+          if (!origin.startsWith('https://')) {
+            context.addIssue({
+              code: 'custom',
+              path: ['WHATSAPP_WEBHOOK_BASE_URL'],
+              message: 'must use HTTPS in production (Meta requires a public HTTPS webhook URL)',
+            });
+          }
+        } catch {
+          context.addIssue({
+            code: 'custom',
+            path: ['WHATSAPP_WEBHOOK_BASE_URL'],
+            message: 'must be a valid absolute URL',
+          });
+        }
       }
     }
   });

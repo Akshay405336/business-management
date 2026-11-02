@@ -68,7 +68,7 @@ export function resolvePhaseProductionSync(input: {
   readonly phaseActualCompletedAt: Date | null;
   readonly tasks: readonly PhaseTaskProductionRow[];
 }): PhaseProductionSyncPatch {
-  const { phaseActualStartedAt, phaseActualCompletedAt, tasks } = input;
+  const { phaseActualCompletedAt, tasks } = input;
   const computed = computePhaseProductionFromTasks(tasks);
 
   const status: PhaseProductionSyncPatch['status'] =

@@ -1,4 +1,4 @@
-import { templatePlaceholders, type TemplateParameter } from './whatsapp-policy.js';
+import { templatePlaceholders, type TemplateParameter } from './policies/whatsapp-policy.js';
 
 export interface TemplateDescription {
   readonly headerText: string | null;

@@ -105,6 +105,14 @@ export const projectManagerOptionSchema = z.object({
   email: z.string(),
 });
 
+export const projectClientOptionSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  primaryContact: z.string(),
+  phone: z.string().nullable(),
+  status: z.enum(['ACTIVE', 'INACTIVE']),
+});
+
 export const clientQuotationOptionSchema = z.object({
   id: z.uuid(),
   documentNumber: z.string(),

@@ -17,6 +17,7 @@ import type { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   PERMISSION_DEFINITIONS,
+  type PermissionKey,
   type CreateInvitationResponse,
   type MyPermissionsResponse,
   type OrgAccessSummaryResponse,
@@ -36,28 +37,39 @@ import {
   setRolePermissionsRequestSchema,
   updateRoleRequestSchema,
 } from '@techwin/validation';
+import { PlatformAdminGuard } from '../../../../auth/index.js';
+import {
+  CrmContext,
+  CrmOrganizationGuard,
+  type CrmRequestContext,
+} from '../../../../../platform/tenant-context/index.js';
+import { AcceptInvitationHandler } from '../../../application/accept-invitation/accept-invitation.handler.js';
+import { AssignMemberRolesHandler } from '../../../application/assign-member-roles/assign-member-roles.handler.js';
+import { ChangeMemberStatusHandler } from '../../../application/change-member-status/change-member-status.handler.js';
+import { CreateOrgRoleHandler } from '../../../application/create-org-role/create-org-role.handler.js';
+import { DeleteMemberHandler } from '../../../application/delete-member/delete-member.handler.js';
+import { DeleteOrgRoleHandler } from '../../../application/delete-org-role/delete-org-role.handler.js';
+import { GetMyPermissionsHandler } from '../../../application/get-my-permissions/get-my-permissions.handler.js';
+import { GetOrgAccessSummaryHandler } from '../../../application/get-org-access-summary/get-org-access-summary.handler.js';
+import { GetOrgMemberHandler } from '../../../application/get-org-member/get-org-member.handler.js';
+import { GetOrgRoleHandler } from '../../../application/get-org-role/get-org-role.handler.js';
+import { InviteMemberHandler } from '../../../application/invite-member/invite-member.handler.js';
+import { ListOrgMembersHandler } from '../../../application/list-org-members/list-org-members.handler.js';
+import { ListOrgRolesHandler } from '../../../application/list-org-roles/list-org-roles.handler.js';
+import { ProvisionMemberHandler } from '../../../application/provision-member/provision-member.handler.js';
+import { ResendInvitationHandler } from '../../../application/resend-invitation/resend-invitation.handler.js';
+import { ResetMemberPasswordHandler } from '../../../application/reset-member-password/reset-member-password.handler.js';
+import { RevokeInvitationHandler } from '../../../application/revoke-invitation/revoke-invitation.handler.js';
+import { SetRolePermissionsHandler } from '../../../application/set-role-permissions/set-role-permissions.handler.js';
+import { toOrgMemberListFilters } from '../../../application/shared/org-member-list-query.js';
+import { UpdateMemberProfileHandler } from '../../../application/update-member-profile/update-member-profile.handler.js';
+import { UpdateOrgRoleHandler } from '../../../application/update-org-role/update-org-role.handler.js';
+import { RequirePermissions } from '../decorators/require-permissions.decorator.js';
 import {
   parseProvisionMemberRequest,
   parseResetMemberPasswordRequest,
   parseUpdateMemberRequest,
 } from '../dto/org-access-body.schemas.js';
-import { PlatformAdminGuard } from '../../../../auth/index.js';
-import { CrmContext } from '../../../../crm/presentation/http/guards/crm-context.decorator.js';
-import {
-  CrmOrganizationGuard,
-  type CrmRequestContext,
-} from '../../../../crm/presentation/http/guards/crm-organization.guard.js';
-import { AcceptInvitationHandler } from '../../../application/accept-invitation/accept-invitation.handler.js';
-import { ProvisionMemberHandler } from '../../../application/provision-member/provision-member.handler.js';
-import { ResetMemberPasswordHandler } from '../../../application/reset-member-password/reset-member-password.handler.js';
-import { PermissionCheckerService } from '../../../application/services/permission-checker.service.js';
-import { toOrgMemberListFilters } from '../../../application/shared/org-member-list-query.js';
-import { OrgAccessNotFoundError } from '../../../domain/errors/org-access.errors.js';
-import {
-  ORG_ACCESS_REPOSITORY,
-  type OrgAccessRepository,
-} from '../../../domain/repositories/org-access.repository.js';
-import { RequirePermissions } from '../decorators/require-permissions.decorator.js';
 import { OrgAccessExceptionFilter } from '../filters/org-access-exception.filter.js';
 import { RequirePermissionsGuard } from '../guards/require-permissions.guard.js';
 import { toOrgAccessActor } from '../mappers/org-access-actor.mapper.js';
@@ -73,11 +85,26 @@ import {
 @UseFilters(OrgAccessExceptionFilter)
 export class OrgAccessController {
   constructor(
-    @Inject(ORG_ACCESS_REPOSITORY) private readonly repository: OrgAccessRepository,
-    @Inject(PermissionCheckerService) private readonly permissionChecker: PermissionCheckerService,
     @Inject(AcceptInvitationHandler) private readonly acceptInvitation: AcceptInvitationHandler,
+    @Inject(AssignMemberRolesHandler) private readonly assignMemberRoles: AssignMemberRolesHandler,
+    @Inject(ChangeMemberStatusHandler) private readonly changeMemberStatus: ChangeMemberStatusHandler,
+    @Inject(CreateOrgRoleHandler) private readonly createOrgRole: CreateOrgRoleHandler,
+    @Inject(DeleteMemberHandler) private readonly deleteMember: DeleteMemberHandler,
+    @Inject(DeleteOrgRoleHandler) private readonly deleteOrgRole: DeleteOrgRoleHandler,
+    @Inject(GetMyPermissionsHandler) private readonly getMyPermissions: GetMyPermissionsHandler,
+    @Inject(GetOrgAccessSummaryHandler) private readonly getOrgAccessSummary: GetOrgAccessSummaryHandler,
+    @Inject(GetOrgMemberHandler) private readonly getOrgMember: GetOrgMemberHandler,
+    @Inject(GetOrgRoleHandler) private readonly getOrgRole: GetOrgRoleHandler,
+    @Inject(InviteMemberHandler) private readonly inviteMember: InviteMemberHandler,
+    @Inject(ListOrgMembersHandler) private readonly listOrgMembers: ListOrgMembersHandler,
+    @Inject(ListOrgRolesHandler) private readonly listOrgRoles: ListOrgRolesHandler,
     @Inject(ProvisionMemberHandler) private readonly provisionMember: ProvisionMemberHandler,
+    @Inject(ResendInvitationHandler) private readonly resendInvitationHandler: ResendInvitationHandler,
     @Inject(ResetMemberPasswordHandler) private readonly resetMemberPassword: ResetMemberPasswordHandler,
+    @Inject(RevokeInvitationHandler) private readonly revokeInvitationHandler: RevokeInvitationHandler,
+    @Inject(SetRolePermissionsHandler) private readonly setRolePermissionsHandler: SetRolePermissionsHandler,
+    @Inject(UpdateMemberProfileHandler) private readonly updateMemberProfile: UpdateMemberProfileHandler,
+    @Inject(UpdateOrgRoleHandler) private readonly updateOrgRole: UpdateOrgRoleHandler,
   ) {}
 
   @Post('invitations/accept')
@@ -94,7 +121,7 @@ export class OrgAccessController {
   @RequirePermissions('users.read')
   @ApiOperation({ summary: 'User management summary counts' })
   async summary(@CrmContext() ctx: CrmRequestContext): Promise<OrgAccessSummaryResponse> {
-    return this.repository.getSummary(ctx.organizationId);
+    return this.getOrgAccessSummary.execute({ organizationId: ctx.organizationId });
   }
 
   @Get('me/permissions')
@@ -106,8 +133,8 @@ export class OrgAccessController {
     @Req() request: Request & { platformAuth?: { admin: { role: string } } },
   ): Promise<MyPermissionsResponse> {
     const actor = toOrgAccessActor(ctx, request.platformAuth?.admin.role === 'SUPER_ADMIN');
-    const permissions = await this.permissionChecker.resolveEffectivePermissions(actor);
-    return { permissions: [...permissions] };
+    const permissions = await this.getMyPermissions.execute({ actor });
+    return { permissions: [...permissions] as PermissionKey[] };
   }
 
   @Get('permissions')
@@ -129,10 +156,10 @@ export class OrgAccessController {
     @Req() request: Request,
   ): Promise<OrgMemberListResponse> {
     const query = parseOrgMemberListQuery(request.query);
-    const result = await this.repository.listMembers(
-      ctx.organizationId,
-      toOrgMemberListFilters(query),
-    );
+    const result = await this.listOrgMembers.execute({
+      organizationId: ctx.organizationId,
+      filters: toOrgMemberListFilters(query),
+    });
     return {
       items: result.items.map(toOrgMemberListItem),
       total: result.total,
@@ -168,14 +195,11 @@ export class OrgAccessController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id') id: string,
   ): Promise<OrgMemberDetail> {
-    const member = await this.repository.getMember(ctx.organizationId, id);
-    if (!member) throw new OrgAccessNotFoundError('Member');
-    const effectivePermissions = await this.repository.resolveEffectivePermissions(
-      ctx.organizationId,
-      member.adminId,
-      false,
-    );
-    return toOrgMemberDetail(member, effectivePermissions);
+    const result = await this.getOrgMember.execute({
+      organizationId: ctx.organizationId,
+      membershipId: id,
+    });
+    return toOrgMemberDetail(result.member, result.effectivePermissions as readonly PermissionKey[]);
   }
 
   @Post('invitations')
@@ -187,11 +211,12 @@ export class OrgAccessController {
     @Body() raw: unknown,
   ): Promise<CreateInvitationResponse> {
     const body = inviteMemberRequestSchema.parse(raw);
-    return this.repository.createInvitation(
-      ctx.organizationId,
-      { email: body.email, roleIds: body.roleIds },
-      ctx.adminId,
-    );
+    return this.inviteMember.execute({
+      organizationId: ctx.organizationId,
+      actorAdminId: ctx.adminId,
+      email: body.email,
+      roleIds: body.roleIds,
+    });
   }
 
   @Post('invitations/:id/revoke')
@@ -200,7 +225,11 @@ export class OrgAccessController {
   @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
   @RequirePermissions('memberships.manage')
   async revokeInvitation(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<void> {
-    await this.repository.revokeInvitation(ctx.organizationId, id, ctx.adminId);
+    await this.revokeInvitationHandler.execute({
+      organizationId: ctx.organizationId,
+      invitationId: id,
+      actorAdminId: ctx.adminId,
+    });
   }
 
   @Post('invitations/:id/resend')
@@ -208,7 +237,11 @@ export class OrgAccessController {
   @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
   @RequirePermissions('memberships.invite', 'memberships.manage')
   async resendInvitation(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string) {
-    return this.repository.resendInvitation(ctx.organizationId, id, ctx.adminId);
+    return this.resendInvitationHandler.execute({
+      organizationId: ctx.organizationId,
+      invitationId: id,
+      actorAdminId: ctx.adminId,
+    });
   }
 
   @Post('members/:id/reset-password')
@@ -241,15 +274,13 @@ export class OrgAccessController {
     @Body() raw: unknown,
   ) {
     const body = parseUpdateMemberRequest(raw);
-    const updated = await this.repository.updateMemberProfile(
-      ctx.organizationId,
-      id,
-      {
-        ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
-        ...(body.phone !== undefined ? { phone: body.phone } : {}),
-      },
-      ctx.adminId,
-    );
+    const updated = await this.updateMemberProfile.execute({
+      organizationId: ctx.organizationId,
+      membershipId: id,
+      actorAdminId: ctx.adminId,
+      displayName: body.displayName,
+      phone: body.phone,
+    });
     return toOrgMemberListItem(updated);
   }
 
@@ -263,13 +294,27 @@ export class OrgAccessController {
     @Body() raw: unknown,
   ) {
     const body = changeMemberStatusRequestSchema.parse(raw);
-    const updated = await this.repository.changeMemberStatus(
-      ctx.organizationId,
-      id,
-      body.status,
-      ctx.adminId,
-    );
+    const updated = await this.changeMemberStatus.execute({
+      organizationId: ctx.organizationId,
+      membershipId: id,
+      actorAdminId: ctx.adminId,
+      status: body.status,
+    });
     return toOrgMemberListItem(updated);
+  }
+
+  @Delete('members/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
+  @RequirePermissions('users.deactivate', 'memberships.manage')
+  @ApiOperation({ summary: 'Permanently delete a member account' })
+  async removeMember(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<void> {
+    await this.deleteMember.execute({
+      organizationId: ctx.organizationId,
+      membershipId: id,
+      actorAdminId: ctx.adminId,
+    });
   }
 
   @Patch('members/:id/roles')
@@ -282,12 +327,12 @@ export class OrgAccessController {
     @Body() raw: unknown,
   ) {
     const body = assignMemberRolesRequestSchema.parse(raw);
-    const updated = await this.repository.assignMemberRoles(
-      ctx.organizationId,
-      id,
-      body.roleIds,
-      ctx.adminId,
-    );
+    const updated = await this.assignMemberRoles.execute({
+      organizationId: ctx.organizationId,
+      membershipId: id,
+      actorAdminId: ctx.adminId,
+      roleIds: body.roleIds,
+    });
     return toOrgMemberListItem(updated);
   }
 
@@ -296,7 +341,7 @@ export class OrgAccessController {
   @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
   @RequirePermissions('roles.read')
   async listRoles(@CrmContext() ctx: CrmRequestContext): Promise<OrgRoleListResponse> {
-    const roles = await this.repository.listRoles(ctx.organizationId);
+    const roles = await this.listOrgRoles.execute({ organizationId: ctx.organizationId });
     return { items: roles.map(toOrgRoleListItem) };
   }
 
@@ -305,8 +350,7 @@ export class OrgAccessController {
   @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
   @RequirePermissions('roles.read')
   async getRole(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<OrgRoleDetail> {
-    const role = await this.repository.getRole(ctx.organizationId, id);
-    if (!role) throw new OrgAccessNotFoundError('Role');
+    const role = await this.getOrgRole.execute({ organizationId: ctx.organizationId, roleId: id });
     return toOrgRoleDetail(role);
   }
 
@@ -316,16 +360,14 @@ export class OrgAccessController {
   @RequirePermissions('roles.create')
   async createRole(@CrmContext() ctx: CrmRequestContext, @Body() raw: unknown) {
     const body = createRoleRequestSchema.parse(raw);
-    const role = await this.repository.createRole(
-      ctx.organizationId,
-      {
-        key: body.key,
-        name: body.name,
-        description: body.description ?? '',
-        permissionKeys: body.permissionKeys,
-      },
-      ctx.adminId,
-    );
+    const role = await this.createOrgRole.execute({
+      organizationId: ctx.organizationId,
+      actorAdminId: ctx.adminId,
+      key: body.key,
+      name: body.name,
+      description: body.description ?? '',
+      permissionKeys: body.permissionKeys,
+    });
     return toOrgRoleListItem(role);
   }
 
@@ -339,7 +381,14 @@ export class OrgAccessController {
     @Body() raw: unknown,
   ) {
     const body = updateRoleRequestSchema.parse(raw);
-    const role = await this.repository.updateRole(ctx.organizationId, id, body, ctx.adminId);
+    const role = await this.updateOrgRole.execute({
+      organizationId: ctx.organizationId,
+      roleId: id,
+      actorAdminId: ctx.adminId,
+      name: body.name,
+      description: body.description,
+      status: body.status,
+    });
     return toOrgRoleListItem(role);
   }
 
@@ -353,12 +402,12 @@ export class OrgAccessController {
     @Body() raw: unknown,
   ) {
     const body = setRolePermissionsRequestSchema.parse(raw);
-    const role = await this.repository.setRolePermissions(
-      ctx.organizationId,
-      id,
-      body.permissionKeys,
-      ctx.adminId,
-    );
+    const role = await this.setRolePermissionsHandler.execute({
+      organizationId: ctx.organizationId,
+      roleId: id,
+      actorAdminId: ctx.adminId,
+      permissionKeys: body.permissionKeys,
+    });
     return toOrgRoleListItem(role);
   }
 
@@ -368,6 +417,10 @@ export class OrgAccessController {
   @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
   @RequirePermissions('roles.delete')
   async deleteRole(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<void> {
-    await this.repository.deleteRole(ctx.organizationId, id, ctx.adminId);
+    await this.deleteOrgRole.execute({
+      organizationId: ctx.organizationId,
+      roleId: id,
+      actorAdminId: ctx.adminId,
+    });
   }
 }

@@ -38,8 +38,8 @@ export class LocalObjectStorage implements ObjectStoragePort {
     });
   }
 
-  async getPresignedDownloadUrl(_input: PresignedDownloadInput): Promise<string> {
-    throw new Error('Local storage does not issue presigned URLs.');
+  getPresignedDownloadUrl(_input: PresignedDownloadInput): Promise<string> {
+    return Promise.reject(new Error('Local storage does not issue presigned URLs.'));
   }
 
   async readLocalObject(input: DeleteObjectInput): Promise<{ body: Buffer; contentType: string }> {

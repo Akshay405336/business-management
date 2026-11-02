@@ -38,11 +38,20 @@ import {
   type UpdatePipelineStageRequest,
 } from '@techwin/validation';
 import { z } from 'zod';
+import { ActivatePipelineStageHandler } from '../../../application/activate-pipeline-stage/activate-pipeline-stage.handler.js';
 import { BulkDeletePipelinesHandler } from '../../../application/bulk-delete-pipelines/bulk-delete-pipelines.handler.js';
 import { BulkUpdatePipelineStatusHandler } from '../../../application/bulk-update-pipeline-status/bulk-update-pipeline-status.handler.js';
-import { toCrmActor } from '../../../application/crm-actor.js';
-import { CrmUseCases } from '../../../application/crm-use-cases.js';
+import { CreatePipelineHandler } from '../../../application/create-pipeline/create-pipeline.handler.js';
+import { CreatePipelineStageHandler } from '../../../application/create-pipeline-stage/create-pipeline-stage.handler.js';
+import { DeactivatePipelineStageHandler } from '../../../application/deactivate-pipeline-stage/deactivate-pipeline-stage.handler.js';
 import { DeletePipelineHandler } from '../../../application/delete-pipeline/delete-pipeline.handler.js';
+import { DeletePipelineStageHandler } from '../../../application/delete-pipeline-stage/delete-pipeline-stage.handler.js';
+import { GetDefaultPipelineHandler } from '../../../application/get-default-pipeline/get-default-pipeline.handler.js';
+import { GetPipelineHandler } from '../../../application/get-pipeline/get-pipeline.handler.js';
+import { ListPipelinesHandler } from '../../../application/list-pipelines/list-pipelines.handler.js';
+import { ReorderPipelineStagesHandler } from '../../../application/reorder-pipeline-stages/reorder-pipeline-stages.handler.js';
+import { UpdatePipelineHandler } from '../../../application/update-pipeline/update-pipeline.handler.js';
+import { UpdatePipelineStageHandler } from '../../../application/update-pipeline-stage/update-pipeline-stage.handler.js';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
 import {
   createStageBodySchema,
@@ -59,6 +68,7 @@ import { CrmExceptionFilter } from '../filters/crm-exception.filter.js';
 import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
+import { toCrmActor } from '../mappers/crm-actor.mapper.js';
 import {
   RequirePermissions,
   RequirePermissionsGuard,
@@ -72,7 +82,20 @@ import { toCrmPipeline, toCrmPipelineStage } from '../mappers/crm-response.mappe
 @UseFilters(CrmExceptionFilter)
 export class PipelineController {
   constructor(
-    @Inject(CrmUseCases) private readonly crm: CrmUseCases,
+    @Inject(ListPipelinesHandler) private readonly listPipelines: ListPipelinesHandler,
+    @Inject(GetDefaultPipelineHandler) private readonly getDefaultPipeline: GetDefaultPipelineHandler,
+    @Inject(GetPipelineHandler) private readonly getPipeline: GetPipelineHandler,
+    @Inject(CreatePipelineHandler) private readonly createPipeline: CreatePipelineHandler,
+    @Inject(UpdatePipelineHandler) private readonly updatePipeline: UpdatePipelineHandler,
+    @Inject(ReorderPipelineStagesHandler)
+    private readonly reorderPipelineStages: ReorderPipelineStagesHandler,
+    @Inject(CreatePipelineStageHandler) private readonly createPipelineStage: CreatePipelineStageHandler,
+    @Inject(UpdatePipelineStageHandler) private readonly updatePipelineStage: UpdatePipelineStageHandler,
+    @Inject(ActivatePipelineStageHandler)
+    private readonly activatePipelineStage: ActivatePipelineStageHandler,
+    @Inject(DeactivatePipelineStageHandler)
+    private readonly deactivatePipelineStage: DeactivatePipelineStageHandler,
+    @Inject(DeletePipelineStageHandler) private readonly deletePipelineStage: DeletePipelineStageHandler,
     @Inject(BulkUpdatePipelineStatusHandler)
     private readonly bulkUpdatePipelineStatus: BulkUpdatePipelineStatusHandler,
     @Inject(BulkDeletePipelinesHandler)
@@ -89,9 +112,12 @@ export class PipelineController {
     @Query('search') search?: string,
     @Query('status') status?: 'ACTIVE' | 'INACTIVE',
   ): Promise<CrmPipelineListResponse> {
-    const pipelines = await this.crm.listPipelines(ctx, {
-      search: search?.trim() || undefined,
-      status: status === 'ACTIVE' || status === 'INACTIVE' ? status : undefined,
+    const pipelines = await this.listPipelines.execute({
+      actor: toCrmActor(ctx),
+      filters: {
+        search: search?.trim() || undefined,
+        status: status === 'ACTIVE' || status === 'INACTIVE' ? status : undefined,
+      },
     });
     return { pipelines: pipelines.map(toCrmPipeline) };
   }
@@ -101,7 +127,7 @@ export class PipelineController {
   @ApiOperation({ summary: 'Get the organization default pipeline with stages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmPipelineResponseSchema) })
   async getDefault(@CrmContext() ctx: CrmRequestContext): Promise<CrmPipeline> {
-    const pipeline = await this.crm.getDefaultPipeline(ctx);
+    const pipeline = await this.getDefaultPipeline.execute({ actor: toCrmActor(ctx) });
     return toCrmPipeline(pipeline);
   }
 
@@ -144,7 +170,10 @@ export class PipelineController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('pipelineId') pipelineId: string,
   ): Promise<CrmPipeline> {
-    const pipeline = await this.crm.getPipeline(ctx, pipelineId);
+    const pipeline = await this.getPipeline.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+    });
     return toCrmPipeline(pipeline);
   }
 
@@ -157,7 +186,10 @@ export class PipelineController {
     @Body() raw: unknown,
   ): Promise<CrmPipeline> {
     const body: CreatePipelineRequest = createPipelineRequestSchema.parse(raw);
-    const pipeline = await this.crm.createPipeline(ctx, body);
+    const pipeline = await this.createPipeline.execute({
+      actor: toCrmActor(ctx),
+      input: body,
+    });
     return toCrmPipeline(pipeline);
   }
 
@@ -171,7 +203,11 @@ export class PipelineController {
     @Body() raw: unknown,
   ): Promise<CrmPipeline> {
     const body: UpdatePipelineRequest = updatePipelineRequestSchema.parse(raw);
-    const pipeline = await this.crm.updatePipeline(ctx, pipelineId, body);
+    const pipeline = await this.updatePipeline.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+      input: body,
+    });
     return toCrmPipeline(pipeline);
   }
 
@@ -199,7 +235,11 @@ export class PipelineController {
     @Param('pipelineId') pipelineId: string,
     @Body({ schema: reorderStagesBodySchema }) body: ReorderPipelineStagesRequest,
   ): Promise<readonly CrmPipelineStage[]> {
-    const stages = await this.crm.reorderStages(ctx, pipelineId, body.orderedStageIds);
+    const stages = await this.reorderPipelineStages.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+      orderedStageIds: body.orderedStageIds,
+    });
     return stages.map(toCrmPipelineStage);
   }
 
@@ -212,7 +252,11 @@ export class PipelineController {
     @Param('pipelineId') pipelineId: string,
     @Body({ schema: createStageBodySchema }) body: CreatePipelineStageRequest,
   ): Promise<CrmPipelineStage> {
-    const stage = await this.crm.createStage(ctx, pipelineId, body);
+    const stage = await this.createPipelineStage.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+      input: body,
+    });
     return toCrmPipelineStage(stage);
   }
 
@@ -226,7 +270,12 @@ export class PipelineController {
     @Param('stageId') stageId: string,
     @Body({ schema: updateStageBodySchema }) body: UpdatePipelineStageRequest,
   ): Promise<CrmPipelineStage> {
-    const stage = await this.crm.updateStage(ctx, pipelineId, stageId, body);
+    const stage = await this.updatePipelineStage.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+      stageId,
+      input: body,
+    });
     return toCrmPipelineStage(stage);
   }
 
@@ -239,7 +288,11 @@ export class PipelineController {
     @Param('pipelineId') pipelineId: string,
     @Param('stageId') stageId: string,
   ): Promise<CrmPipelineStage> {
-    const stage = await this.crm.activateStage(ctx, pipelineId, stageId);
+    const stage = await this.activatePipelineStage.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+      stageId,
+    });
     return toCrmPipelineStage(stage);
   }
 
@@ -253,7 +306,12 @@ export class PipelineController {
     @Param('stageId') stageId: string,
     @Body({ schema: deleteStageBodySchema }) body: { targetStageId?: string },
   ): Promise<CrmPipelineStage> {
-    const stage = await this.crm.deactivateStage(ctx, pipelineId, stageId, body.targetStageId);
+    const stage = await this.deactivatePipelineStage.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+      stageId,
+      targetStageId: body.targetStageId,
+    });
     return toCrmPipelineStage(stage);
   }
 
@@ -268,6 +326,11 @@ export class PipelineController {
     @Param('stageId') stageId: string,
     @Body({ schema: deleteStageBodySchema }) body: { targetStageId?: string },
   ): Promise<void> {
-    await this.crm.deleteStage(ctx, pipelineId, stageId, body.targetStageId);
+    await this.deletePipelineStage.execute({
+      actor: toCrmActor(ctx),
+      pipelineId,
+      stageId,
+      targetStageId: body.targetStageId,
+    });
   }
 }

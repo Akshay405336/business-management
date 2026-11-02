@@ -148,6 +148,14 @@ export interface ProjectManagerRecord {
   readonly email: string;
 }
 
+export interface ProjectClientOptionRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly primaryContact: string;
+  readonly phone: string | null;
+  readonly status: 'ACTIVE' | 'INACTIVE';
+}
+
 export interface ClientQuotationRecord {
   readonly id: string;
   readonly documentNumber: string;
@@ -183,6 +191,7 @@ export interface ProjectRepository {
   ): Promise<void>;
   previewProjectNumber(organizationId: string): Promise<string>;
   listProjectManagers(organizationId: string): Promise<readonly ProjectManagerRecord[]>;
+  listClientOptions(organizationId: string): Promise<readonly ProjectClientOptionRecord[]>;
   listClientQuotations(
     organizationId: string,
     clientId: string,

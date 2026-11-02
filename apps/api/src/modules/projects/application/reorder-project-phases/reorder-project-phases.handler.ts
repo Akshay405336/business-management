@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ReorderProjectPhasesRequest } from '@techwin/validation';
 import {
   PROJECT_REPOSITORY,
   type ProjectRepository,
@@ -8,7 +7,7 @@ import {
   PROJECT_TASK_REPOSITORY,
   type ProjectTaskRepository,
 } from '../../domain/repositories/project-task.repository.js';
-import type { ProjectActor } from '../access/project-actor.js';
+import type { ReorderProjectPhasesCommand } from './reorder-project-phases.command.js';
 
 @Injectable()
 export class ReorderProjectPhasesHandler {
@@ -17,13 +16,13 @@ export class ReorderProjectPhasesHandler {
     @Inject(PROJECT_TASK_REPOSITORY) private readonly tasks: ProjectTaskRepository,
   ) {}
 
-  async execute(actor: ProjectActor, projectId: string, body: ReorderProjectPhasesRequest) {
+  async execute(command: ReorderProjectPhasesCommand) {
     await this.projects.reorderProjectPhases(
-      actor.organizationId,
-      projectId,
-      body.orderedPhaseIds,
-      { adminId: actor.adminId },
+      command.actor.organizationId,
+      command.projectId,
+      command.body.orderedPhaseIds,
+      { adminId: command.actor.adminId },
     );
-    return this.tasks.getProjectBoard(actor.organizationId, projectId);
+    return this.tasks.getProjectBoard(command.actor.organizationId, command.projectId);
   }
 }

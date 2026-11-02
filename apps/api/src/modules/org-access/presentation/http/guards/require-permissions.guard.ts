@@ -8,9 +8,9 @@ import {
 import { Reflector } from '@nestjs/core';
 import { API_ERROR_CODES, type PermissionKey } from '@techwin/contracts';
 import { ApiException } from '../../../../../common/filters/api-error.response.js';
-import type { OrgAccessActor } from '../../../application/access/org-access-actor.js';
+import type { OrgAccessActor } from '../../../application/shared/org-access-actor.js';
 import { PermissionCheckerService } from '../../../application/services/permission-checker.service.js';
-import type { CrmAuthenticatedRequest } from '../../../../crm/presentation/http/guards/crm-organization.guard.js';
+import type { CrmAuthenticatedRequest } from '../../../../../platform/tenant-context/crm-organization.guard.js';
 import { REQUIRE_PERMISSIONS_KEY } from '../decorators/require-permissions.decorator.js';
 
 export type OrgAccessAuthenticatedRequest = CrmAuthenticatedRequest & {

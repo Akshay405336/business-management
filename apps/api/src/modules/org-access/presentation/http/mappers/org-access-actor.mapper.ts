@@ -1,4 +1,4 @@
-import type { OrgAccessActor } from '../../../application/access/org-access-actor.js';
+import type { OrgAccessActor } from '../../../application/shared/org-access-actor.js';
 
 export function toOrgAccessActor(
   crm: { organizationId: string; adminId: string },

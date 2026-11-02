@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DeletePipelineHandler } from '../delete-pipeline/delete-pipeline.handler.js';
-import { PipelineBulkActionRunner } from '../pipeline-bulk/pipeline-bulk-action.runner.js';
+import { PipelineBulkActionRunner } from '../bulk-operations/pipeline-bulk-action.runner.js';
 import type { BulkDeletePipelinesCommand } from './bulk-delete-pipelines.command.js';
 import type { BulkDeletePipelinesResult } from './bulk-delete-pipelines.result.js';
 

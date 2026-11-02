@@ -1,4 +1,4 @@
-import type { ProjectActor } from '../../../application/access/project-actor.js';
+import type { ProjectActor } from '../../../application/shared/project-actor.js';
 
 export type ProjectRequestContext = {
   readonly organizationId: string;

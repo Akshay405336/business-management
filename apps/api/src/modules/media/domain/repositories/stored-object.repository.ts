@@ -2,7 +2,7 @@ import type {
   StoredObjectCategory,
   StoredObjectProvider,
   StoredObjectStatus,
-} from '../../../../generated/prisma/client.js';
+} from '../enums/stored-object.enums.js';
 
 export type StoredObjectRecord = {
   readonly id: string;

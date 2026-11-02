@@ -122,6 +122,7 @@ export class PlatformAuthController {
       this.cookies.setSession(response, result);
       return toPlatformLoginResponse(result);
     }
+    this.cookies.clearSession(response);
     this.cookies.setChallenge(response, result.challengeToken, result.challengeExpiresAt);
     return toPlatformLoginResponse(result);
   }

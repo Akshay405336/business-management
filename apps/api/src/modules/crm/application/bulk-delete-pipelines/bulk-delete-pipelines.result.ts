@@ -1,3 +1,3 @@
-import type { PipelineBulkActionResult } from '../pipeline-bulk/pipeline-bulk-action.result.js';
+import type { PipelineBulkActionResult } from '../bulk-operations/pipeline-bulk-action.result.js';
 
 export type BulkDeletePipelinesResult = PipelineBulkActionResult;

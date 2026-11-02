@@ -3,8 +3,8 @@ import { API_ERROR_CODES } from '@techwin/contracts';
 import type { Request } from 'express';
 import { ApiException } from '../../../../common/filters/api-error.response.js';
 import { PermissionCheckerService } from '../../../org-access/index.js';
-import type { WhatsAppActor } from '../../application/whatsapp-access.js';
-import { WhatsAppInboxService } from '../../application/whatsapp-inbox.service.js';
+import type { WhatsAppActor } from '../../application/shared/whatsapp-actor.js';
+import { WhatsAppEmployeeIdResolver } from '../../application/services/whatsapp-employee-id.resolver.js';
 
 type GuardedRequest = Request & {
   orgAccess?: { organizationId: string; adminId: string; isPlatformSuperAdmin: boolean };
@@ -16,7 +16,7 @@ type GuardedRequest = Request & {
 export class WhatsAppActorResolver {
   constructor(
     @Inject(PermissionCheckerService) private readonly permissions: PermissionCheckerService,
-    @Inject(WhatsAppInboxService) private readonly inbox: WhatsAppInboxService,
+    @Inject(WhatsAppEmployeeIdResolver) private readonly employees: WhatsAppEmployeeIdResolver,
   ) {}
 
   async resolve(request: Request): Promise<WhatsAppActor> {
@@ -32,7 +32,7 @@ export class WhatsAppActorResolver {
     }
     const [effective, employeeId] = await Promise.all([
       this.permissions.resolveEffectivePermissions(access),
-      this.inbox.resolveEmployeeId(access.organizationId, access.adminId),
+      this.employees.resolveEmployeeId(access.organizationId, access.adminId),
     ]);
     const keys = new Set<string>(effective);
     const actor: WhatsAppActor = {

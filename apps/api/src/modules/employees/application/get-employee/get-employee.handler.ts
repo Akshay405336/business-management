@@ -1,16 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EmployeeNotFoundError } from '../../domain/errors/employee.errors.js';
-import type { EmployeeActor } from '../access/employee-actor.js';
 import {
   EMPLOYEE_REPOSITORY,
   type EmployeeRecord,
   type EmployeeRepository,
 } from '../../domain/repositories/employee.repository.js';
-
-export type GetEmployeeQuery = {
-  readonly actor: EmployeeActor;
-  readonly employeeId: string;
-};
+import type { GetEmployeeQuery } from './get-employee.query.js';
 
 @Injectable()
 export class GetEmployeeHandler {

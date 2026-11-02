@@ -1,28 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PermissionCheckerService } from '../../../org-access/application/services/permission-checker.service.js';
-import type { OrgAccessActor } from '../../../org-access/application/access/org-access-actor.js';
-import { assertCanManageEmployeeCompensation } from '../compensation/employee-compensation-access.js';
-import {
-  assertEmployeeContactAvailable,
-  normalizeEmployeeContact,
-} from '../employee-contact-uniqueness.js';
-import type { EmployeeActor } from '../access/employee-actor.js';
-import { StoredFileService } from '../../../media/application/stored-file.service.js';
+import { PermissionCheckerService } from '../../../org-access/index.js';
+import { StoredFileService } from '../../../media/index.js';
+import { EmployeeNotFoundError } from '../../domain/errors/employee.errors.js';
 import {
   EMPLOYEE_REPOSITORY,
   type EmployeeRecord,
   type EmployeeRepository,
   type UpdateEmployeeInput,
 } from '../../domain/repositories/employee.repository.js';
-import { EmployeeNotFoundError } from '../../domain/errors/employee.errors.js';
-import { validateProfileImageAssignment } from '../employee-profile-image.js';
-
-export type UpdateEmployeeCommand = {
-  readonly actor: EmployeeActor;
-  readonly accessActor: OrgAccessActor;
-  readonly employeeId: string;
-  readonly input: UpdateEmployeeInput;
-};
+import { assertCanManageEmployeeCompensation } from '../services/employee-compensation-access.js';
+import {
+  assertEmployeeContactAvailable,
+  normalizeEmployeeContact,
+} from '../shared/employee-contact-uniqueness.js';
+import { validateProfileImageAssignment } from '../shared/employee-profile-image.js';
+import type { UpdateEmployeeCommand } from './update-employee.command.js';
 
 @Injectable()
 export class UpdateEmployeeHandler {

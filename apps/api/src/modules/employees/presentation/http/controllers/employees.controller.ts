@@ -3,13 +3,11 @@ import {
   Controller,
   Delete,
   Get,
-  HttpCode,
   HttpStatus,
   Inject,
   Param,
   Patch,
   Post,
-  Query,
   Req,
   Res,
   UploadedFile,
@@ -19,10 +17,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
-import { createReadStream, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { createReadStream } from 'node:fs';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
+  AssignableEmployeeListResponse,
+  DeleteEmployeeResponse,
   EmployeeCodePreviewResponse,
   EmployeeDetail,
   EmployeeListResponse,
@@ -31,6 +30,7 @@ import type {
 import {
   changeEmployeeStatusRequestSchema,
   createEmployeeRequestSchema,
+  parseAssignableEmployeeQuery,
   parseEmployeeListQuery,
   updateEmployeeRequestSchema,
   type CreateEmployeeRequest,
@@ -44,21 +44,22 @@ import {
   CrmContext,
   CrmOrganizationGuard,
   type CrmRequestContext,
-} from '../../../../crm/index.js';
+} from '../../../../../platform/tenant-context/index.js';
 import { ChangeEmployeeStatusHandler } from '../../../application/change-employee-status/change-employee-status.handler.js';
 import { CreateEmployeeHandler } from '../../../application/create-employee/create-employee.handler.js';
 import { DeleteEmployeeHandler } from '../../../application/delete-employee/delete-employee.handler.js';
 import { GetEmployeeHandler } from '../../../application/get-employee/get-employee.handler.js';
+import { ListAssignableEmployeesHandler } from '../../../application/list-assignable-employees/list-assignable-employees.handler.js';
 import { ListEmployeesHandler } from '../../../application/list-employees/list-employees.handler.js';
+import { OpenStoredProfileImageHandler } from '../../../application/open-stored-profile-image/open-stored-profile-image.handler.js';
 import { PreviewEmployeeCodeHandler } from '../../../application/preview-employee-code/preview-employee-code.handler.js';
+import { StreamLegacyProfileImageHandler } from '../../../application/stream-legacy-profile-image/stream-legacy-profile-image.handler.js';
 import { UpdateEmployeeHandler } from '../../../application/update-employee/update-employee.handler.js';
 import { UploadEmployeeProfileImageHandler } from '../../../application/upload-employee-profile-image/upload-employee-profile-image.handler.js';
-import { StoredFileService } from '../../../../media/application/stored-file.service.js';
-import { MediaExceptionFilter } from '../../../../media/presentation/http/filters/media-exception.filter.js';
-import { canReadEmployeeCompensation } from '../../../application/compensation/employee-compensation-access.js';
-import { PermissionCheckerService } from '../../../../org-access/application/services/permission-checker.service.js';
-import { toOrgAccessActor } from '../../../../org-access/presentation/http/mappers/org-access-actor.mapper.js';
+import { canReadEmployeeCompensation } from '../../../application/services/employee-compensation-access.js';
+import { MediaExceptionFilter } from '../../../../media/index.js';
 import {
+  assignableEmployeeListResponseSchema,
   employeeCodePreviewResponseSchema,
   employeeDetailResponseSchema,
   employeeListResponseSchema,
@@ -68,12 +69,19 @@ import { EmployeeExceptionFilter } from '../filters/employee-exception.filter.js
 import { toEmployeeActor } from '../mappers/employee-actor.mapper.js';
 import {
   toCreateEmployeeInput,
+  toCreateEmployeeLogin,
   toUpdateEmployeeInput,
 } from '../mappers/employee-request.mapper.js';
-import { toEmployeeDetail, toEmployeeListItem } from '../mappers/employee-response.mapper.js';
 import {
+  toAssignableEmployee,
+  toEmployeeDetail,
+  toEmployeeListItem,
+} from '../mappers/employee-response.mapper.js';
+import {
+  PermissionCheckerService,
   RequirePermissions,
   RequirePermissionsGuard,
+  toOrgAccessActor,
 } from '../../../../org-access/index.js';
 
 @ApiTags('Employees')
@@ -84,6 +92,8 @@ import {
 export class EmployeesController {
   constructor(
     @Inject(ListEmployeesHandler) private readonly listEmployees: ListEmployeesHandler,
+    @Inject(ListAssignableEmployeesHandler)
+    private readonly listAssignableEmployees: ListAssignableEmployeesHandler,
     @Inject(GetEmployeeHandler) private readonly getEmployee: GetEmployeeHandler,
     @Inject(CreateEmployeeHandler) private readonly createEmployee: CreateEmployeeHandler,
     @Inject(UpdateEmployeeHandler) private readonly updateEmployee: UpdateEmployeeHandler,
@@ -94,7 +104,10 @@ export class EmployeesController {
     private readonly previewEmployeeCode: PreviewEmployeeCodeHandler,
     @Inject(UploadEmployeeProfileImageHandler)
     private readonly uploadProfileImage: UploadEmployeeProfileImageHandler,
-    @Inject(StoredFileService) private readonly storedFiles: StoredFileService,
+    @Inject(OpenStoredProfileImageHandler)
+    private readonly openStoredProfileImage: OpenStoredProfileImageHandler,
+    @Inject(StreamLegacyProfileImageHandler)
+    private readonly streamLegacyProfileImage: StreamLegacyProfileImageHandler,
     @Inject(PermissionCheckerService) private readonly permissionChecker: PermissionCheckerService,
   ) {}
 
@@ -121,6 +134,22 @@ export class EmployeesController {
       page: result.page,
       pageSize: result.pageSize,
     };
+  }
+
+  @Get('assignable')
+  @RequirePermissions('employees.read', 'tasks.read', 'tasks.assign', 'projects.read')
+  @ApiOperation({ summary: 'List active employees for task assignment pickers' })
+  @ApiOkResponse({ schema: toOpenApiSchema(assignableEmployeeListResponseSchema) })
+  async assignable(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: Request,
+  ): Promise<AssignableEmployeeListResponse> {
+    const query = parseAssignableEmployeeQuery(request.query);
+    const items = await this.listAssignableEmployees.execute({
+      actor: toEmployeeActor(ctx),
+      search: query.search,
+    });
+    return { items: items.map(toAssignableEmployee) };
   }
 
   @Get('code-preview')
@@ -159,10 +188,10 @@ export class EmployeesController {
     @Param('storedObjectId') storedObjectId: string,
     @Res() response: Response,
   ): Promise<void> {
-    const opened = await this.storedFiles.openInlineEmployeeProfile(
-      ctx.organizationId,
+    const opened = await this.openStoredProfileImage.execute({
+      organizationId: ctx.organizationId,
       storedObjectId,
-    );
+    });
     response.setHeader('Content-Type', opened.contentType);
     response.setHeader('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800');
     response.send(opened.body);
@@ -171,26 +200,22 @@ export class EmployeesController {
   @Get('profile-images/:organizationId/:fileName')
   @RequirePermissions('employees.read')
   @ApiOperation({ summary: 'Stream employee profile image' })
-  async streamProfileImage(
+  streamProfileImage(
     @CrmContext() ctx: CrmRequestContext,
     @Param('organizationId') organizationId: string,
     @Param('fileName') fileName: string,
     @Res() response: Response,
-  ): Promise<void> {
-    if (organizationId !== ctx.organizationId) {
+  ): void {
+    const result = this.streamLegacyProfileImage.execute({
+      trustedOrganizationId: ctx.organizationId,
+      organizationId,
+      fileName,
+    });
+    if (result.kind === 'not_found') {
       response.status(HttpStatus.NOT_FOUND).end();
       return;
     }
-    if (!/^[a-f0-9-]+\.(jpg|jpeg|png|webp)$/i.test(fileName)) {
-      response.status(HttpStatus.NOT_FOUND).end();
-      return;
-    }
-    const path = join(process.cwd(), 'data', 'uploads', 'employees', organizationId, fileName);
-    if (!existsSync(path)) {
-      response.status(HttpStatus.NOT_FOUND).end();
-      return;
-    }
-    const stream = createReadStream(path);
+    const stream = createReadStream(result.absolutePath);
     stream.pipe(response);
   }
 
@@ -229,6 +254,7 @@ export class EmployeesController {
       actor: toEmployeeActor(ctx),
       accessActor,
       input: toCreateEmployeeInput(body),
+      login: toCreateEmployeeLogin(body),
     });
     const includeCompensation = await canReadEmployeeCompensation(
       this.permissionChecker,
@@ -268,12 +294,14 @@ export class EmployeesController {
   @ApiOkResponse({ schema: toOpenApiSchema(employeeDetailResponseSchema) })
   async changeStatus(
     @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
     @Param('id') id: string,
     @Body() raw: unknown,
   ): Promise<EmployeeDetail> {
     const body = changeEmployeeStatusRequestSchema.parse(raw);
     const employee = await this.changeEmployeeStatus.execute({
       actor: toEmployeeActor(ctx),
+      accessActor: this.accessActor(request, ctx),
       employeeId: id,
       status: body.status,
     });
@@ -282,12 +310,19 @@ export class EmployeesController {
 
   @Delete(':id')
   @RequirePermissions('employees.update')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete employee' })
-  async remove(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<void> {
-    await this.deleteEmployee.execute({
+  @ApiOperation({
+    summary: 'Permanently delete employee and the sign-in account created with it',
+  })
+  async remove(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<DeleteEmployeeResponse> {
+    const result = await this.deleteEmployee.execute({
       actor: toEmployeeActor(ctx),
+      accessActor: this.accessActor(request, ctx),
       employeeId: id,
     });
+    return { loginAccount: result.loginAccount };
   }
 }

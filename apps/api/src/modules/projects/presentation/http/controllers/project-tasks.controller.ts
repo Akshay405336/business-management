@@ -31,15 +31,16 @@ import {
   type ReorderProjectPhasesRequest,
   type UpdateProjectTaskRequest,
 } from '@techwin/validation';
-import { PlatformAdminGuard } from '../../../../auth/index.js';
+import { PlatformAdminGuard, type PlatformAuthenticatedRequest } from '../../../../auth/index.js';
 import {
   CrmContext,
   CrmOrganizationGuard,
   type CrmRequestContext,
-} from '../../../../crm/index.js';
+} from '../../../../../platform/tenant-context/index.js';
 import {
   RequirePermissions,
   RequirePermissionsGuard,
+  toOrgAccessActor,
 } from '../../../../org-access/index.js';
 import { CreateProjectTaskHandler } from '../../../application/create-project-task/create-project-task.handler.js';
 import { DeleteProjectTaskHandler } from '../../../application/delete-project-task/delete-project-task.handler.js';
@@ -125,7 +126,11 @@ export class ProjectTasksController {
     @Body() raw: unknown,
   ): Promise<ProjectTaskBoardResponse> {
     const body: ReorderProjectPhasesRequest = reorderProjectPhasesRequestSchema.parse(raw);
-    const board = await this.reorderPhases.execute(toProjectActor(ctx), projectId, body);
+    const board = await this.reorderPhases.execute({
+      actor: toProjectActor(ctx),
+      projectId,
+      body,
+    });
     return toProjectTaskBoardResponse(board);
   }
 
@@ -134,11 +139,17 @@ export class ProjectTasksController {
   @ApiOperation({ summary: 'Create project task' })
   async create(
     @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
     @Param('projectId') projectId: string,
     @Body() raw: unknown,
   ): Promise<ProjectTask> {
     const body: CreateProjectTaskRequest = createProjectTaskRequestSchema.parse(raw);
-    const task = await this.createTask.execute(toProjectActor(ctx), projectId, body);
+    const task = await this.createTask.execute({
+      actor: toProjectActor(ctx),
+      accessActor: toOrgAccessActor(ctx, request.platformAuth?.admin.role === 'SUPER_ADMIN'),
+      projectId,
+      input: body,
+    });
     return toProjectTask(task);
   }
 
@@ -147,12 +158,19 @@ export class ProjectTasksController {
   @ApiOperation({ summary: 'Update project task' })
   async update(
     @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
     @Param('projectId') projectId: string,
     @Param('taskId') taskId: string,
     @Body() raw: unknown,
   ): Promise<ProjectTask> {
     const body: UpdateProjectTaskRequest = updateProjectTaskRequestSchema.parse(raw);
-    const task = await this.updateTask.execute(toProjectActor(ctx), projectId, taskId, body);
+    const task = await this.updateTask.execute({
+      actor: toProjectActor(ctx),
+      accessActor: toOrgAccessActor(ctx, request.platformAuth?.admin.role === 'SUPER_ADMIN'),
+      projectId,
+      taskId,
+      input: body,
+    });
     return toProjectTask(task);
   }
 
@@ -166,7 +184,12 @@ export class ProjectTasksController {
     @Body() raw: unknown,
   ): Promise<ProjectTask> {
     const body: MoveProjectTaskRequest = moveProjectTaskRequestSchema.parse(raw);
-    const task = await this.moveTask.execute(toProjectActor(ctx), projectId, taskId, body);
+    const task = await this.moveTask.execute({
+      actor: toProjectActor(ctx),
+      projectId,
+      taskId,
+      input: body,
+    });
     return toProjectTask(task);
   }
 
@@ -179,6 +202,6 @@ export class ProjectTasksController {
     @Param('projectId') projectId: string,
     @Param('taskId') taskId: string,
   ): Promise<void> {
-    await this.deleteTask.execute(toProjectActor(ctx), projectId, taskId);
+    await this.deleteTask.execute({ actor: toProjectActor(ctx), projectId, taskId });
   }
 }

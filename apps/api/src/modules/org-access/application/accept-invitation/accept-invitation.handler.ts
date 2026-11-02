@@ -8,9 +8,9 @@ import {
 } from '../../../../infrastructure/security/security.contracts.js';
 import {
   PLATFORM_TOTP_SECRET_PROTECTOR,
+  PlatformTotpSecret,
   type PlatformTotpSecretProtector,
-} from '../../../auth/domain/services/platform-totp-secret-protector.js';
-import { PlatformTotpSecret } from '../../../auth/domain/value-objects/platform-totp-secret.js';
+} from '../../../auth/index.js';
 import {
   ORG_ACCESS_REPOSITORY,
   type OrgAccessRepository,

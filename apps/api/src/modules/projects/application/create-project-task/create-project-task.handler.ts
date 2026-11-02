@@ -1,16 +1,26 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { CreateProjectTaskRequest } from '@techwin/validation';
+import { PermissionCheckerService } from '../../../org-access/index.js';
 import {
   PROJECT_TASK_REPOSITORY,
   type ProjectTaskRepository,
 } from '../../domain/repositories/project-task.repository.js';
-import type { ProjectActor } from '../access/project-actor.js';
+import type { CreateProjectTaskCommand } from './create-project-task.command.js';
 
 @Injectable()
 export class CreateProjectTaskHandler {
-  constructor(@Inject(PROJECT_TASK_REPOSITORY) private readonly repository: ProjectTaskRepository) {}
+  constructor(
+    @Inject(PROJECT_TASK_REPOSITORY) private readonly repository: ProjectTaskRepository,
+    @Inject(PermissionCheckerService) private readonly permissions: PermissionCheckerService,
+  ) {}
 
-  execute(actor: ProjectActor, projectId: string, input: CreateProjectTaskRequest) {
-    return this.repository.createTask(actor.organizationId, projectId, input);
+  async execute(command: CreateProjectTaskCommand) {
+    if (command.input.assigneeAdminId) {
+      await this.permissions.requirePermissions(command.accessActor, ['tasks.assign']);
+    }
+    return this.repository.createTask(
+      command.actor.organizationId,
+      command.projectId,
+      command.input,
+    );
   }
 }

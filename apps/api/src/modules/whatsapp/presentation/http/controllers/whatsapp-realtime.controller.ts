@@ -4,9 +4,9 @@ import type { WhatsAppRealtimeResponse } from '@techwin/contracts';
 import { whatsappRealtimeQuerySchema } from '@techwin/validation';
 import type { Request, Response } from 'express';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
-import { CrmOrganizationGuard } from '../../../../crm/index.js';
+import { CrmOrganizationGuard } from '../../../../../platform/tenant-context/index.js';
 import { RequirePermissions, RequirePermissionsGuard } from '../../../../org-access/index.js';
-import { WhatsAppRealtimeService } from '../../../application/whatsapp-realtime.service.js';
+import { PollWhatsAppRealtimeEventsHandler } from '../../../application/poll-whatsapp-realtime-events/poll-whatsapp-realtime-events.handler.js';
 import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js';
 import { WhatsAppActorResolver } from '../whatsapp-actor.resolver.js';
 
@@ -17,7 +17,8 @@ import { WhatsAppActorResolver } from '../whatsapp-actor.resolver.js';
 @UseFilters(WhatsAppExceptionFilter)
 export class WhatsAppRealtimeController {
   constructor(
-    @Inject(WhatsAppRealtimeService) private readonly realtime: WhatsAppRealtimeService,
+    @Inject(PollWhatsAppRealtimeEventsHandler)
+    private readonly pollEvents: PollWhatsAppRealtimeEventsHandler,
     @Inject(WhatsAppActorResolver) private readonly actors: WhatsAppActorResolver,
   ) {}
 
@@ -38,7 +39,12 @@ export class WhatsAppRealtimeController {
     const onClose = () => abort.abort();
     response.on('close', onClose);
     try {
-      return await this.realtime.poll(actor, query.after, query.waitMs, abort.signal);
+      return await this.pollEvents.execute({
+        actor,
+        after: query.after,
+        waitMs: query.waitMs,
+        signal: abort.signal,
+      });
     } finally {
       response.off('close', onClose);
     }

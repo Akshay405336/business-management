@@ -12,7 +12,8 @@ import {
 } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import type { Request } from 'express';
-import { WhatsAppWebhookService } from '../../../application/whatsapp-webhook.service.js';
+import { ReceiveWhatsAppWebhookHandler } from '../../../application/receive-whatsapp-webhook/receive-whatsapp-webhook.handler.js';
+import { VerifyWhatsAppWebhookHandler } from '../../../application/verify-whatsapp-webhook/verify-whatsapp-webhook.handler.js';
 import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js';
 
 /**
@@ -23,12 +24,16 @@ import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js
 @Controller('webhooks/whatsapp')
 @UseFilters(WhatsAppExceptionFilter)
 export class WhatsAppWebhookController {
-  constructor(@Inject(WhatsAppWebhookService) private readonly webhooks: WhatsAppWebhookService) {}
+  constructor(
+    @Inject(VerifyWhatsAppWebhookHandler) private readonly verifyWebhook: VerifyWhatsAppWebhookHandler,
+    @Inject(ReceiveWhatsAppWebhookHandler) private readonly receiveWebhook: ReceiveWhatsAppWebhookHandler,
+  ) {}
 
   @Get(':channelKey')
   @Header('Content-Type', 'text/plain; charset=utf-8')
   verify(@Param('channelKey') channelKey: string, @Req() request: Request): Promise<string> {
-    return this.webhooks.verifySubscription(channelKey, {
+    return this.verifyWebhook.execute({
+      channelKey,
       mode: request.query['hub.mode'],
       token: request.query['hub.verify_token'],
       challenge: request.query['hub.challenge'],
@@ -41,7 +46,11 @@ export class WhatsAppWebhookController {
     @Param('channelKey') channelKey: string,
     @Req() request: Request & { rawBody?: Buffer },
   ): Promise<{ received: true }> {
-    await this.webhooks.receive(channelKey, request.rawBody, request.get('x-hub-signature-256'));
+    await this.receiveWebhook.execute({
+      channelKey,
+      rawBody: request.rawBody,
+      signature: request.get('x-hub-signature-256'),
+    });
     return { received: true };
   }
 }

@@ -1,13 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { EmployeeActor } from '../access/employee-actor.js';
 import {
   EMPLOYEE_REPOSITORY,
   type EmployeeRepository,
 } from '../../domain/repositories/employee.repository.js';
-
-export type PreviewEmployeeCodeQuery = {
-  readonly actor: EmployeeActor;
-};
+import type { PreviewEmployeeCodeQuery } from './preview-employee-code.query.js';
 
 @Injectable()
 export class PreviewEmployeeCodeHandler {

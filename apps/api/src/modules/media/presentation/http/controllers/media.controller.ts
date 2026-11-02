@@ -24,13 +24,18 @@ import {
   CrmContext,
   CrmOrganizationGuard,
   type CrmRequestContext,
-} from '../../../../crm/index.js';
+} from '../../../../../platform/tenant-context/index.js';
 import {
   RequirePermissions,
   RequirePermissionsGuard,
 } from '../../../../org-access/index.js';
-import { StoredFileService } from '../../../application/stored-file.service.js';
+import { DeleteFileHandler } from '../../../application/delete-file/delete-file.handler.js';
+import { GetFileMetadataHandler } from '../../../application/get-file-metadata/get-file-metadata.handler.js';
+import { OpenFileContentHandler } from '../../../application/open-file-content/open-file-content.handler.js';
+import { StoredFileService } from '../../../application/services/stored-file.service.js';
+import { UploadFileHandler } from '../../../application/upload-file/upload-file.handler.js';
 import { MediaExceptionFilter } from '../filters/media-exception.filter.js';
+import { toStoredObjectMetadataResponse } from '../mappers/media-response.mapper.js';
 
 @ApiTags('Media')
 @ApiBearerAuth()
@@ -38,7 +43,13 @@ import { MediaExceptionFilter } from '../filters/media-exception.filter.js';
 @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(MediaExceptionFilter)
 export class MediaController {
-  constructor(@Inject(StoredFileService) private readonly storedFiles: StoredFileService) {}
+  constructor(
+    @Inject(UploadFileHandler) private readonly uploadFile: UploadFileHandler,
+    @Inject(GetFileMetadataHandler) private readonly getFileMetadata: GetFileMetadataHandler,
+    @Inject(OpenFileContentHandler) private readonly openFileContent: OpenFileContentHandler,
+    @Inject(DeleteFileHandler) private readonly deleteFile: DeleteFileHandler,
+    @Inject(StoredFileService) private readonly storedFiles: StoredFileService,
+  ) {}
 
   @Post()
   @RequirePermissions('media.upload')
@@ -55,7 +66,7 @@ export class MediaController {
     file: { buffer: Buffer; mimetype: string; size: number; originalname: string },
   ): Promise<StoredObjectUploadResponse> {
     const category = storedObjectCategorySchema.parse(categoryRaw);
-    return this.storedFiles.upload({
+    return this.uploadFile.execute({
       organizationId: ctx.organizationId,
       adminId: ctx.adminId,
       category,
@@ -70,16 +81,11 @@ export class MediaController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id') id: string,
   ): Promise<StoredObjectMetadataResponse> {
-    const record = await this.storedFiles.getGenericRecord(ctx.organizationId, id);
-    return {
-      id: record.id,
-      previewUrl: this.storedFiles.previewPath(record.id),
-      mimeType: record.mimeType,
-      sizeBytes: record.sizeBytes,
-      displayFileName: record.displayFileName,
-      category: record.category,
-      createdAt: record.createdAt,
-    };
+    const record = await this.getFileMetadata.execute({
+      organizationId: ctx.organizationId,
+      storedObjectId: id,
+    });
+    return toStoredObjectMetadataResponse(record, this.storedFiles);
   }
 
   @Get(':id/content')
@@ -90,7 +96,10 @@ export class MediaController {
     @Param('id') id: string,
     @Res() response: Response,
   ): Promise<void> {
-    const opened = await this.storedFiles.openDownload(ctx.organizationId, id);
+    const opened = await this.openFileContent.execute({
+      organizationId: ctx.organizationId,
+      storedObjectId: id,
+    });
     if (opened.redirectUrl) {
       response.redirect(HttpStatus.TEMPORARY_REDIRECT, opened.redirectUrl);
       return;
@@ -109,6 +118,9 @@ export class MediaController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an unreferenced stored object' })
   async remove(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<void> {
-    await this.storedFiles.deleteUnreferenced(ctx.organizationId, id);
+    await this.deleteFile.execute({
+      organizationId: ctx.organizationId,
+      storedObjectId: id,
+    });
   }
 }

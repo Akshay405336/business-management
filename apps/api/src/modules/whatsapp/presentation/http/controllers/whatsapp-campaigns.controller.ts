@@ -30,11 +30,21 @@ import {
 } from '@techwin/validation';
 import type { Request } from 'express';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
-import { CrmContext, CrmOrganizationGuard, type CrmRequestContext } from '../../../../crm/index.js';
+import {
+  CrmContext,
+  CrmOrganizationGuard,
+  type CrmRequestContext,
+} from '../../../../../platform/tenant-context/index.js';
 import { RequirePermissions, RequirePermissionsGuard } from '../../../../org-access/index.js';
-import { WhatsAppAnalyticsService } from '../../../application/whatsapp-analytics.service.js';
-import { WhatsAppBroadcastService } from '../../../application/whatsapp-broadcast.service.js';
-import { WhatsAppTemplateService } from '../../../application/whatsapp-template.service.js';
+import { CancelWhatsAppBroadcastHandler } from '../../../application/cancel-whatsapp-broadcast/cancel-whatsapp-broadcast.handler.js';
+import { CreateWhatsAppBroadcastHandler } from '../../../application/create-whatsapp-broadcast/create-whatsapp-broadcast.handler.js';
+import { CreateWhatsAppTemplateHandler } from '../../../application/create-whatsapp-template/create-whatsapp-template.handler.js';
+import { GetWhatsAppAnalyticsHandler } from '../../../application/get-whatsapp-analytics/get-whatsapp-analytics.handler.js';
+import { GetWhatsAppBroadcastHandler } from '../../../application/get-whatsapp-broadcast/get-whatsapp-broadcast.handler.js';
+import { GetWhatsAppTemplateHandler } from '../../../application/get-whatsapp-template/get-whatsapp-template.handler.js';
+import { ListWhatsAppBroadcastsHandler } from '../../../application/list-whatsapp-broadcasts/list-whatsapp-broadcasts.handler.js';
+import { ListWhatsAppTemplatesHandler } from '../../../application/list-whatsapp-templates/list-whatsapp-templates.handler.js';
+import { PreviewWhatsAppBroadcastAudienceHandler } from '../../../application/preview-whatsapp-broadcast-audience/preview-whatsapp-broadcast-audience.handler.js';
 import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js';
 
 @ApiTags('WhatsApp Templates & Broadcasts')
@@ -44,31 +54,38 @@ import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js
 @UseFilters(WhatsAppExceptionFilter)
 export class WhatsAppCampaignsController {
   constructor(
-    @Inject(WhatsAppTemplateService) private readonly templates: WhatsAppTemplateService,
-    @Inject(WhatsAppBroadcastService) private readonly broadcasts: WhatsAppBroadcastService,
-    @Inject(WhatsAppAnalyticsService) private readonly analytics: WhatsAppAnalyticsService,
+    @Inject(ListWhatsAppTemplatesHandler) private readonly listTemplates: ListWhatsAppTemplatesHandler,
+    @Inject(GetWhatsAppTemplateHandler) private readonly getTemplate: GetWhatsAppTemplateHandler,
+    @Inject(CreateWhatsAppTemplateHandler) private readonly createTemplate: CreateWhatsAppTemplateHandler,
+    @Inject(ListWhatsAppBroadcastsHandler) private readonly listBroadcasts: ListWhatsAppBroadcastsHandler,
+    @Inject(PreviewWhatsAppBroadcastAudienceHandler)
+    private readonly previewBroadcastAudience: PreviewWhatsAppBroadcastAudienceHandler,
+    @Inject(CreateWhatsAppBroadcastHandler) private readonly createBroadcast: CreateWhatsAppBroadcastHandler,
+    @Inject(GetWhatsAppBroadcastHandler) private readonly getBroadcast: GetWhatsAppBroadcastHandler,
+    @Inject(CancelWhatsAppBroadcastHandler) private readonly cancelBroadcast: CancelWhatsAppBroadcastHandler,
+    @Inject(GetWhatsAppAnalyticsHandler) private readonly analytics: GetWhatsAppAnalyticsHandler,
   ) {}
 
   @Get('templates')
   @RequirePermissions('whatsapp.read', 'whatsapp.templates.manage', 'whatsapp.broadcasts.manage')
   @ApiOperation({ summary: 'List synced message templates' })
-  listTemplates(
+  listTemplatesRoute(
     @CrmContext() ctx: CrmRequestContext,
     @Req() request: Request,
   ): Promise<WhatsAppTemplateListResponse> {
-    return this.templates.list(
-      ctx.organizationId,
-      whatsappTemplateListQuerySchema.parse(request.query),
-    );
+    return this.listTemplates.execute({
+      organizationId: ctx.organizationId,
+      query: whatsappTemplateListQuerySchema.parse(request.query),
+    });
   }
 
   @Get('templates/:id')
   @RequirePermissions('whatsapp.read', 'whatsapp.templates.manage', 'whatsapp.broadcasts.manage')
-  getTemplate(
+  getTemplateRoute(
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppTemplateSummary> {
-    return this.templates.get(ctx.organizationId, id);
+    return this.getTemplate.execute({ organizationId: ctx.organizationId, templateId: id });
   }
 
   @Post('templates')
@@ -78,13 +95,16 @@ export class WhatsAppCampaignsController {
     @CrmContext() ctx: CrmRequestContext,
     @Body() raw: unknown,
   ): Promise<WhatsAppTemplateSummary> {
-    return this.templates.submit(ctx, whatsappCreateTemplateRequestSchema.parse(raw));
+    return this.createTemplate.execute({
+      ctx,
+      input: whatsappCreateTemplateRequestSchema.parse(raw),
+    });
   }
 
   @Get('broadcasts')
   @RequirePermissions('whatsapp.broadcasts.manage')
-  listBroadcasts(@CrmContext() ctx: CrmRequestContext): Promise<WhatsAppBroadcastListResponse> {
-    return this.broadcasts.list(ctx.organizationId);
+  listBroadcastsRoute(@CrmContext() ctx: CrmRequestContext): Promise<WhatsAppBroadcastListResponse> {
+    return this.listBroadcasts.execute({ organizationId: ctx.organizationId });
   }
 
   @Post('broadcasts/audience-preview')
@@ -95,39 +115,42 @@ export class WhatsAppCampaignsController {
     @CrmContext() ctx: CrmRequestContext,
     @Body() raw: unknown,
   ): Promise<WhatsAppBroadcastAudiencePreview> {
-    return this.broadcasts.previewAudience(
-      ctx.organizationId,
-      whatsappBroadcastAudiencePreviewRequestSchema.parse(raw),
-    );
+    return this.previewBroadcastAudience.execute({
+      organizationId: ctx.organizationId,
+      input: whatsappBroadcastAudiencePreviewRequestSchema.parse(raw),
+    });
   }
 
   @Post('broadcasts')
   @RequirePermissions('whatsapp.broadcasts.manage')
   @ApiOperation({ summary: 'Create a confirmed broadcast (sends now or at the scheduled time)' })
-  createBroadcast(
+  createBroadcastRoute(
     @CrmContext() ctx: CrmRequestContext,
     @Body() raw: unknown,
   ): Promise<WhatsAppBroadcastDetail> {
-    return this.broadcasts.create(ctx, whatsappCreateBroadcastRequestSchema.parse(raw));
+    return this.createBroadcast.execute({
+      ctx,
+      input: whatsappCreateBroadcastRequestSchema.parse(raw),
+    });
   }
 
   @Get('broadcasts/:id')
   @RequirePermissions('whatsapp.broadcasts.manage')
-  getBroadcast(
+  getBroadcastRoute(
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppBroadcastDetail> {
-    return this.broadcasts.get(ctx.organizationId, id);
+    return this.getBroadcast.execute({ organizationId: ctx.organizationId, broadcastId: id });
   }
 
   @Post('broadcasts/:id/cancel')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('whatsapp.broadcasts.manage')
-  cancelBroadcast(
+  cancelBroadcastRoute(
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppBroadcastDetail> {
-    return this.broadcasts.cancel(ctx, id);
+    return this.cancelBroadcast.execute({ ctx, broadcastId: id });
   }
 
   @Get('analytics')
@@ -137,9 +160,9 @@ export class WhatsAppCampaignsController {
     @CrmContext() ctx: CrmRequestContext,
     @Req() request: Request,
   ): Promise<WhatsAppAnalyticsResponse> {
-    return this.analytics.summary(
-      ctx.organizationId,
-      whatsappAnalyticsQuerySchema.parse(request.query),
-    );
+    return this.analytics.execute({
+      organizationId: ctx.organizationId,
+      query: whatsappAnalyticsQuerySchema.parse(request.query),
+    });
   }
 }

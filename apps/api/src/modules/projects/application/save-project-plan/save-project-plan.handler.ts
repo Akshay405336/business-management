@@ -5,7 +5,7 @@ import {
   type ProjectRepository,
   type SaveProjectPlanInput,
 } from '../../domain/repositories/project.repository.js';
-import type { ProjectActor } from '../access/project-actor.js';
+import type { SaveProjectPlanCommand } from './save-project-plan.command.js';
 
 function toSaveProjectPlanInput(body: SaveProjectPlanRequest): SaveProjectPlanInput {
   return {
@@ -34,12 +34,12 @@ function toSaveProjectPlanInput(body: SaveProjectPlanRequest): SaveProjectPlanIn
 export class SaveProjectPlanHandler {
   constructor(@Inject(PROJECT_REPOSITORY) private readonly repository: ProjectRepository) {}
 
-  execute(actor: ProjectActor, projectId: string, body: SaveProjectPlanRequest) {
+  execute(command: SaveProjectPlanCommand) {
     return this.repository.saveProjectPlan(
-      actor.organizationId,
-      projectId,
-      toSaveProjectPlanInput(body),
-      { adminId: actor.adminId },
+      command.actor.organizationId,
+      command.projectId,
+      toSaveProjectPlanInput(command.body),
+      { adminId: command.actor.adminId },
     );
   }
 }

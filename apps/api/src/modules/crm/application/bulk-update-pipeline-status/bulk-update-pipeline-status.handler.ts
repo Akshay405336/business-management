@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { PipelineBulkActionRunner } from '../pipeline-bulk/pipeline-bulk-action.runner.js';
+import { PipelineBulkActionRunner } from '../bulk-operations/pipeline-bulk-action.runner.js';
 import { UpdatePipelineStatusHandler } from '../update-pipeline-status/update-pipeline-status.handler.js';
 import type { BulkUpdatePipelineStatusCommand } from './bulk-update-pipeline-status.command.js';
 import type { BulkUpdatePipelineStatusResult } from './bulk-update-pipeline-status.result.js';

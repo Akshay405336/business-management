@@ -51,7 +51,7 @@ export function toOrgRoleListItem(record: OrgRoleRecord): OrgRoleListItem {
     isSystem: record.isSystem,
     status: record.status,
     memberCount: record.memberCount,
-    permissionKeys: [...record.permissionKeys],
+    permissionKeys: [...record.permissionKeys] as OrgRoleDetail['permissionKeys'],
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

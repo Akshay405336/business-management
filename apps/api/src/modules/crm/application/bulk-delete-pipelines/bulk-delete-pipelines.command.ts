@@ -1,4 +1,4 @@
-import type { CrmActor } from '../crm-actor.js';
+import type { CrmActor } from '../shared/crm-actor.js';
 
 export interface BulkDeletePipelinesCommand {
   readonly actor: CrmActor;

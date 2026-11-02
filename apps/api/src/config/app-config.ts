@@ -33,6 +33,9 @@ export interface AppConfig {
     readonly provider: 'local' | 's3';
     readonly presignedTtlSeconds: number;
     readonly employeeProfileMaxBytes: number;
+    readonly cleanupWorkerEnabled: boolean;
+    readonly cleanupIntervalMs: number;
+    readonly cleanupBatchSize: number;
     readonly s3: {
       readonly region: string;
       readonly bucket: string;
@@ -40,6 +43,7 @@ export interface AppConfig {
       readonly secretAccessKey: string | null;
     };
   };
+  readonly distributedLock: { readonly strict: boolean };
   readonly whatsapp: {
     readonly metaAppId: string | null;
     readonly metaAppSecret: string | null;
@@ -115,11 +119,15 @@ export function loadAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfi
     swagger: { enabled: env.SWAGGER_ENABLED ?? !isProduction },
     rateLimit: { globalPerMinute: env.RATE_LIMIT_GLOBAL_PER_MINUTE },
     logging: { level: env.LOG_LEVEL, pretty: env.LOG_PRETTY },
+    distributedLock: { strict: env.DISTRIBUTED_LOCK_STRICT },
     storage: {
       provider:
         env.STORAGE_PROVIDER ?? (env.NODE_ENV === 'production' ? 's3' : ('local' as const)),
       presignedTtlSeconds: env.STORAGE_PRESIGNED_TTL_SECONDS,
       employeeProfileMaxBytes: env.STORAGE_EMPLOYEE_PROFILE_MAX_BYTES,
+      cleanupWorkerEnabled: env.MEDIA_CLEANUP_WORKER_ENABLED,
+      cleanupIntervalMs: env.MEDIA_CLEANUP_INTERVAL_MS,
+      cleanupBatchSize: env.MEDIA_CLEANUP_BATCH_SIZE,
       s3: {
         region: env.AWS_REGION,
         bucket: env.AWS_S3_BUCKET,

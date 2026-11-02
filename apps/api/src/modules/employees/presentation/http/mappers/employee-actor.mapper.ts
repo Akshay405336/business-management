@@ -1,4 +1,4 @@
-import type { EmployeeActor } from '../../../application/access/employee-actor.js';
+import type { EmployeeActor } from '../../../application/shared/employee-actor.js';
 
 export type EmployeeRequestContext = {
   readonly organizationId: string;

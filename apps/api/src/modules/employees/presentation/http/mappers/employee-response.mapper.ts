@@ -1,6 +1,14 @@
-import type { EmployeeDetail, EmployeeListItem, EmployeeSalaryStructure } from '@techwin/contracts';
+import type {
+  AssignableEmployee,
+  EmployeeDetail,
+  EmployeeListItem,
+  EmployeeSalaryStructure,
+} from '@techwin/contracts';
 import { computeEmployeeSalaryTotals } from '@techwin/validation';
-import type { EmployeeRecord } from '../../../domain/repositories/employee.repository.js';
+import type {
+  AssignableEmployeeRecord,
+  EmployeeRecord,
+} from '../../../domain/repositories/employee.repository.js';
 
 function toSalaryStructure(
   record: EmployeeRecord['salaryStructure'],
@@ -20,11 +28,13 @@ export function toEmployeeListItem(record: EmployeeRecord): EmployeeListItem {
     workEmail: record.workEmail,
     phone: record.phone,
     jobTitle: record.jobTitle,
+    department: record.department,
     employmentType: record.employmentType,
     employmentStatus: record.employmentStatus,
     dateOfJoining: record.dateOfJoining,
     profileImageUrl: record.profileImageUrl,
     platformAdminId: record.platformAdminId,
+    loginAccess: record.loginAccess,
   };
 }
 
@@ -46,5 +56,16 @@ export function toEmployeeDetail(
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     salaryStructure: includeCompensation ? toSalaryStructure(record.salaryStructure) : null,
+  };
+}
+
+export function toAssignableEmployee(record: AssignableEmployeeRecord): AssignableEmployee {
+  return {
+    id: record.id,
+    employeeCode: record.employeeCode,
+    displayName: record.displayName,
+    jobTitle: record.jobTitle,
+    profileImageUrl: record.profileImageUrl,
+    platformAdminId: record.platformAdminId,
   };
 }

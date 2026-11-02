@@ -28,11 +28,35 @@ export const employeeListItemSchema = z.object({
   workEmail: z.string(),
   phone: z.string(),
   jobTitle: z.string(),
+  department: z.string().nullable(),
   employmentType: employeeEmploymentTypeSchema,
   employmentStatus: employeeEmploymentStatusSchema,
   dateOfJoining: z.string(),
   profileImageUrl: z.string().nullable(),
   platformAdminId: z.uuid().nullable(),
+  loginAccess: z
+    .object({
+      membershipId: z.uuid(),
+      status: z.enum(['ACTIVE', 'INVITED', 'SUSPENDED', 'DEACTIVATED']),
+      isOwner: z.boolean(),
+      ownsAccount: z.boolean(),
+      roles: z.array(z.object({ id: z.uuid(), key: z.string(), name: z.string() })),
+      lastLoginAt: z.string().nullable(),
+    })
+    .nullable(),
+});
+
+export const assignableEmployeeListResponseSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.uuid(),
+      employeeCode: z.string(),
+      displayName: z.string(),
+      jobTitle: z.string(),
+      profileImageUrl: z.string().nullable(),
+      platformAdminId: z.uuid().nullable(),
+    }),
+  ),
 });
 
 export const employeeListResponseSchema = z.object({

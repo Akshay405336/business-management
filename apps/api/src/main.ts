@@ -12,6 +12,8 @@ import { NoStoreInterceptor } from './common/interceptors/no-store.interceptor.j
 import { createSchemaValidationPipe } from './common/validation/schema-validation.pipe.js';
 import { APP_CONFIG, loadAppConfig, type AppConfig } from './config/app-config.js';
 import { loadEnvFile } from './config/load-env-file.js';
+import { PlatformAuthExceptionFilter } from './modules/auth/index.js';
+import { OrgAccessExceptionFilter } from './modules/org-access/index.js';
 
 async function bootstrap(): Promise<void> {
   loadEnvFile();
@@ -52,7 +54,13 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix(API_PREFIX.replace(/^\//, ''));
   app.useGlobalPipes(createSchemaValidationPipe());
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  // Nest consults global filters last-registered first, so the catch-all must come first here;
+  // session and permission errors raised by shared guards in any module then map to 401/403.
+  app.useGlobalFilters(
+    new GlobalExceptionFilter(),
+    app.get(PlatformAuthExceptionFilter),
+    app.get(OrgAccessExceptionFilter),
+  );
   app.useGlobalInterceptors(new NoStoreInterceptor());
   app.enableShutdownHooks();
 

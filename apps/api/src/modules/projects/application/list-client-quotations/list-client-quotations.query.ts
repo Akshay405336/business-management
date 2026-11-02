@@ -1,4 +1,4 @@
-import type { ProjectActor } from '../access/project-actor.js';
+import type { ProjectActor } from '../shared/project-actor.js';
 
 export type ListClientQuotationsQuery = {
   readonly actor: ProjectActor;

@@ -42,13 +42,26 @@ import {
 } from '@techwin/validation';
 import type { Request, Response } from 'express';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
-import { CrmOrganizationGuard } from '../../../../crm/index.js';
+import { CrmOrganizationGuard } from '../../../../../platform/tenant-context/index.js';
 import { RequirePermissions, RequirePermissionsGuard } from '../../../../org-access/index.js';
-import { WhatsAppInboxService } from '../../../application/whatsapp-inbox.service.js';
-import {
-  WhatsAppOutboundService,
-  type UploadedAttachment,
-} from '../../../application/whatsapp-outbound.service.js';
+import { AddWhatsAppConversationNoteHandler } from '../../../application/add-whatsapp-conversation-note/add-whatsapp-conversation-note.handler.js';
+import { AssignWhatsAppConversationHandler } from '../../../application/assign-whatsapp-conversation/assign-whatsapp-conversation.handler.js';
+import { GetWhatsAppConversationHandler } from '../../../application/get-whatsapp-conversation/get-whatsapp-conversation.handler.js';
+import { GetWhatsAppConversationCountsHandler } from '../../../application/get-whatsapp-conversation-counts/get-whatsapp-conversation-counts.handler.js';
+import { GetWhatsAppConversationTimelineHandler } from '../../../application/get-whatsapp-conversation-timeline/get-whatsapp-conversation-timeline.handler.js';
+import { ListWhatsAppAssigneesHandler } from '../../../application/list-whatsapp-assignees/list-whatsapp-assignees.handler.js';
+import { ListWhatsAppConversationsHandler } from '../../../application/list-whatsapp-conversations/list-whatsapp-conversations.handler.js';
+import { MarkWhatsAppConversationReadHandler } from '../../../application/mark-whatsapp-conversation-read/mark-whatsapp-conversation-read.handler.js';
+import { OpenWhatsAppMessageMediaHandler } from '../../../application/open-whatsapp-message-media/open-whatsapp-message-media.handler.js';
+import { RetryWhatsAppMessageHandler } from '../../../application/retry-whatsapp-message/retry-whatsapp-message.handler.js';
+import { SendWhatsAppMediaMessageHandler } from '../../../application/send-whatsapp-media-message/send-whatsapp-media-message.handler.js';
+import { SendWhatsAppTemplateMessageHandler } from '../../../application/send-whatsapp-template-message/send-whatsapp-template-message.handler.js';
+import { SendWhatsAppTextMessageHandler } from '../../../application/send-whatsapp-text-message/send-whatsapp-text-message.handler.js';
+import { SetWhatsAppContactConsentHandler } from '../../../application/set-whatsapp-contact-consent/set-whatsapp-contact-consent.handler.js';
+import { SetWhatsAppContactCrmLinkHandler } from '../../../application/set-whatsapp-contact-crm-link/set-whatsapp-contact-crm-link.handler.js';
+import { SetWhatsAppConversationStatusHandler } from '../../../application/set-whatsapp-conversation-status/set-whatsapp-conversation-status.handler.js';
+import { StartWhatsAppConversationHandler } from '../../../application/start-whatsapp-conversation/start-whatsapp-conversation.handler.js';
+import type { UploadedAttachment } from '../../../application/services/whatsapp-outbound.service.js';
 import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js';
 import { WhatsAppActorResolver } from '../whatsapp-actor.resolver.js';
 
@@ -62,8 +75,30 @@ const MAX_UPLOAD_BYTES = 64 * 1024 * 1024;
 @UseFilters(WhatsAppExceptionFilter)
 export class WhatsAppInboxController {
   constructor(
-    @Inject(WhatsAppInboxService) private readonly inbox: WhatsAppInboxService,
-    @Inject(WhatsAppOutboundService) private readonly outbound: WhatsAppOutboundService,
+    @Inject(ListWhatsAppConversationsHandler)
+    private readonly listConversations: ListWhatsAppConversationsHandler,
+    @Inject(GetWhatsAppConversationCountsHandler)
+    private readonly conversationCounts: GetWhatsAppConversationCountsHandler,
+    @Inject(StartWhatsAppConversationHandler)
+    private readonly startConversation: StartWhatsAppConversationHandler,
+    @Inject(GetWhatsAppConversationHandler) private readonly getConversation: GetWhatsAppConversationHandler,
+    @Inject(GetWhatsAppConversationTimelineHandler)
+    private readonly conversationTimeline: GetWhatsAppConversationTimelineHandler,
+    @Inject(SendWhatsAppTextMessageHandler) private readonly sendTextMessage: SendWhatsAppTextMessageHandler,
+    @Inject(SendWhatsAppMediaMessageHandler) private readonly sendMediaMessage: SendWhatsAppMediaMessageHandler,
+    @Inject(SendWhatsAppTemplateMessageHandler)
+    private readonly sendTemplateMessage: SendWhatsAppTemplateMessageHandler,
+    @Inject(AddWhatsAppConversationNoteHandler) private readonly addNote: AddWhatsAppConversationNoteHandler,
+    @Inject(AssignWhatsAppConversationHandler) private readonly assignConversation: AssignWhatsAppConversationHandler,
+    @Inject(SetWhatsAppConversationStatusHandler)
+    private readonly setConversationStatus: SetWhatsAppConversationStatusHandler,
+    @Inject(MarkWhatsAppConversationReadHandler)
+    private readonly markConversationRead: MarkWhatsAppConversationReadHandler,
+    @Inject(OpenWhatsAppMessageMediaHandler) private readonly openMessageMedia: OpenWhatsAppMessageMediaHandler,
+    @Inject(RetryWhatsAppMessageHandler) private readonly retryMessage: RetryWhatsAppMessageHandler,
+    @Inject(SetWhatsAppContactConsentHandler) private readonly setContactConsent: SetWhatsAppContactConsentHandler,
+    @Inject(SetWhatsAppContactCrmLinkHandler) private readonly setContactCrmLink: SetWhatsAppContactCrmLinkHandler,
+    @Inject(ListWhatsAppAssigneesHandler) private readonly listAssignees: ListWhatsAppAssigneesHandler,
     @Inject(WhatsAppActorResolver) private readonly actors: WhatsAppActorResolver,
   ) {}
 
@@ -72,13 +107,16 @@ export class WhatsAppInboxController {
   @ApiOperation({ summary: 'List conversations visible to the caller' })
   async list(@Req() request: Request): Promise<WhatsAppConversationListResponse> {
     const actor = await this.actors.resolve(request);
-    return this.inbox.list(actor, whatsappConversationListQuerySchema.parse(request.query));
+    return this.listConversations.execute({
+      actor,
+      query: whatsappConversationListQuerySchema.parse(request.query),
+    });
   }
 
   @Get('conversations/counts')
   @RequirePermissions('whatsapp.read')
   async counts(@Req() request: Request): Promise<WhatsAppFolderCounts> {
-    return this.inbox.counts(await this.actors.resolve(request));
+    return this.conversationCounts.execute({ actor: await this.actors.resolve(request) });
   }
 
   @Post('conversations')
@@ -86,7 +124,10 @@ export class WhatsAppInboxController {
   @ApiOperation({ summary: 'Start a conversation with a phone number' })
   async start(@Req() request: Request, @Body() raw: unknown): Promise<WhatsAppConversationDetail> {
     const actor = await this.actors.resolve(request);
-    return this.inbox.startConversation(actor, whatsappStartConversationRequestSchema.parse(raw));
+    return this.startConversation.execute({
+      actor,
+      input: whatsappStartConversationRequestSchema.parse(raw),
+    });
   }
 
   @Get('conversations/:id')
@@ -95,7 +136,10 @@ export class WhatsAppInboxController {
     @Req() request: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppConversationDetail> {
-    return this.inbox.detail(await this.actors.resolve(request), id);
+    return this.getConversation.execute({
+      actor: await this.actors.resolve(request),
+      conversationId: id,
+    });
   }
 
   @Get('conversations/:id/timeline')
@@ -105,7 +149,11 @@ export class WhatsAppInboxController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppTimelineResponse> {
     const actor = await this.actors.resolve(request);
-    return this.inbox.timeline(actor, id, whatsappTimelineQuerySchema.parse(request.query));
+    return this.conversationTimeline.execute({
+      actor,
+      conversationId: id,
+      query: whatsappTimelineQuerySchema.parse(request.query),
+    });
   }
 
   @Post('conversations/:id/messages')
@@ -117,7 +165,11 @@ export class WhatsAppInboxController {
     @Body() raw: unknown,
   ): Promise<WhatsAppSendMessageResponse> {
     const actor = await this.actors.resolve(request);
-    return this.outbound.sendText(actor, id, whatsappSendTextRequestSchema.parse(raw));
+    return this.sendTextMessage.execute({
+      actor,
+      conversationId: id,
+      input: whatsappSendTextRequestSchema.parse(raw),
+    });
   }
 
   @Post('conversations/:id/media-messages')
@@ -131,7 +183,12 @@ export class WhatsAppInboxController {
     @Body() raw: unknown,
   ): Promise<WhatsAppSendMessageResponse> {
     const actor = await this.actors.resolve(request);
-    return this.outbound.sendMedia(actor, id, file, whatsappSendMediaFieldsSchema.parse(raw));
+    return this.sendMediaMessage.execute({
+      actor,
+      conversationId: id,
+      file,
+      fields: whatsappSendMediaFieldsSchema.parse(raw),
+    });
   }
 
   @Post('conversations/:id/template-messages')
@@ -143,20 +200,28 @@ export class WhatsAppInboxController {
     @Body() raw: unknown,
   ): Promise<WhatsAppSendMessageResponse> {
     const actor = await this.actors.resolve(request);
-    return this.outbound.sendTemplate(actor, id, whatsappSendTemplateRequestSchema.parse(raw));
+    return this.sendTemplateMessage.execute({
+      actor,
+      conversationId: id,
+      input: whatsappSendTemplateRequestSchema.parse(raw),
+    });
   }
 
   @Post('conversations/:id/notes')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('whatsapp.read')
   @ApiOperation({ summary: 'Add an internal note (never sent to WhatsApp)' })
-  async addNote(
+  async addConversationNote(
     @Req() request: Request,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() raw: unknown,
   ): Promise<void> {
     const actor = await this.actors.resolve(request);
-    await this.inbox.addNote(actor, id, whatsappAddNoteRequestSchema.parse(raw).body);
+    await this.addNote.execute({
+      actor,
+      conversationId: id,
+      body: whatsappAddNoteRequestSchema.parse(raw).body,
+    });
   }
 
   @Patch('conversations/:id/assignment')
@@ -167,7 +232,11 @@ export class WhatsAppInboxController {
     @Body() raw: unknown,
   ): Promise<WhatsAppConversationDetail> {
     const actor = await this.actors.resolve(request);
-    return this.inbox.assign(actor, id, whatsappAssignRequestSchema.parse(raw));
+    return this.assignConversation.execute({
+      actor,
+      conversationId: id,
+      input: whatsappAssignRequestSchema.parse(raw),
+    });
   }
 
   @Patch('conversations/:id/status')
@@ -178,14 +247,21 @@ export class WhatsAppInboxController {
     @Body() raw: unknown,
   ): Promise<WhatsAppConversationDetail> {
     const actor = await this.actors.resolve(request);
-    return this.inbox.setStatus(actor, id, whatsappConversationStatusRequestSchema.parse(raw));
+    return this.setConversationStatus.execute({
+      actor,
+      conversationId: id,
+      input: whatsappConversationStatusRequestSchema.parse(raw),
+    });
   }
 
   @Post('conversations/:id/read')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermissions('whatsapp.read')
   async markRead(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
-    await this.inbox.markRead(await this.actors.resolve(request), id);
+    await this.markConversationRead.execute({
+      actor: await this.actors.resolve(request),
+      conversationId: id,
+    });
   }
 
   @Get('messages/:id/media')
@@ -196,7 +272,10 @@ export class WhatsAppInboxController {
     @Param('id', ParseUUIDPipe) id: string,
     @Res() response: Response,
   ): Promise<void> {
-    const opened = await this.inbox.openMedia(await this.actors.resolve(request), id);
+    const opened = await this.openMessageMedia.execute({
+      actor: await this.actors.resolve(request),
+      messageId: id,
+    });
     response.setHeader('X-Content-Type-Options', 'nosniff');
     if (opened.redirectUrl) {
       // Browsers cannot read the Location of a manual redirect, so API clients get the short-lived URL as JSON.
@@ -226,7 +305,7 @@ export class WhatsAppInboxController {
     @Req() request: Request,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppMessageView> {
-    return this.outbound.retry(await this.actors.resolve(request), id);
+    return this.retryMessage.execute({ actor: await this.actors.resolve(request), messageId: id });
   }
 
   @Patch('contacts/:id/consent')
@@ -239,7 +318,11 @@ export class WhatsAppInboxController {
     @Body() raw: unknown,
   ): Promise<void> {
     const actor = await this.actors.resolve(request);
-    await this.inbox.setConsent(actor, id, whatsappConsentRequestSchema.parse(raw));
+    await this.setContactConsent.execute({
+      actor,
+      contactId: id,
+      input: whatsappConsentRequestSchema.parse(raw),
+    });
   }
 
   @Patch('contacts/:id/crm-link')
@@ -251,12 +334,16 @@ export class WhatsAppInboxController {
     @Body() raw: unknown,
   ): Promise<void> {
     const actor = await this.actors.resolve(request);
-    await this.inbox.setCrmLink(actor, id, whatsappCrmLinkRequestSchema.parse(raw));
+    await this.setContactCrmLink.execute({
+      actor,
+      contactId: id,
+      input: whatsappCrmLinkRequestSchema.parse(raw),
+    });
   }
 
   @Get('assignees')
   @RequirePermissions('whatsapp.read')
   async assignees(@Req() request: Request): Promise<WhatsAppAssigneesResponse> {
-    return this.inbox.assignees(await this.actors.resolve(request));
+    return this.listAssignees.execute({ actor: await this.actors.resolve(request) });
   }
 }

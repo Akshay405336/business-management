@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { PermissionKey } from '@techwin/contracts';
-import type { OrgAccessActor } from '../access/org-access-actor.js';
+import type { OrgAccessActor } from '../shared/org-access-actor.js';
 import { OrgAccessForbiddenError } from '../../domain/errors/org-access.errors.js';
 import {
   ORG_ACCESS_REPOSITORY,
@@ -15,11 +15,12 @@ export class PermissionCheckerService {
 
   async resolveEffectivePermissions(actor: OrgAccessActor): Promise<readonly PermissionKey[]> {
     await this.orgAccess.assertActiveMembership(actor.organizationId, actor.adminId);
-    return this.orgAccess.resolveEffectivePermissions(
+    const permissions = await this.orgAccess.resolveEffectivePermissions(
       actor.organizationId,
       actor.adminId,
       actor.isPlatformSuperAdmin,
     );
+    return permissions as readonly PermissionKey[];
   }
 
   async hasAllPermissions(
@@ -31,6 +32,16 @@ export class PermissionCheckerService {
     return required.every((key) => effective.has(key));
   }
 
+  async hasAnyPermission(
+    actor: OrgAccessActor,
+    keys: readonly PermissionKey[],
+  ): Promise<boolean> {
+    if (keys.length === 0) return true;
+    const effective = new Set(await this.resolveEffectivePermissions(actor));
+    return keys.some((key) => effective.has(key));
+  }
+
+  /** Grants when the actor holds any of `required`. */
   async requirePermissions(
     actor: OrgAccessActor,
     required: readonly PermissionKey[],

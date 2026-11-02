@@ -1,5 +1,5 @@
 import type { ProjectStatus } from '../../domain/project-types.js';
-import type { ProjectActor } from '../access/project-actor.js';
+import type { ProjectActor } from '../shared/project-actor.js';
 
 export type ChangeProjectStatusCommand = {
   readonly actor: ProjectActor;

@@ -13,6 +13,7 @@ import { MediaModule } from './modules/media/index.js';
 import { DailyTasksModule } from './modules/daily-tasks/index.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { WhatsAppModule } from './modules/whatsapp/index.js';
+import { TenantContextModule } from './platform/tenant-context/tenant-context.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { WhatsAppModule } from './modules/whatsapp/index.js';
     CacheModule,
     HealthModule,
     AuthModule,
+    TenantContextModule,
     CrmModule,
     ProjectsModule,
     EmployeesModule,

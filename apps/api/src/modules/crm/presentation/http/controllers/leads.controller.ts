@@ -35,7 +35,15 @@ import {
   type CreateLeadRequest,
   type UpdateLeadRequest,
 } from '@techwin/validation';
-import { CrmUseCases } from '../../../application/crm-use-cases.js';
+import { ChangeLeadStageHandler } from '../../../application/change-lead-stage/change-lead-stage.handler.js';
+import { ConvertLeadHandler } from '../../../application/convert-lead/convert-lead.handler.js';
+import { CreateLeadHandler } from '../../../application/create-lead/create-lead.handler.js';
+import { CreateLeadActivityHandler } from '../../../application/create-lead-activity/create-lead-activity.handler.js';
+import { DeleteLeadHandler } from '../../../application/delete-lead/delete-lead.handler.js';
+import { GetLeadHandler } from '../../../application/get-lead/get-lead.handler.js';
+import { ListLeadActivitiesHandler } from '../../../application/list-lead-activities/list-lead-activities.handler.js';
+import { ListLeadsHandler } from '../../../application/list-leads/list-leads.handler.js';
+import { UpdateLeadHandler } from '../../../application/update-lead/update-lead.handler.js';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
 import {
   changeLeadStageBodySchema,
@@ -51,6 +59,7 @@ import { CrmExceptionFilter } from '../filters/crm-exception.filter.js';
 import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
+import { toCrmActor } from '../mappers/crm-actor.mapper.js';
 import { toCrmClient, toCrmLead, toCrmLeadActivity } from '../mappers/crm-response.mapper.js';
 import {
   RequirePermissions,
@@ -76,7 +85,17 @@ const parseDateTime = (value: string | null | undefined): Date | null | undefine
 @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(CrmExceptionFilter)
 export class LeadsController {
-  constructor(@Inject(CrmUseCases) private readonly crm: CrmUseCases) {}
+  constructor(
+    @Inject(ListLeadsHandler) private readonly listLeads: ListLeadsHandler,
+    @Inject(GetLeadHandler) private readonly getLead: GetLeadHandler,
+    @Inject(CreateLeadHandler) private readonly createLead: CreateLeadHandler,
+    @Inject(UpdateLeadHandler) private readonly updateLead: UpdateLeadHandler,
+    @Inject(DeleteLeadHandler) private readonly deleteLead: DeleteLeadHandler,
+    @Inject(ChangeLeadStageHandler) private readonly changeLeadStage: ChangeLeadStageHandler,
+    @Inject(ListLeadActivitiesHandler) private readonly listLeadActivities: ListLeadActivitiesHandler,
+    @Inject(CreateLeadActivityHandler) private readonly createLeadActivity: CreateLeadActivityHandler,
+    @Inject(ConvertLeadHandler) private readonly convertLead: ConvertLeadHandler,
+  ) {}
 
   @Get()
   @RequirePermissions('leads.read')
@@ -87,7 +106,10 @@ export class LeadsController {
     @Req() request: Request,
   ): Promise<CrmLeadListResponse> {
     const query = parseLeadListQuery(request.query);
-    const result = await this.crm.listLeads(ctx, query);
+    const result = await this.listLeads.execute({
+      actor: toCrmActor(ctx),
+      filters: query,
+    });
     return {
       items: result.items.map(toCrmLead),
       total: result.total,
@@ -104,7 +126,7 @@ export class LeadsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('leadId') leadId: string,
   ): Promise<CrmLead> {
-    const lead = await this.crm.getLead(ctx, leadId);
+    const lead = await this.getLead.execute({ actor: toCrmActor(ctx), leadId });
     return toCrmLead(lead);
   }
 
@@ -116,10 +138,13 @@ export class LeadsController {
     @CrmContext() ctx: CrmRequestContext,
     @Body({ schema: createLeadBodySchema }) body: CreateLeadRequest,
   ): Promise<CrmLead> {
-    const lead = await this.crm.createLead(ctx, {
-      ...body,
-      expectedCloseDate: parseDateOnly(body.expectedCloseDate),
-      nextFollowUpDate: parseDateTime(body.nextFollowUpDate),
+    const lead = await this.createLead.execute({
+      actor: toCrmActor(ctx),
+      input: {
+        ...body,
+        expectedCloseDate: parseDateOnly(body.expectedCloseDate),
+        nextFollowUpDate: parseDateTime(body.nextFollowUpDate),
+      },
     });
     return toCrmLead(lead);
   }
@@ -133,10 +158,14 @@ export class LeadsController {
     @Param('leadId') leadId: string,
     @Body({ schema: updateLeadBodySchema }) body: UpdateLeadRequest,
   ): Promise<CrmLead> {
-    const lead = await this.crm.updateLead(ctx, leadId, {
-      ...body,
-      expectedCloseDate: parseDateOnly(body.expectedCloseDate),
-      nextFollowUpDate: parseDateTime(body.nextFollowUpDate),
+    const lead = await this.updateLead.execute({
+      actor: toCrmActor(ctx),
+      leadId,
+      input: {
+        ...body,
+        expectedCloseDate: parseDateOnly(body.expectedCloseDate),
+        nextFollowUpDate: parseDateTime(body.nextFollowUpDate),
+      },
     });
     return toCrmLead(lead);
   }
@@ -150,7 +179,7 @@ export class LeadsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('leadId') leadId: string,
   ): Promise<void> {
-    await this.crm.deleteLead(ctx, leadId);
+    await this.deleteLead.execute({ actor: toCrmActor(ctx), leadId });
   }
 
   @Patch(':leadId/stage')
@@ -162,7 +191,12 @@ export class LeadsController {
     @Param('leadId') leadId: string,
     @Body({ schema: changeLeadStageBodySchema }) body: ChangeLeadStageRequest,
   ): Promise<CrmLead> {
-    const lead = await this.crm.changeLeadStage(ctx, leadId, body.stageId, body.beforeLeadId);
+    const lead = await this.changeLeadStage.execute({
+      actor: toCrmActor(ctx),
+      leadId,
+      stageId: body.stageId,
+      beforeLeadId: body.beforeLeadId,
+    });
     return toCrmLead(lead);
   }
 
@@ -176,7 +210,10 @@ export class LeadsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('leadId') leadId: string,
   ): Promise<CrmLeadActivityListResponse> {
-    const activities = await this.crm.listLeadActivities(ctx, leadId);
+    const activities = await this.listLeadActivities.execute({
+      actor: toCrmActor(ctx),
+      leadId,
+    });
     return { activities: activities.map(toCrmLeadActivity) };
   }
 
@@ -189,11 +226,15 @@ export class LeadsController {
     @Param('leadId') leadId: string,
     @Body({ schema: createLeadActivityBodySchema }) body: CreateLeadActivityRequest,
   ): Promise<CrmLeadActivity> {
-    const activity = await this.crm.createLeadActivity(ctx, leadId, {
-      ...body,
-      occurredAt: new Date(body.occurredAt),
-      dueAt: parseDateTime(body.dueAt),
-      completedAt: parseDateTime(body.completedAt),
+    const activity = await this.createLeadActivity.execute({
+      actor: toCrmActor(ctx),
+      leadId,
+      input: {
+        ...body,
+        occurredAt: new Date(body.occurredAt),
+        dueAt: parseDateTime(body.dueAt),
+        completedAt: parseDateTime(body.completedAt),
+      },
     });
     return toCrmLeadActivity(activity);
   }
@@ -210,7 +251,7 @@ export class LeadsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('leadId') leadId: string,
   ): Promise<CrmLeadConvertResponse> {
-    const result = await this.crm.convertLead(ctx, leadId);
+    const result = await this.convertLead.execute({ actor: toCrmActor(ctx), leadId });
     return { lead: toCrmLead(result.lead), client: toCrmClient(result.client) };
   }
 }

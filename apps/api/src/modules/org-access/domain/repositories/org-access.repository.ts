@@ -1,5 +1,9 @@
-import type { PermissionKey } from '@techwin/contracts';
-import type { OrganizationMembershipStatus, OrganizationRoleStatus } from '@techwin/contracts';
+import type {
+  OrganizationMembershipStatus,
+  OrganizationRoleStatus,
+  PermissionKey,
+  SystemRoleKey,
+} from '../types/org-access.types.js';
 
 export interface OrgMemberListFilters {
   readonly page: number;
@@ -63,6 +67,21 @@ export interface OrgAccessSummary {
   readonly customRoles: number;
 }
 
+/** Credentials and access prepared for a new sign-in account; hashes only, never plaintext. */
+export interface PreparedMemberAccount {
+  readonly adminId: string;
+  readonly email: string;
+  readonly passwordHash: string;
+  readonly totpSecretCiphertext: string;
+  readonly roleIds: readonly string[];
+  readonly isOwner: boolean;
+}
+
+export interface OrgMembershipRef {
+  readonly membershipId: string;
+  readonly status: OrganizationMembershipStatus;
+}
+
 export interface OrgAccessRepository {
   ensureOrganizationAccessBootstrap(organizationId: string, adminId: string): Promise<void>;
   assertActiveMembership(organizationId: string, adminId: string): Promise<void>;
@@ -124,16 +143,42 @@ export interface OrgAccessRepository {
     passwordHash: string,
     actorAdminId: string,
   ): Promise<void>;
+  /**
+   * Validates that a new sign-in account can be created for `email` with `roleIds`:
+   * the email has no account yet, the roles are active roles of this organization, and
+   * the actor already holds every permission those roles grant.
+   */
+  assertMemberAccountAvailable(
+    organizationId: string,
+    input: { email: string; roleIds: readonly string[] },
+    actorAdminId: string,
+  ): Promise<{ isOwner: boolean }>;
+  /**
+   * Same protections as other privileged member operations: never the actor's own account,
+   * never a platform super admin, and only members whose permissions the actor fully holds.
+   */
+  assertActorCanRemoveMemberAccount(
+    organizationId: string,
+    actorAdminId: string,
+    targetAdminId: string,
+  ): Promise<void>;
+  /** System role with `key`, configured from the role templates if the organization lacks it. */
+  resolveSystemRoleId(organizationId: string, key: SystemRoleKey): Promise<string>;
+  /** Permanently removes a membership and, when exclusive, its sign-in account. */
+  deleteMember(
+    organizationId: string,
+    membershipId: string,
+    actorAdminId: string,
+  ): Promise<void>;
+  /** Existing member of this organization with `email` and no linked employee record. */
+  findLinkableMemberAdminId(organizationId: string, email: string): Promise<string | null>;
+  findMembershipByAdmin(organizationId: string, adminId: string): Promise<OrgMembershipRef | null>;
   provisionMember(
     organizationId: string,
     input: {
-      email: string;
       displayName: string;
       phone?: string | null;
-      passwordHash: string;
-      totpSecretCiphertext: string;
-      newAdminId: string;
-      roleIds: readonly string[];
+      account: PreparedMemberAccount;
     },
     actorAdminId: string,
   ): Promise<OrgMemberRecord>;

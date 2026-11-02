@@ -26,7 +26,13 @@ import type {
   CreateServicePackageRequest,
   UpdateServicePackageRequest,
 } from '@techwin/validation';
-import { CrmUseCases } from '../../../application/crm-use-cases.js';
+import { ChangeServicePackageStatusHandler } from '../../../application/change-service-package-status/change-service-package-status.handler.js';
+import { CreateServicePackageHandler } from '../../../application/create-service-package/create-service-package.handler.js';
+import { DeleteServicePackageHandler } from '../../../application/delete-service-package/delete-service-package.handler.js';
+import { GetServicePackageHandler } from '../../../application/get-service-package/get-service-package.handler.js';
+import { ListServicePackagesHandler } from '../../../application/list-service-packages/list-service-packages.handler.js';
+import { PreviewServicePackageCodeHandler } from '../../../application/preview-service-package-code/preview-service-package-code.handler.js';
+import { UpdateServicePackageHandler } from '../../../application/update-service-package/update-service-package.handler.js';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
 import {
   changeServicePackageStatusBodySchema,
@@ -41,6 +47,7 @@ import { CrmExceptionFilter } from '../filters/crm-exception.filter.js';
 import { CrmContext } from '../guards/crm-context.decorator.js';
 import type { CrmRequestContext } from '../guards/crm-organization.guard.js';
 import { CrmOrganizationGuard } from '../guards/crm-organization.guard.js';
+import { toCrmActor } from '../mappers/crm-actor.mapper.js';
 import {
   RequirePermissions,
   RequirePermissionsGuard,
@@ -57,14 +64,24 @@ import {
 @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
 @UseFilters(CrmExceptionFilter)
 export class ServicePackagesController {
-  constructor(@Inject(CrmUseCases) private readonly crm: CrmUseCases) {}
+  constructor(
+    @Inject(ListServicePackagesHandler) private readonly listServicePackages: ListServicePackagesHandler,
+    @Inject(PreviewServicePackageCodeHandler)
+    private readonly previewServicePackageCode: PreviewServicePackageCodeHandler,
+    @Inject(GetServicePackageHandler) private readonly getServicePackage: GetServicePackageHandler,
+    @Inject(CreateServicePackageHandler) private readonly createServicePackage: CreateServicePackageHandler,
+    @Inject(ChangeServicePackageStatusHandler)
+    private readonly changeServicePackageStatus: ChangeServicePackageStatusHandler,
+    @Inject(DeleteServicePackageHandler) private readonly deleteServicePackage: DeleteServicePackageHandler,
+    @Inject(UpdateServicePackageHandler) private readonly updateServicePackage: UpdateServicePackageHandler,
+  ) {}
 
   @RequirePermissions('settings.read')
   @Get()
   @ApiOperation({ summary: 'List service packages' })
   @ApiOkResponse({ schema: toOpenApiSchema(crmServicePackageListResponseSchema) })
   async list(@CrmContext() ctx: CrmRequestContext): Promise<CrmServicePackageListResponse> {
-    const packages = await this.crm.listServicePackages(ctx);
+    const packages = await this.listServicePackages.execute({ actor: toCrmActor(ctx) });
     return { packages: packages.map(toCrmServicePackage) };
   }
 
@@ -73,7 +90,7 @@ export class ServicePackagesController {
   @ApiOperation({ summary: 'Preview the next TECH-PKG package code (not reserved until create)' })
   @ApiOkResponse({ schema: toOpenApiSchema(servicePackageCodePreviewResponseSchema) })
   async previewCode(@CrmContext() ctx: CrmRequestContext): Promise<ServicePackageCodePreviewResponse> {
-    const code = await this.crm.previewServicePackageCode(ctx);
+    const code = await this.previewServicePackageCode.execute({ actor: toCrmActor(ctx) });
     return { code, isPreview: true };
   }
 
@@ -85,7 +102,10 @@ export class ServicePackagesController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('packageId') packageId: string,
   ): Promise<CrmServicePackage> {
-    const pkg = await this.crm.getServicePackage(ctx, packageId);
+    const pkg = await this.getServicePackage.execute({
+      actor: toCrmActor(ctx),
+      packageId,
+    });
     return toCrmServicePackage(pkg);
   }
 
@@ -97,10 +117,10 @@ export class ServicePackagesController {
     @CrmContext() ctx: CrmRequestContext,
     @Body({ schema: createServicePackageBodySchema }) body: CreateServicePackageRequest,
   ): Promise<CrmServicePackage> {
-    const pkg = await this.crm.createServicePackage(
-      ctx,
-      toCreateServicePackageInput(body, ctx.adminId),
-    );
+    const pkg = await this.createServicePackage.execute({
+      actor: toCrmActor(ctx),
+      input: toCreateServicePackageInput(body, ctx.adminId),
+    });
     return toCrmServicePackage(pkg);
   }
 
@@ -114,7 +134,11 @@ export class ServicePackagesController {
     @Body({ schema: changeServicePackageStatusBodySchema })
     body: ChangeServicePackageStatusRequest,
   ): Promise<CrmServicePackage> {
-    const pkg = await this.crm.changeServicePackageStatus(ctx, packageId, body);
+    const pkg = await this.changeServicePackageStatus.execute({
+      actor: toCrmActor(ctx),
+      packageId,
+      input: body,
+    });
     return toCrmServicePackage(pkg);
   }
 
@@ -125,7 +149,7 @@ export class ServicePackagesController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('packageId') packageId: string,
   ): Promise<void> {
-    await this.crm.deleteServicePackage(ctx, packageId);
+    await this.deleteServicePackage.execute({ actor: toCrmActor(ctx), packageId });
   }
 
   @RequirePermissions('settings.manage')
@@ -137,11 +161,11 @@ export class ServicePackagesController {
     @Param('packageId') packageId: string,
     @Body({ schema: updateServicePackageBodySchema }) body: UpdateServicePackageRequest,
   ): Promise<CrmServicePackage> {
-    const pkg = await this.crm.updateServicePackage(
-      ctx,
+    const pkg = await this.updateServicePackage.execute({
+      actor: toCrmActor(ctx),
       packageId,
-      toUpdateServicePackageInput(body),
-    );
+      input: toUpdateServicePackageInput(body),
+    });
     return toCrmServicePackage(pkg);
   }
 }

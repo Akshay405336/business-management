@@ -1,5 +1,5 @@
 import type { PipelineStatus } from '../../domain/crm-types.js';
-import type { CrmActor } from '../crm-actor.js';
+import type { CrmActor } from '../shared/crm-actor.js';
 
 export interface BulkUpdatePipelineStatusCommand {
   readonly actor: CrmActor;

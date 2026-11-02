@@ -14,13 +14,14 @@ export function toCreateEmployeeInput(body: CreateEmployeeRequest): CreateEmploy
     profileImageUrl: body.profileImageUrl ?? null,
     profileImageStoredObjectId: body.profileImageStoredObjectId ?? null,
     jobTitle: body.jobTitle,
+    department: body.department ?? null,
     employmentType: body.employmentType,
+    ...(body.employmentStatus !== undefined ? { employmentStatus: body.employmentStatus } : {}),
     dateOfJoining: body.dateOfJoining,
     probationEndDate: body.probationEndDate ?? null,
     employmentEndDate: body.employmentEndDate ?? null,
     workLocation: body.workLocation ?? null,
     notes: body.notes ?? '',
-    platformAdminId: body.platformAdminId ?? null,
     ...(body.salaryStructure !== undefined
       ? {
           salaryStructure: {
@@ -40,6 +41,14 @@ export function toCreateEmployeeInput(body: CreateEmployeeRequest): CreateEmploy
   };
 }
 
+/** Login credentials stay out of the employee record and go only to account creation. */
+export function toCreateEmployeeLogin(
+  body: CreateEmployeeRequest,
+): { password: string } | null {
+  if (!body.loginEnabled || !body.password) return null;
+  return { password: body.password };
+}
+
 export function toUpdateEmployeeInput(body: UpdateEmployeeRequest): UpdateEmployeeInput {
   return {
     ...(body.firstName !== undefined ? { firstName: body.firstName } : {}),
@@ -52,13 +61,13 @@ export function toUpdateEmployeeInput(body: UpdateEmployeeRequest): UpdateEmploy
       ? { profileImageStoredObjectId: body.profileImageStoredObjectId }
       : {}),
     ...(body.jobTitle !== undefined ? { jobTitle: body.jobTitle } : {}),
+    ...(body.department !== undefined ? { department: body.department } : {}),
     ...(body.employmentType !== undefined ? { employmentType: body.employmentType } : {}),
     ...(body.dateOfJoining !== undefined ? { dateOfJoining: body.dateOfJoining } : {}),
     ...(body.probationEndDate !== undefined ? { probationEndDate: body.probationEndDate } : {}),
     ...(body.employmentEndDate !== undefined ? { employmentEndDate: body.employmentEndDate } : {}),
     ...(body.workLocation !== undefined ? { workLocation: body.workLocation } : {}),
     ...(body.notes !== undefined ? { notes: body.notes } : {}),
-    ...(body.platformAdminId !== undefined ? { platformAdminId: body.platformAdminId } : {}),
     ...(body.salaryStructure !== undefined
       ? {
           salaryStructure: {

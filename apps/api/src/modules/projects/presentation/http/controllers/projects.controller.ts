@@ -17,6 +17,7 @@ import type { Request } from 'express';
 import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   ClientQuotationListResponse,
+  ProjectClientOptionListResponse,
   ProjectDetail,
   ProjectListResponse,
   ProjectNumberPreviewResponse,
@@ -37,7 +38,7 @@ import {
   CrmContext,
   CrmOrganizationGuard,
   type CrmRequestContext,
-} from '../../../../crm/index.js';
+} from '../../../../../platform/tenant-context/index.js';
 import {
   RequirePermissions,
   RequirePermissionsGuard,
@@ -47,6 +48,7 @@ import { CreateProjectHandler } from '../../../application/create-project/create
 import { DeleteProjectHandler } from '../../../application/delete-project/delete-project.handler.js';
 import { GetProjectHandler } from '../../../application/get-project/get-project.handler.js';
 import { ListClientQuotationsHandler } from '../../../application/list-client-quotations/list-client-quotations.handler.js';
+import { ListProjectClientOptionsHandler } from '../../../application/list-project-client-options/list-project-client-options.handler.js';
 import { ListProjectManagersHandler } from '../../../application/list-project-managers/list-project-managers.handler.js';
 import { ListProjectsHandler } from '../../../application/list-projects/list-projects.handler.js';
 import { PreviewProjectNumberHandler } from '../../../application/preview-project-number/preview-project-number.handler.js';
@@ -56,6 +58,7 @@ import { SaveProjectPlanHandler } from '../../../application/save-project-plan/s
 import { StartProjectProductionHandler } from '../../../application/start-project-production/start-project-production.handler.js';
 import {
   clientQuotationOptionSchema,
+  projectClientOptionSchema,
   projectDetailResponseSchema,
   projectListResponseSchema,
   projectManagerOptionSchema,
@@ -83,6 +86,10 @@ const clientQuotationsResponseSchema = z.object({
   quotations: z.array(clientQuotationOptionSchema),
 });
 
+const projectClientOptionsResponseSchema = z.object({
+  clients: z.array(projectClientOptionSchema),
+});
+
 @ApiTags('Projects')
 @ApiBearerAuth()
 @Controller('projects')
@@ -101,6 +108,8 @@ export class ProjectsController {
     private readonly previewProjectNumber: PreviewProjectNumberHandler,
     @Inject(ListProjectManagersHandler)
     private readonly listProjectManagers: ListProjectManagersHandler,
+    @Inject(ListProjectClientOptionsHandler)
+    private readonly listProjectClientOptions: ListProjectClientOptionsHandler,
     @Inject(ListClientQuotationsHandler)
     private readonly listClientQuotationsHandler: ListClientQuotationsHandler,
     @Inject(SaveProjectPlanHandler) private readonly saveProjectPlan: SaveProjectPlanHandler,
@@ -144,6 +153,17 @@ export class ProjectsController {
   async listManagers(@CrmContext() ctx: CrmRequestContext) {
     const result = await this.listProjectManagers.execute({ actor: toProjectActor(ctx) });
     return { managers: result.managers.map(toProjectManagerOption) };
+  }
+
+  @RequirePermissions('projects.create', 'projects.update')
+  @Get('client-options')
+  @ApiOperation({ summary: 'List clients selectable on a project' })
+  @ApiOkResponse({ schema: toOpenApiSchema(projectClientOptionsResponseSchema) })
+  async listClientOptions(
+    @CrmContext() ctx: CrmRequestContext,
+  ): Promise<ProjectClientOptionListResponse> {
+    const clients = await this.listProjectClientOptions.execute({ actor: toProjectActor(ctx) });
+    return { clients: clients.map((client) => ({ ...client })) };
   }
 
   @RequirePermissions('projects.read')
@@ -218,7 +238,11 @@ export class ProjectsController {
     @Body() raw: unknown,
   ): Promise<ProjectDetail> {
     const body: SaveProjectPlanRequest = saveProjectPlanRequestSchema.parse(raw);
-    const project = await this.saveProjectPlan.execute(toProjectActor(ctx), id, body);
+    const project = await this.saveProjectPlan.execute({
+      actor: toProjectActor(ctx),
+      projectId: id,
+      body,
+    });
     return toProjectDetail(project);
   }
 
@@ -231,7 +255,10 @@ export class ProjectsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id') id: string,
   ): Promise<ProjectDetail> {
-    const project = await this.startProjectProduction.execute(toProjectActor(ctx), id);
+    const project = await this.startProjectProduction.execute({
+      actor: toProjectActor(ctx),
+      projectId: id,
+    });
     return toProjectDetail(project);
   }
 
@@ -244,7 +271,10 @@ export class ProjectsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id') id: string,
   ): Promise<ProjectDetail> {
-    const project = await this.completeProject.execute(toProjectActor(ctx), id);
+    const project = await this.completeProject.execute({
+      actor: toProjectActor(ctx),
+      projectId: id,
+    });
     return toProjectDetail(project);
   }
 

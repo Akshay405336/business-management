@@ -28,10 +28,23 @@ import {
   whatsappUpdateChannelRequestSchema,
 } from '@techwin/validation';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
-import { CrmContext, CrmOrganizationGuard, type CrmRequestContext } from '../../../../crm/index.js';
+import {
+  CrmContext,
+  CrmOrganizationGuard,
+  type CrmRequestContext,
+} from '../../../../../platform/tenant-context/index.js';
 import { RequirePermissions, RequirePermissionsGuard } from '../../../../org-access/index.js';
-import { WhatsAppChannelService } from '../../../application/whatsapp-channel.service.js';
-import { WhatsAppTemplateService } from '../../../application/whatsapp-template.service.js';
+import { CreateWhatsAppChannelHandler } from '../../../application/create-whatsapp-channel/create-whatsapp-channel.handler.js';
+import { DeleteWhatsAppChannelHandler } from '../../../application/delete-whatsapp-channel/delete-whatsapp-channel.handler.js';
+import { DisconnectWhatsAppChannelHandler } from '../../../application/disconnect-whatsapp-channel/disconnect-whatsapp-channel.handler.js';
+import { GetWhatsAppChannelHandler } from '../../../application/get-whatsapp-channel/get-whatsapp-channel.handler.js';
+import { GetWhatsAppSetupHandler } from '../../../application/get-whatsapp-setup/get-whatsapp-setup.handler.js';
+import { ListWhatsAppChannelsHandler } from '../../../application/list-whatsapp-channels/list-whatsapp-channels.handler.js';
+import { RotateWhatsAppChannelCredentialsHandler } from '../../../application/rotate-whatsapp-channel-credentials/rotate-whatsapp-channel-credentials.handler.js';
+import { SyncWhatsAppChannelTemplatesHandler } from '../../../application/sync-whatsapp-channel-templates/sync-whatsapp-channel-templates.handler.js';
+import { TestWhatsAppChannelHandler } from '../../../application/test-whatsapp-channel/test-whatsapp-channel.handler.js';
+import { UpdateWhatsAppChannelHandler } from '../../../application/update-whatsapp-channel/update-whatsapp-channel.handler.js';
+import { WhatsAppEmbeddedSignupChannelHandler } from '../../../application/whatsapp-embedded-signup-channel/whatsapp-embedded-signup-channel.handler.js';
 import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js';
 
 @ApiTags('WhatsApp')
@@ -41,15 +54,28 @@ import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js
 @UseFilters(WhatsAppExceptionFilter)
 export class WhatsAppChannelsController {
   constructor(
-    @Inject(WhatsAppChannelService) private readonly channels: WhatsAppChannelService,
-    @Inject(WhatsAppTemplateService) private readonly templates: WhatsAppTemplateService,
+    @Inject(GetWhatsAppSetupHandler) private readonly setup: GetWhatsAppSetupHandler,
+    @Inject(ListWhatsAppChannelsHandler) private readonly listChannels: ListWhatsAppChannelsHandler,
+    @Inject(CreateWhatsAppChannelHandler) private readonly createChannel: CreateWhatsAppChannelHandler,
+    @Inject(WhatsAppEmbeddedSignupChannelHandler)
+    private readonly embeddedSignupChannel: WhatsAppEmbeddedSignupChannelHandler,
+    @Inject(GetWhatsAppChannelHandler) private readonly getChannel: GetWhatsAppChannelHandler,
+    @Inject(UpdateWhatsAppChannelHandler) private readonly updateChannel: UpdateWhatsAppChannelHandler,
+    @Inject(TestWhatsAppChannelHandler) private readonly testChannel: TestWhatsAppChannelHandler,
+    @Inject(RotateWhatsAppChannelCredentialsHandler)
+    private readonly rotateCredentials: RotateWhatsAppChannelCredentialsHandler,
+    @Inject(DisconnectWhatsAppChannelHandler)
+    private readonly disconnectChannel: DisconnectWhatsAppChannelHandler,
+    @Inject(SyncWhatsAppChannelTemplatesHandler)
+    private readonly syncTemplates: SyncWhatsAppChannelTemplatesHandler,
+    @Inject(DeleteWhatsAppChannelHandler) private readonly deleteChannel: DeleteWhatsAppChannelHandler,
   ) {}
 
   @Get('setup')
   @RequirePermissions('whatsapp.channels.manage')
   @ApiOperation({ summary: 'Server-side WhatsApp setup status (no secrets)' })
-  setup(): WhatsAppSetupInfo {
-    return this.channels.setupInfo();
+  setupInfo(): WhatsAppSetupInfo {
+    return this.setup.execute({});
   }
 
   @Get('channels')
@@ -62,7 +88,7 @@ export class WhatsAppChannelsController {
   )
   @ApiOperation({ summary: 'List WhatsApp channels (credentials are never returned)' })
   list(@CrmContext() ctx: CrmRequestContext): Promise<WhatsAppChannelListResponse> {
-    return this.channels.list(ctx.organizationId);
+    return this.listChannels.execute({ organizationId: ctx.organizationId });
   }
 
   @Post('channels')
@@ -72,7 +98,10 @@ export class WhatsAppChannelsController {
     @CrmContext() ctx: CrmRequestContext,
     @Body() raw: unknown,
   ): Promise<WhatsAppChannelTestResult> {
-    return this.channels.create(ctx, whatsappCreateChannelRequestSchema.parse(raw));
+    return this.createChannel.execute({
+      ctx,
+      input: whatsappCreateChannelRequestSchema.parse(raw),
+    });
   }
 
   @Post('channels/embedded-signup')
@@ -82,7 +111,10 @@ export class WhatsAppChannelsController {
     @CrmContext() ctx: CrmRequestContext,
     @Body() raw: unknown,
   ): Promise<WhatsAppChannelTestResult> {
-    return this.channels.embeddedSignup(ctx, whatsappEmbeddedSignupRequestSchema.parse(raw));
+    return this.embeddedSignupChannel.execute({
+      ctx,
+      input: whatsappEmbeddedSignupRequestSchema.parse(raw),
+    });
   }
 
   @Get('channels/:id')
@@ -91,7 +123,7 @@ export class WhatsAppChannelsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppChannelSummary> {
-    return this.channels.get(ctx.organizationId, id);
+    return this.getChannel.execute({ organizationId: ctx.organizationId, channelId: id });
   }
 
   @Patch('channels/:id')
@@ -101,7 +133,11 @@ export class WhatsAppChannelsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() raw: unknown,
   ): Promise<WhatsAppChannelSummary> {
-    return this.channels.rename(ctx, id, whatsappUpdateChannelRequestSchema.parse(raw).name);
+    return this.updateChannel.execute({
+      ctx,
+      channelId: id,
+      name: whatsappUpdateChannelRequestSchema.parse(raw).name,
+    });
   }
 
   @Post('channels/:id/test')
@@ -112,7 +148,7 @@ export class WhatsAppChannelsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppChannelTestResult> {
-    return this.channels.test(ctx, id);
+    return this.testChannel.execute({ ctx, channelId: id });
   }
 
   @Post('channels/:id/credentials')
@@ -124,11 +160,11 @@ export class WhatsAppChannelsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() raw: unknown,
   ): Promise<WhatsAppChannelTestResult> {
-    return this.channels.rotateCredentials(
+    return this.rotateCredentials.execute({
       ctx,
-      id,
-      whatsappRotateCredentialsRequestSchema.parse(raw),
-    );
+      channelId: id,
+      input: whatsappRotateCredentialsRequestSchema.parse(raw),
+    });
   }
 
   @Post('channels/:id/disconnect')
@@ -139,18 +175,18 @@ export class WhatsAppChannelsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppChannelSummary> {
-    return this.channels.disconnect(ctx, id);
+    return this.disconnectChannel.execute({ ctx, channelId: id });
   }
 
   @Post('channels/:id/sync-templates')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('whatsapp.channels.manage', 'whatsapp.templates.manage')
   @ApiOperation({ summary: 'Sync message templates from Meta' })
-  syncTemplates(
+  syncChannelTemplates(
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<WhatsAppTemplateSyncResponse> {
-    return this.templates.sync(ctx, id);
+    return this.syncTemplates.execute({ ctx, channelId: id });
   }
 
   @Delete('channels/:id')
@@ -161,6 +197,6 @@ export class WhatsAppChannelsController {
     @CrmContext() ctx: CrmRequestContext,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
-    await this.channels.remove(ctx, id);
+    await this.deleteChannel.execute({ ctx, channelId: id });
   }
 }

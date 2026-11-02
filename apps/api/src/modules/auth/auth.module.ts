@@ -19,7 +19,7 @@ import { RevokeSessionHandler } from './application/revoke-session/revoke-sessio
 import { VerifyTotpHandler } from './application/verify-totp/verify-totp.handler.js';
 import { PLATFORM_AUTH_REPOSITORY } from './domain/repositories/platform-auth.repository.js';
 import { PLATFORM_TOTP_SECRET_PROTECTOR } from './domain/services/platform-totp-secret-protector.js';
-import { PrismaPlatformAuthRepository } from './infrastructure/persistence/prisma/prisma-platform-auth.repository.js';
+import { PrismaPlatformAuthRepository } from './infrastructure/persistence/prisma/repositories/prisma-platform-auth.repository.js';
 import { PlatformRateLimiterAdapter } from './infrastructure/platform-rate-limiter.adapter.js';
 import { PlatformTotpSecretResolver } from './infrastructure/totp/platform-totp-secret-resolver.js';
 import { PlatformAuthController } from './presentation/http/controllers/platform-auth.controller.js';
@@ -63,6 +63,11 @@ export const platformAuthPersistenceProviders: Provider[] = [
     PlatformAdminGuard,
   ],
   // Other modules protect routes with PlatformAdminGuard, which needs these.
-  exports: [PlatformAdminGuard, GetCurrentSessionHandler, JwtSecurityModule],
+  exports: [
+    PlatformAdminGuard,
+    GetCurrentSessionHandler,
+    JwtSecurityModule,
+    PLATFORM_TOTP_SECRET_PROTECTOR,
+  ],
 })
 export class AuthModule {}

@@ -17,6 +17,57 @@ export interface EmployeeSalaryRecord {
   readonly otherDeductions: number;
 }
 
+export type EmployeeLoginStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'DEACTIVATED';
+
+/** Linked sign-in access as seen from HR; credentials are never loaded. */
+export interface EmployeeLoginAccessRecord {
+  readonly membershipId: string;
+  readonly status: EmployeeLoginStatus;
+  readonly isOwner: boolean;
+  /** Created together with the employee, so deleting the employee deletes the account. */
+  readonly ownsAccount: boolean;
+  readonly roles: readonly { readonly id: string; readonly key: string; readonly name: string }[];
+  readonly lastLoginAt: string | null;
+}
+
+/** Prepared by the organization access service: hashes only, never plaintext. */
+export interface NewEmployeeLoginAccount {
+  readonly adminId: string;
+  readonly email: string;
+  readonly passwordHash: string;
+  readonly totpSecretCiphertext: string;
+  readonly roleIds: readonly string[];
+  readonly isOwner: boolean;
+}
+
+export interface EmployeeDeletionTarget {
+  readonly platformAdminId: string | null;
+  readonly ownsLoginAccount: boolean;
+  readonly profileImageStoredObjectId: string | null;
+}
+
+/** NONE: no linked account; ACCOUNT_PRESERVED: linked account was not created for the employee. */
+export type EmployeeLoginDeletionOutcome =
+  | 'NONE'
+  | 'ACCOUNT_DELETED'
+  | 'MEMBERSHIP_REMOVED'
+  | 'ACCOUNT_PRESERVED';
+
+export interface EmployeeDeletionResult {
+  readonly loginAccount: EmployeeLoginDeletionOutcome;
+  readonly platformAdminId: string | null;
+  readonly profileImageStoredObjectId: string | null;
+}
+
+export interface AssignableEmployeeRecord {
+  readonly id: string;
+  readonly employeeCode: string;
+  readonly displayName: string;
+  readonly jobTitle: string;
+  readonly profileImageUrl: string | null;
+  readonly platformAdminId: string | null;
+}
+
 export interface EmployeeRecord {
   readonly id: string;
   readonly employeeCode: string;
@@ -28,6 +79,7 @@ export interface EmployeeRecord {
   readonly alternatePhone: string | null;
   readonly profileImageUrl: string | null;
   readonly jobTitle: string;
+  readonly department: string | null;
   readonly employmentType: EmployeeEmploymentType;
   readonly employmentStatus: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
@@ -36,6 +88,7 @@ export interface EmployeeRecord {
   readonly workLocation: string | null;
   readonly notes: string;
   readonly platformAdminId: string | null;
+  readonly loginAccess: EmployeeLoginAccessRecord | null;
   readonly deactivatedAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -68,12 +121,15 @@ export interface CreateEmployeeInput {
   readonly profileImageUrl?: string | null;
   readonly profileImageStoredObjectId?: string | null;
   readonly jobTitle: string;
+  readonly department?: string | null;
   readonly employmentType: EmployeeEmploymentType;
+  readonly employmentStatus?: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
   readonly probationEndDate?: string | null;
   readonly employmentEndDate?: string | null;
   readonly workLocation?: string | null;
   readonly notes?: string;
+  /** Set by the server only (account linking); never taken from the request body. */
   readonly platformAdminId?: string | null;
   readonly salaryStructure?: EmployeeSalaryRecord | null;
 }
@@ -87,13 +143,13 @@ export interface UpdateEmployeeInput {
   readonly profileImageUrl?: string | null;
   readonly profileImageStoredObjectId?: string | null;
   readonly jobTitle?: string;
+  readonly department?: string | null;
   readonly employmentType?: EmployeeEmploymentType;
   readonly dateOfJoining?: string;
   readonly probationEndDate?: string | null;
   readonly employmentEndDate?: string | null;
   readonly workLocation?: string | null;
   readonly notes?: string;
-  readonly platformAdminId?: string | null;
   readonly salaryStructure?: EmployeeSalaryRecord | null;
 }
 
@@ -115,11 +171,20 @@ export interface EmployeeRepository {
     phone: string,
     excludeEmployeeId?: string,
   ): Promise<string | null>;
+  listAssignableEmployees(
+    organizationId: string,
+    search?: string,
+  ): Promise<readonly AssignableEmployeeRecord[]>;
+  /**
+   * Creates the employee and, when `loginAccount` is given, its sign-in account,
+   * membership and role in the same transaction.
+   */
   createEmployee(
     organizationId: string,
     employeeId: string,
     input: CreateEmployeeInput,
     adminId: string,
+    loginAccount?: NewEmployeeLoginAccount | null,
   ): Promise<EmployeeRecord>;
   updateEmployee(
     organizationId: string,
@@ -133,7 +198,19 @@ export interface EmployeeRepository {
     status: EmployeeEmploymentStatus,
     adminId: string,
   ): Promise<EmployeeRecord>;
-  deleteEmployee(organizationId: string, employeeId: string): Promise<void>;
+  getDeletionTarget(
+    organizationId: string,
+    employeeId: string,
+  ): Promise<EmployeeDeletionTarget | null>;
+  /**
+   * Permanently deletes the employee and, in the same transaction, the sign-in account it
+   * owns (see `EmployeeDeletionResult.loginAccount`), writing an EMPLOYEE_DELETED audit event.
+   */
+  deleteEmployee(
+    organizationId: string,
+    employeeId: string,
+    adminId: string,
+  ): Promise<EmployeeDeletionResult>;
 }
 
 export const EMPLOYEE_REPOSITORY = Symbol('EMPLOYEE_REPOSITORY');
