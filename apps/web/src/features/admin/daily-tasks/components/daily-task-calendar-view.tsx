@@ -38,7 +38,7 @@ export function DailyTaskCalendarView({
   onAnchorChange: (date: string) => void;
   onSelectDate: (date: string) => void;
   onOpenTask: (task: DailyTaskListItem) => void;
-  onCreateForDate: (date: string) => void;
+  onCreateForDate?: (date: string) => void;
 }) {
   const monthKey = anchorDate.slice(0, 7);
   const { weeks, monthLabelDate } = useMemo(() => {
@@ -137,13 +137,15 @@ export function DailyTaskCalendarView({
                       <p className="text-muted-foreground text-[10px]">+{dayTasks.length - 3} more</p>
                     ) : null}
                   </div>
-                  <button
-                    type="button"
-                    className="text-muted-foreground mt-1 text-[10px] hover:text-foreground"
-                    onClick={() => onCreateForDate(dateKey)}
-                  >
-                    + Add
-                  </button>
+                  {onCreateForDate ? (
+                    <button
+                      type="button"
+                      className="text-muted-foreground mt-1 text-[10px] hover:text-foreground"
+                      onClick={() => onCreateForDate(dateKey)}
+                    >
+                      + Add
+                    </button>
+                  ) : null}
                 </div>
               );
             })}

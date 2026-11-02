@@ -3,14 +3,13 @@
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { hasCsrfCookie } from '@/shared/api/api-client';
-import { isApiError } from '@/shared/api/api-error';
+import { accessTokenStore, hasCsrfCookie } from '@/shared/api/api-client';
 import { getCurrentSession } from '../api/get-current-session';
-import { loginPath } from '../utils/auth-errors';
 
 /**
  * TOTP verification is only for Super Admin after password login. If the user
  * already has a live session (password-only org sign-in), skip this step.
+ * A failed `/me` here is expected: the password step has not created a session yet.
  */
 export function VerifyTotpGate({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -19,7 +18,7 @@ export function VerifyTotpGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
-      if (!hasCsrfCookie()) {
+      if (!hasCsrfCookie() && !accessTokenStore.get()) {
         setReady(true);
         return;
       }
@@ -28,13 +27,8 @@ export function VerifyTotpGate({ children }: { children: ReactNode }) {
         if (!controller.signal.aborted) {
           router.replace('/admin/dashboard');
         }
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        if (isApiError(error) && !error.isTransient) {
-          router.replace(loginPath('session_expired'));
-          return;
-        }
-        setReady(true);
+      } catch {
+        if (!controller.signal.aborted) setReady(true);
       }
     })();
     return () => controller.abort();

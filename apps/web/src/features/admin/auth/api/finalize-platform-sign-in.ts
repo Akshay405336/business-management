@@ -1,4 +1,5 @@
 import { getMyPermissions } from '@/features/admin/org-access/api/org-access';
+import { suppressPlatformSessionEndedFor } from '@/shared/api/session-ended';
 import type { PlatformVerifyTotpResponse } from '../types/auth.types';
 import {
   armPostAuthBootstrap,
@@ -10,6 +11,7 @@ import {
  * protected layout can render the shell without intermediate session/access loaders.
  */
 export async function finalizePlatformSignIn(response: PlatformVerifyTotpResponse): Promise<void> {
+  suppressPlatformSessionEndedFor(15_000);
   const { permissions } = await getMyPermissions();
   armPostAuthBootstrap({
     accessToken: response.accessToken,

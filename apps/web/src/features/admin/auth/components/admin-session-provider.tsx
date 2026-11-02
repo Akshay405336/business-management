@@ -53,6 +53,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     registerSessionRefresher(refreshSession);
+    return () => registerSessionRefresher(null);
   }, []);
 
   useEffect(

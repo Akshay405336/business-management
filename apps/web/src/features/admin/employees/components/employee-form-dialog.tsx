@@ -9,6 +9,7 @@ import {
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
 import { clearFormFieldError, mergeFieldErrors, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
+import type { EmployeeLoginAccess } from '@techwin/contracts';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -51,16 +52,18 @@ import {
   uploadEmployeeProfileImage,
 } from '../api/employees';
 import { revokeDeferredImagePreview } from '@/features/admin/media/components/image-upload-field';
-import { EMPLOYEE_EMPLOYMENT_TYPES } from '../constants';
-import type { EmployeeEmploymentType } from '../types';
+import { EMPLOYEE_EMPLOYMENT_TYPES, EMPLOYEE_STATUSES } from '../constants';
+import type { EmployeeEmploymentStatus, EmployeeEmploymentType } from '../types';
 import { applyEmployeeFieldErrors, describeEmployeeError } from '../utils/errors';
 import {
   employeeDetailToForm,
+  employeeFormToCreateExtras,
   employeeFormToPayload,
   emptyEmployeeForm,
   type EmployeeFormState,
 } from '../utils/employee-form';
-import { labelEmploymentType } from '../utils/labels';
+import { labelEmployeeStatus, labelEmploymentType } from '../utils/labels';
+import { EmployeeLoginAccessFields, EmployeeRoleField } from './employee-login-access-section';
 import { EmployeeProfileImageField } from './employee-profile-image-field';
 import {
   EmployeeSalarySection,
@@ -79,7 +82,13 @@ const DIALOG_SHELL_CLASS = cn(
   '[&>button]:text-foreground [&>button]:top-5 [&>button]:right-5 [&>button]:size-9 [&>button]:rounded-lg [&>button]:border [&>button]:border-input [&>button]:bg-card [&>button]:shadow-none [&>button]:hover:bg-muted/50',
 );
 
-const EMPLOYMENT_FIELD_KEYS = ['jobTitle', 'employmentType', 'dateOfJoining'] as const;
+const EMPLOYMENT_FIELD_KEYS = [
+  'jobTitle',
+  'department',
+  'employmentType',
+  'employmentStatus',
+  'dateOfJoining',
+] as const;
 const MORE_DETAILS_FIELD_KEYS = [
   'alternatePhone',
   'workLocation',
@@ -142,10 +151,13 @@ export function EmployeeFormDialog({
 }) {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
-  const { has } = useAdminAccess();
+  const { has, hasAny } = useAdminAccess();
   const canManageCompensation = has('employees.compensation.manage');
   const canReadCompensation = has('employees.compensation.read');
+  const canCreateLogin = hasAny('users.create', 'memberships.manage');
   const isCreate = editingId === null;
+
+  const [loginAccess, setLoginAccess] = useState<EmployeeLoginAccess | null>(null);
 
   const [form, setForm] = useState<EmployeeFormState>(() => emptyEmployeeForm());
   const [salaryForm, setSalaryForm] = useState<EmployeeSalaryFormState>(() => emptySalaryForm());
@@ -216,12 +228,14 @@ export function EmployeeFormDialog({
     if (!open) return;
     if (isCreate) {
       resetCreateForm();
+      setLoginAccess(null);
       return;
     }
     setLoadingEmployee(true);
     void getEmployee(editingId)
       .then((detail) => {
         const nextForm = employeeDetailToForm(detail);
+        setLoginAccess(detail.loginAccess);
         setForm(nextForm);
         if (canReadCompensation) setSalaryForm(salaryFromDetail(detail));
         setFormErrors({});
@@ -251,6 +265,16 @@ export function EmployeeFormDialog({
       });
     return () => controller.abort();
   }, [open, isCreate]);
+
+  const createPayloadFor = (profileImageStoredObjectId: string | null | undefined) => ({
+    ...employeeFormToPayload(form, {
+      editingId,
+      includeSalary: canManageCompensation && showCompensation,
+      salaryForm,
+      profileImageStoredObjectId,
+    }),
+    ...employeeFormToCreateExtras(canCreateLogin ? form : { ...form, loginEnabled: false }),
+  });
 
   const resolveProfileImageStoredObjectId = async (): Promise<string | null | undefined> => {
     const { profileImage } = form;
@@ -306,13 +330,7 @@ export function EmployeeFormDialog({
       setShowEmploymentInformation(true);
     }
 
-    const createPayload = employeeFormToPayload(form, {
-      editingId,
-      includeSalary: canManageCompensation && showCompensation,
-      salaryForm,
-      profileImageStoredObjectId: undefined,
-    });
-    const parsed = createEmployeeRequestSchema.safeParse(createPayload);
+    const parsed = createEmployeeRequestSchema.safeParse(createPayloadFor(undefined));
     if (!parsed.success) {
       const errors = zodErrorToFieldMap(parsed.error);
       setFormErrors(errors);
@@ -328,13 +346,7 @@ export function EmployeeFormDialog({
     try {
       await run(async () => {
         const profileImageStoredObjectId = await resolveProfileImageStoredObjectId();
-        const withImage = employeeFormToPayload(form, {
-          editingId,
-          includeSalary: canManageCompensation && showCompensation,
-          salaryForm,
-          profileImageStoredObjectId,
-        });
-        const body = createEmployeeRequestSchema.parse(withImage);
+        const body = createEmployeeRequestSchema.parse(createPayloadFor(profileImageStoredObjectId));
         await createEmployee(body);
       });
       toast.success('Employee created.');
@@ -471,7 +483,7 @@ export function EmployeeFormDialog({
                       <p className="text-muted-foreground mt-1 text-xs">{codePreviewHint}</p>
                     ) : null}
                   </CrmFormField>
-                  <CrmFormField id="emp-job" label="Job title" required error={fieldError('jobTitle')}>
+                  <CrmFormField id="emp-job" label="Designation" required error={fieldError('jobTitle')}>
                     <Input
                       id="emp-job"
                       disabled={pending}
@@ -480,6 +492,18 @@ export function EmployeeFormDialog({
                       onChange={(e) => {
                         clearFormFieldError(setFormErrors, 'jobTitle');
                         setForm((f) => ({ ...f, jobTitle: e.target.value }));
+                      }}
+                    />
+                  </CrmFormField>
+                  <CrmFormField id="emp-department" label="Department" optional error={fieldError('department')}>
+                    <Input
+                      id="emp-department"
+                      disabled={pending}
+                      value={form.department}
+                      className={simpleInputClass(Boolean(fieldError('department')))}
+                      onChange={(e) => {
+                        clearFormFieldError(setFormErrors, 'department');
+                        setForm((f) => ({ ...f, department: e.target.value }));
                       }}
                     />
                   </CrmFormField>
@@ -516,7 +540,44 @@ export function EmployeeFormDialog({
                       }}
                     />
                   </CrmFormField>
+                  {isCreate ? (
+                    <CrmFormField id="emp-status" label="Employee status" required>
+                      <Select
+                        value={form.employmentStatus}
+                        disabled={pending}
+                        onValueChange={(value) =>
+                          setForm((f) => ({ ...f, employmentStatus: value as EmployeeEmploymentStatus }))
+                        }
+                      >
+                        <SelectTrigger id="emp-status" className={CRM_PIPELINE_FORM_FIELD_CLASS}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {EMPLOYEE_STATUSES.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {labelEmployeeStatus(status)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </CrmFormField>
+                  ) : loginAccess ? (
+                    <EmployeeRoleField loginAccess={loginAccess} />
+                  ) : null}
                 </div>
+              ) : null}
+
+              {isCreate && canCreateLogin ? (
+                <EmployeeLoginAccessFields
+                  value={form}
+                  disabled={pending}
+                  fieldError={fieldError}
+                  onChange={(patch, field) => {
+                    clearFormFieldError(setFormErrors, field);
+                    if (field === 'password') clearFormFieldError(setFormErrors, 'confirmPassword');
+                    setForm((f) => ({ ...f, ...patch }));
+                  }}
+                />
               ) : null}
 
               {isCreate && showEmploymentInformation && !showMoreDetails ? (

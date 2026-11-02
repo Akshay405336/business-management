@@ -20,12 +20,12 @@ import {
 import { CRM_PIPELINE_FORM_FIELD_CLASS } from '@/features/admin/crm/constants';
 import { formControlStateClass } from '@/shared/form/form-control-state';
 import { cn } from '@/shared/lib/utils';
-import { listEmployees } from '../api/employees';
-import type { EmployeeListItem } from '../types';
+import type { AssignableEmployee as AssignableEmployeeItem } from '@techwin/contracts';
+import { listAssignableEmployees } from '../api/employees';
 
-type AssignableEmployee = EmployeeListItem & { platformAdminId: string };
+type AssignableEmployee = AssignableEmployeeItem & { platformAdminId: string };
 
-function isAssignable(employee: EmployeeListItem): employee is AssignableEmployee {
+function isAssignable(employee: AssignableEmployeeItem): employee is AssignableEmployee {
   return Boolean(employee.platformAdminId);
 }
 
@@ -51,14 +51,7 @@ export function EmployeeAssigneeSelect({
   const loadEmployees = useCallback(async (searchTerm: string) => {
     setLoading(true);
     try {
-      const response = await listEmployees({
-        status: 'ACTIVE',
-        page: 1,
-        pageSize: 100,
-        search: searchTerm.trim() || undefined,
-        sortBy: 'displayName',
-        sortDir: 'asc',
-      });
+      const response = await listAssignableEmployees(searchTerm.trim() || undefined);
       const assignable = response.items.filter(isAssignable);
       setEmployees(assignable);
       setLabelByAdminId((current) => {
@@ -110,7 +103,7 @@ export function EmployeeAssigneeSelect({
         <div className="border-border/60 border-b p-2">
           <Input
             value={search}
-            placeholder="Search by name, code, email…"
+            placeholder="Search by name or code…"
             className="h-9"
             onChange={(event) => setSearch(event.target.value)}
           />

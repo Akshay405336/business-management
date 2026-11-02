@@ -129,6 +129,13 @@ export function assignOrgMemberRoles(
   });
 }
 
+export function deleteOrgMember(membershipId: string): Promise<void> {
+  return apiRequest<void>(ORG_ACCESS_ROUTES.member(membershipId), {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
 export function listOrgRoles(signal?: AbortSignal): Promise<OrgRoleListResponse> {
   return apiRequest<OrgRoleListResponse>(ORG_ACCESS_ROUTES.roles, { auth: true, signal });
 }

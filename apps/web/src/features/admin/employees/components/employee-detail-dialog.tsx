@@ -11,7 +11,12 @@ import {
 } from '@/components/ui/dialog';
 import { getEmployee } from '../api/employees';
 import type { EmployeeDetail } from '../types';
-import { labelEmploymentType, labelEmployeeStatus } from '../utils/labels';
+import {
+  labelEmploymentType,
+  labelEmployeeStatus,
+  labelLoginRoles,
+  labelLoginStatus,
+} from '../utils/labels';
 import { describeEmployeeError } from '../utils/errors';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
 import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
@@ -117,7 +122,22 @@ export function EmployeeDetailDialog({ employeeId, open, onOpenChange }: Props) 
             <DetailRow label="Work email" value={detail.workEmail} />
             <DetailRow label="Phone" value={detail.phone} />
             <DetailRow label="Alternate phone" value={detail.alternatePhone} />
-            <DetailRow label="Job title" value={detail.jobTitle} />
+            <DetailRow label="Designation" value={detail.jobTitle} />
+            <DetailRow label="Department" value={detail.department} />
+            <DetailRow label="Sign-in" value={labelLoginStatus(detail.loginAccess)} />
+            {detail.loginAccess ? (
+              <>
+                <DetailRow label="Role" value={labelLoginRoles(detail.loginAccess)} />
+                <DetailRow
+                  label="Last sign-in"
+                  value={
+                    detail.loginAccess.lastLoginAt
+                      ? new Date(detail.loginAccess.lastLoginAt).toLocaleString()
+                      : 'Never'
+                  }
+                />
+              </>
+            ) : null}
             <DetailRow label="Date joined" value={detail.dateOfJoining} />
             <DetailRow label="Probation ends" value={detail.probationEndDate} />
             <DetailRow label="Employment ends" value={detail.employmentEndDate} />

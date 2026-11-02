@@ -1,14 +1,23 @@
 'use client';
 
-import { SYSTEM_ROLE_KEYS } from '@techwin/contracts';
 import { orgMemberListQuerySchema, updateMemberRequestSchema } from '@techwin/validation';
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { clearFormFieldError, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
-import { KeyRound, Pencil, Power, Search, Shield, UserPlus, Users } from 'lucide-react';
+import { KeyRound, Pencil, Power, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +36,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TableCell, TableHead, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/shared/lib/utils';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import {
@@ -48,6 +58,7 @@ import { formatDateTime } from '@/shared/lib/format';
 import {
   assignOrgMemberRoles,
   changeOrgMemberStatus,
+  deleteOrgMember,
   listOrgMembers,
   listOrgRoles,
   provisionOrgMember,
@@ -71,26 +82,49 @@ import {
   isOrgAccessSchemaContractError,
   ORG_ACCESS_CREATE_ACCOUNT_GENERIC_ERROR,
 } from '../utils/org-access-form-errors';
+import { selectGrantableRoles } from '../utils/grantable-roles';
 import { labelMembershipStatus } from '../utils/labels';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
+const MEMBERS_TABLE_COLUMN_CLASS = {
+  name: 'w-[20%] min-w-[11rem] overflow-hidden pr-4 align-middle',
+  email: 'w-[26%] min-w-[13rem] overflow-hidden px-4 align-middle',
+  role: 'w-[16%] min-w-[8.5rem] overflow-hidden px-4 align-middle',
+  lastLogin: 'w-[16%] min-w-[9rem] overflow-hidden px-4 align-middle',
+  actions: 'w-[24%] min-w-[15.5rem] px-4 align-middle',
+} as const;
+
 const MEMBERS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
-  { variant: 'textWide' },
-  { variant: 'text' },
-  { variant: 'text' },
-  { variant: 'badge' },
-  { variant: 'text' },
-  { variant: 'actions', headClassName: 'w-[8rem] text-right' },
+  { variant: 'textWide', className: MEMBERS_TABLE_COLUMN_CLASS.name },
+  { variant: 'textWide', className: MEMBERS_TABLE_COLUMN_CLASS.email },
+  { variant: 'badge', className: MEMBERS_TABLE_COLUMN_CLASS.role },
+  { variant: 'text', className: MEMBERS_TABLE_COLUMN_CLASS.lastLogin },
+  {
+    variant: 'actions',
+    className: MEMBERS_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${MEMBERS_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
 ];
 
 const PHONE_PLACEHOLDER = 'Not provided';
 
-function TruncateWithTitle({ value, className }: { value: string; className?: string }) {
+function TruncateWithTooltip({
+  value,
+  className,
+}: {
+  value: string;
+  className?: string;
+}) {
   return (
-    <span className={cn('block min-w-0 truncate', className)} title={value}>
-      {value}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className={cn('block min-w-0 truncate', className)}>{value}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-sm break-all">
+        {value}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -106,7 +140,7 @@ function formatLastLoginAt(value: string | null | undefined): string {
 
 function MemberRoleBadges({ roles }: { roles: OrgMemberListItem['roles'] }) {
   if (roles.length === 0) {
-    return <span className="text-muted-foreground text-sm">—</span>;
+    return <span className="text-muted-foreground text-sm">No role assigned</span>;
   }
   return (
     <div className="flex min-w-0 flex-wrap gap-1">
@@ -123,7 +157,7 @@ export function UsersPage() {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
   const { admin } = useAuthenticatedAdmin();
-  const { has, hasAll } = useMyPermissions();
+  const { has, hasAll, permissions } = useMyPermissions();
 
   const canRead = has('users.read');
   const canProvision = hasAll('users.create', 'memberships.manage');
@@ -131,6 +165,7 @@ export function UsersPage() {
   const canManageRoles = has('users.manage_roles');
   const canResetPassword = has('users.reset_password');
   const canChangeStatus = hasAll('users.deactivate', 'memberships.manage');
+  const canDeleteMembers = hasAll('users.deactivate', 'memberships.manage');
 
   const [items, setItems] = useState<readonly OrgMemberListItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -161,13 +196,16 @@ export function UsersPage() {
 
   const [createAccountOpen, setCreateAccountOpen] = useState(false);
   const [createAccountApiErrors, setCreateAccountApiErrors] = useState<Record<string, string>>({});
+  const [deleteTarget, setDeleteTarget] = useState<OrgMemberListItem | null>(null);
 
-  const grantableRoles = useMemo(() => {
-    const isPlatformSuperAdmin = admin.role === 'SUPER_ADMIN';
-    return roleOptions.filter(
-      (role) => isPlatformSuperAdmin || role.key !== SYSTEM_ROLE_KEYS.owner,
-    );
-  }, [admin.role, roleOptions]);
+  const grantableRoles = useMemo(
+    () =>
+      selectGrantableRoles(roleOptions, {
+        isPlatformSuperAdmin: admin.role === 'SUPER_ADMIN',
+        permissions: new Set(permissions),
+      }),
+    [admin.role, roleOptions, permissions],
+  );
 
   const query = useMemo((): OrgMemberListQuery => {
     return orgMemberListQuerySchema.parse({
@@ -311,6 +349,21 @@ export function UsersPage() {
     }
   };
 
+  const canDeleteMember = (member: OrgMemberListItem) =>
+    canDeleteMembers && member.adminId !== admin.id && !member.isOwner;
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await run(() => deleteOrgMember(deleteTarget.membershipId));
+      toast.success(`${deleteTarget.displayName} was permanently deleted.`);
+      setDeleteTarget(null);
+      await load();
+    } catch (failure) {
+      toast.error(describeOrgAccessError(failure));
+    }
+  };
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-4 pb-8">
       <AdminBreadcrumb breadcrumbs={[{ label: 'Users' }]} />
@@ -394,18 +447,21 @@ export function UsersPage() {
 
           <DataTable
             className="min-w-0 max-w-full"
-            tableClassName="table-fixed"
+            tableClassName="table-fixed min-w-[60rem]"
             phase={tablePhase}
-            colSpan={6}
+            colSpan={5}
             skeletonColumns={MEMBERS_TABLE_SKELETON}
             header={
               <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[18%]">Name</TableHead>
-                <TableHead className="w-[22%]">Email</TableHead>
-                <TableHead className="w-[14%]">Phone Number</TableHead>
-                <TableHead className="w-[18%]">Role</TableHead>
-                <TableHead className="w-[16%]">Last Login At</TableHead>
-                <TableHead className="w-[12%] text-right">Actions</TableHead>
+                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.name}>Name</TableHead>
+                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.email}>Email</TableHead>
+                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.role}>Role</TableHead>
+                <TableHead className={cn(MEMBERS_TABLE_COLUMN_CLASS.lastLogin, 'whitespace-nowrap')}>
+                  Last Login At
+                </TableHead>
+                <TableHead className={cn(MEMBERS_TABLE_COLUMN_CLASS.actions, 'text-right')}>
+                  Actions
+                </TableHead>
               </TableRow>
             }
             empty={{
@@ -441,33 +497,46 @@ export function UsersPage() {
               const phoneLabel = formatPhoneNumber(member.phoneNumber);
               return (
                 <TableRow key={member.membershipId}>
-                  <TableCell className="min-w-0 font-medium">
-                    <TruncateWithTitle value={member.displayName} />
+                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.name, 'min-w-0 font-medium')}>
+                    <TruncateWithTooltip value={member.displayName} />
                     {member.isOwner ? (
                       <Badge variant="outline" className="mt-1 text-[10px]">
                         Owner
                       </Badge>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-muted-foreground min-w-0">
-                    <TruncateWithTitle value={member.email} />
+                  <TableCell
+                    className={cn(MEMBERS_TABLE_COLUMN_CLASS.email, 'min-w-0 whitespace-normal')}
+                  >
+                    <div className="flex min-w-0 flex-col gap-1.5">
+                      <TruncateWithTooltip
+                        value={member.email}
+                        className="text-muted-foreground text-sm"
+                      />
+                      <TruncateWithTooltip
+                        value={phoneLabel}
+                        className={cn(
+                          'text-[11px] tabular-nums',
+                          phoneLabel === PHONE_PLACEHOLDER
+                            ? 'text-muted-foreground'
+                            : 'text-foreground',
+                        )}
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.role, 'min-w-0 whitespace-normal')}>
+                    <MemberRoleBadges roles={member.roles} />
                   </TableCell>
                   <TableCell
                     className={cn(
-                      'min-w-0 text-sm',
-                      phoneLabel === PHONE_PLACEHOLDER ? 'text-muted-foreground' : 'text-foreground',
+                      MEMBERS_TABLE_COLUMN_CLASS.lastLogin,
+                      'text-muted-foreground min-w-0 text-sm tabular-nums',
                     )}
                   >
-                    <TruncateWithTitle value={phoneLabel} />
+                    <TruncateWithTooltip value={formatLastLoginAt(member.lastLoginAt)} />
                   </TableCell>
-                  <TableCell className="min-w-0">
-                    <MemberRoleBadges roles={member.roles} />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground min-w-0 text-sm tabular-nums">
-                    <TruncateWithTitle value={formatLastLoginAt(member.lastLoginAt)} />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-0.5">
+                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.actions, 'min-w-0 text-right')}>
+                    <div className="flex w-full shrink-0 items-center justify-end gap-2.5">
                       {canResetPassword && !isSelf ? (
                         <TableIconButton
                           label={`Reset password for ${member.displayName}`}
@@ -527,6 +596,16 @@ export function UsersPage() {
                           onClick={() => void toggleMemberStatus(member)}
                         >
                           <Power className="size-4" aria-hidden="true" />
+                        </TableIconButton>
+                      ) : null}
+                      {canDeleteMember(member) ? (
+                        <TableIconButton
+                          label={`Delete ${member.displayName}`}
+                          tone="danger"
+                          disabled={pending}
+                          onClick={() => setDeleteTarget(member)}
+                        >
+                          <Trash2 className="size-4" aria-hidden="true" />
                         </TableIconButton>
                       ) : null}
                     </div>
@@ -628,30 +707,37 @@ export function UsersPage() {
         <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Assign roles</DialogTitle>
-            <DialogDescription>Choose roles for {rolesTarget?.displayName ?? 'this member'}.</DialogDescription>
+            <DialogDescription>
+              Choose roles for {rolesTarget?.displayName ?? 'this member'}. Owner is the built-in
+              role and is never assigned automatically.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            {grantableRoles.map((role) => {
-              const checked = selectedRoleIds.includes(role.id);
-              return (
-                <label
-                  key={role.id}
-                  className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-md border p-3"
-                >
-                  <Checkbox
-                    checked={checked}
-                    onCheckedChange={(value) => {
-                      setSelectedRoleIds((previous) => {
-                        if (value === true) return previous.includes(role.id) ? previous : [...previous, role.id];
-                        return previous.filter((id) => id !== role.id);
-                      });
-                    }}
-                    aria-label={role.name}
-                  />
-                  <span className="text-sm font-medium">{role.name}</span>
-                </label>
-              );
-            })}
+            {grantableRoles.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No assignable roles are available.</p>
+            ) : (
+              grantableRoles.map((role) => {
+                const checked = selectedRoleIds.includes(role.id);
+                return (
+                  <label
+                    key={role.id}
+                    className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-md border p-3"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) => {
+                        setSelectedRoleIds((previous) => {
+                          if (value === true) return previous.includes(role.id) ? previous : [...previous, role.id];
+                          return previous.filter((id) => id !== role.id);
+                        });
+                      }}
+                      aria-label={role.name}
+                    />
+                    <span className="text-sm font-medium">{role.name}</span>
+                  </label>
+                );
+              })
+            )}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setRolesDialogOpen(false)} disabled={pending}>
@@ -701,6 +787,26 @@ export function UsersPage() {
           }
         }}
       />
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {deleteTarget?.displayName ?? 'this member'} permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the sign-in account, membership, role assignments, and
+              sessions. Employee records and other organization data are kept. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={pending} onClick={() => void confirmDelete()}>
+              Delete permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -835,6 +835,9 @@ enum CrmAuditEventType {
   WHATSAPP_BROADCAST_CANCELLED
   WHATSAPP_CONTACT_CONSENT_CHANGED
   WHATSAPP_CONVERSATION_ASSIGNED
+  EMPLOYEE_CREATED
+  EMPLOYEE_STATUS_CHANGED
+  EMPLOYEE_DELETED
 }
 
 model CrmAuditEvent {
@@ -951,6 +954,7 @@ model Employee {
   profileImageUrl            String?                  @map("profile_image_url") @db.VarChar(512)
   profileImageStoredObjectId String?                  @unique @map("profile_image_stored_object_id") @db.Uuid
   jobTitle           String                   @map("job_title") @db.VarChar(120)
+  department         String?                  @db.VarChar(120)
   employmentType     EmployeeEmploymentType   @map("employment_type")
   employmentStatus   EmployeeEmploymentStatus @default(ACTIVE) @map("employment_status")
   dateOfJoining      DateTime                 @map("date_of_joining") @db.Date
@@ -959,6 +963,9 @@ model Employee {
   workLocation       String?                  @map("work_location") @db.VarChar(160)
   notes              String                   @default("") @db.VarChar(4000)
   platformAdminId    String?                  @unique @map("platform_admin_id") @db.Uuid
+  /// True when the linked sign-in account was created together with this employee and is
+  /// deleted with it; accounts linked by email (created from Users) are never owned.
+  ownsLoginAccount   Boolean                  @default(false) @map("owns_login_account")
   deactivatedAt      DateTime?                @map("deactivated_at") @db.Timestamptz(3)
   createdByAdminId   String                   @map("created_by_admin_id") @db.Uuid
   updatedByAdminId   String?                  @map("updated_by_admin_id") @db.Uuid

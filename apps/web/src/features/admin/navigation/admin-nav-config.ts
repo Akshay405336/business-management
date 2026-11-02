@@ -26,12 +26,12 @@ import {
   WalletCards,
 } from 'lucide-react';
 
+/** Link visibility comes from `ADMIN_ROUTE_PERMISSIONS` for `href`. */
 export type AdminNavLink = {
   kind: 'link';
   href: string;
   label: string;
   icon: LucideIcon;
-  requiredPermissions: readonly PermissionKey[];
 };
 
 export type AdminNavSoon = {
@@ -61,7 +61,6 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         href: '/admin/dashboard',
         label: 'Dashboard',
         icon: LayoutDashboard,
-        requiredPermissions: [],
       },
     ],
   },
@@ -75,35 +74,30 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         href: '/admin/pipeline',
         label: 'Pipeline',
         icon: GitBranch,
-        requiredPermissions: ['leads.read'],
       },
       {
         kind: 'link',
         href: '/admin/leads',
         label: 'Leads',
         icon: Users,
-        requiredPermissions: ['leads.read'],
       },
       {
         kind: 'link',
         href: '/admin/packages',
         label: 'Service Packages',
         icon: Package,
-        requiredPermissions: ['settings.read'],
       },
       {
         kind: 'link',
         href: '/admin/proposals',
         label: 'Proposals & Quotations',
         icon: FileText,
-        requiredPermissions: ['leads.read'],
       },
       {
         kind: 'link',
         href: '/admin/clients',
         label: 'Clients',
         icon: UserCircle2,
-        requiredPermissions: ['clients.read'],
       },
     ],
   },
@@ -117,35 +111,30 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         href: '/admin/whatsapp/inbox',
         label: 'WhatsApp Inbox',
         icon: Inbox,
-        requiredPermissions: ['whatsapp.read'],
       },
       {
         kind: 'link',
         href: '/admin/whatsapp/channels',
         label: 'WhatsApp Channels',
         icon: Smartphone,
-        requiredPermissions: ['whatsapp.channels.manage'],
       },
       {
         kind: 'link',
         href: '/admin/whatsapp/templates',
         label: 'Templates',
         icon: FileText,
-        requiredPermissions: ['whatsapp.templates.manage', 'whatsapp.broadcasts.manage'],
       },
       {
         kind: 'link',
         href: '/admin/whatsapp/broadcasts',
         label: 'Broadcasts',
         icon: Megaphone,
-        requiredPermissions: ['whatsapp.broadcasts.manage'],
       },
       {
         kind: 'link',
         href: '/admin/whatsapp/reports',
         label: 'WhatsApp Reports',
         icon: BarChart3,
-        requiredPermissions: ['whatsapp.view_all', 'whatsapp.channels.manage'],
       },
     ],
   },
@@ -159,14 +148,12 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         href: '/admin/daily-tasks',
         label: 'Daily Tasks',
         icon: ClipboardList,
-        requiredPermissions: ['tasks.read'],
       },
       {
         kind: 'link',
         href: '/admin/task-calendar',
         label: 'Task Calendar',
         icon: CalendarDays,
-        requiredPermissions: ['tasks.read'],
       },
     ],
   },
@@ -180,7 +167,6 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         href: '/admin/project-tasks',
         label: 'Project Management',
         icon: FolderKanban,
-        requiredPermissions: ['tasks.read', 'projects.read'],
       },
       { kind: 'soon', label: 'Milestones', icon: Target, requiredPermissions: ['projects.read'] },
       { kind: 'soon', label: 'Team Assignments', icon: Users, requiredPermissions: ['projects.read'] },
@@ -210,7 +196,6 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         href: '/admin/employees',
         label: 'Employees',
         icon: Users,
-        requiredPermissions: ['employees.read'],
       },
       { kind: 'soon', label: 'Departments', icon: Building2, requiredPermissions: ['employees.read'] },
       { kind: 'soon', label: 'Attendance', icon: CalendarDays, requiredPermissions: ['employees.read'] },
@@ -229,14 +214,12 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         href: '/admin/users',
         label: 'Users',
         icon: Users,
-        requiredPermissions: ['users.read'],
       },
       {
         kind: 'link',
         href: '/admin/roles',
         label: 'Roles & Permissions',
         icon: Shield,
-        requiredPermissions: ['roles.read'],
       },
       { kind: 'soon', label: 'Audit Logs', icon: ClipboardList, requiredPermissions: ['settings.read'] },
       { kind: 'soon', label: 'Settings', icon: Settings, requiredPermissions: ['settings.read'] },

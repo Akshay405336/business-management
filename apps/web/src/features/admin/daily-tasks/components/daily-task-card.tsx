@@ -30,6 +30,7 @@ import {
 } from '@/features/admin/crm/components/kanban-lead-priority-badge';
 import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
 import { useAdminToast } from '@/features/admin/components/toast';
+import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
 import { cn } from '@/shared/lib/utils';
 import { deleteDailyTask } from '../api/daily-tasks';
 import type { DailyTaskListItem } from '../types';
@@ -84,6 +85,10 @@ function TaskKanbanCardActions({
   onReschedule: () => void;
   onDelete: () => void;
 }) {
+  const { has } = useAdminAccess();
+  const canUpdate = has('tasks.update');
+  const canReassign = canUpdate && has('tasks.assign');
+  const canDelete = has('tasks.delete');
   return (
     <div onPointerDown={stopCardPointer} onClick={(event) => event.stopPropagation()}>
       <DropdownMenu>
@@ -104,23 +109,33 @@ function TaskKanbanCardActions({
             <Eye className="size-3.5" aria-hidden="true" />
             View Details
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onEdit}>
-            <Pencil className="size-3.5" aria-hidden="true" />
-            Edit
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onReassign}>
-            <UserRound className="size-3.5" aria-hidden="true" />
-            Reassign
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onReschedule}>
-            <CalendarClock className="size-3.5" aria-hidden="true" />
-            Reschedule
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-            <Trash2 className="size-3.5" aria-hidden="true" />
-            Delete
-          </DropdownMenuItem>
+          {canUpdate ? (
+            <DropdownMenuItem onSelect={onEdit}>
+              <Pencil className="size-3.5" aria-hidden="true" />
+              Edit
+            </DropdownMenuItem>
+          ) : null}
+          {canReassign ? (
+            <DropdownMenuItem onSelect={onReassign}>
+              <UserRound className="size-3.5" aria-hidden="true" />
+              Reassign
+            </DropdownMenuItem>
+          ) : null}
+          {canUpdate ? (
+            <DropdownMenuItem onSelect={onReschedule}>
+              <CalendarClock className="size-3.5" aria-hidden="true" />
+              Reschedule
+            </DropdownMenuItem>
+          ) : null}
+          {canDelete ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+                <Trash2 className="size-3.5" aria-hidden="true" />
+                Delete
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

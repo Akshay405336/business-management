@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdminToast } from '@/features/admin/components/toast';
-import { listClients } from '@/features/admin/crm/api/clients';
+import type { ProjectClientOption } from '@techwin/contracts';
 import {
   CrmFieldLabel,
   CrmInlineFieldError,
@@ -42,12 +42,12 @@ import {
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { toDateInputValue } from '@/features/admin/crm/utils/format';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
-import type { CrmClient } from '@/features/admin/crm/types';
 import { cn } from '@/shared/lib/utils';
 import {
   createProject,
   getProject,
   listClientQuotations,
+  listProjectClientOptions,
   listProjectManagers,
   previewProjectNumber,
   updateProject,
@@ -79,7 +79,7 @@ const UNSELECTED = '__none__';
 
 const PROJECT_END_BEFORE_START = 'Expected end date must be on or after the start date.';
 
-function formatClientSelectLabel(client: CrmClient): string {
+function formatClientSelectLabel(client: ProjectClientOption): string {
   return [client.name, client.primaryContact, client.phone]
     .map((part) => part?.trim())
     .filter(Boolean)
@@ -109,7 +109,7 @@ export function ProjectFormDialog({
   const isCreate = editingId === null;
   const [form, setForm] = useState<ProjectFormState>(() => emptyProjectForm());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [clients, setClients] = useState<readonly CrmClient[]>([]);
+  const [clients, setClients] = useState<readonly ProjectClientOption[]>([]);
   const [managers, setManagers] = useState<readonly ProjectManagerOption[]>([]);
   const [quotations, setQuotations] = useState<readonly ClientQuotationOption[]>([]);
   const [loadingProject, setLoadingProject] = useState(false);
@@ -193,7 +193,7 @@ export function ProjectFormDialog({
 
   useEffect(() => {
     if (!open) return;
-    void listClients()
+    void listProjectClientOptions()
       .then((result) => setClients(result.clients))
       .catch(() => setClients([]));
     void listProjectManagers()

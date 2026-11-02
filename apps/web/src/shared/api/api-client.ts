@@ -21,6 +21,7 @@ export { accessTokenStore } from './access-token-store';
 export type RefreshOutcome = 'refreshed' | 'unauthenticated';
 type SessionRefresher = () => Promise<RefreshOutcome>;
 type SessionEndedListener = () => void;
+type AccessDeniedListener = (error: ApiError) => void;
 
 export interface ApiRequestOptions {
   readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -38,29 +39,65 @@ const REFRESHABLE_CODES: ReadonlySet<ApiErrorCode | null> = new Set([
   API_ERROR_CODES.UNAUTHENTICATED,
 ]);
 
-let sessionRefresher: SessionRefresher | null = null;
-let refreshInFlight: Promise<RefreshOutcome> | null = null;
-const sessionEndedListeners = new Set<SessionEndedListener>();
+const SESSION_RUNTIME_KEY = '__techwinPlatformSessionRuntime';
+
+type SessionRuntime = {
+  refresher: SessionRefresher | null;
+  inFlight: Promise<RefreshOutcome> | null;
+  sessionEndedListeners: Set<SessionEndedListener>;
+  accessDeniedListeners: Set<AccessDeniedListener>;
+};
+
+function sessionRuntime(): SessionRuntime {
+  const globalRecord = globalThis as typeof globalThis & {
+    [SESSION_RUNTIME_KEY]?: SessionRuntime;
+  };
+  globalRecord[SESSION_RUNTIME_KEY] ??= {
+    refresher: null,
+    inFlight: null,
+    sessionEndedListeners: new Set(),
+    accessDeniedListeners: new Set(),
+  };
+  return globalRecord[SESSION_RUNTIME_KEY];
+}
+
+const ACCESS_DENIED_CODES: ReadonlySet<ApiErrorCode | null> = new Set([
+  API_ERROR_CODES.FORBIDDEN,
+  API_ERROR_CODES.MEMBERSHIP_DENIED,
+]);
 
 export function hasCsrfCookie(): boolean {
   return readCookie(apiConfig.csrfCookie) !== null;
 }
 
 /** Registers the feature-level function that performs a refresh-token rotation. */
-export function registerSessionRefresher(refresher: SessionRefresher): void {
-  sessionRefresher = refresher;
+export function registerSessionRefresher(refresher: SessionRefresher | null): void {
+  sessionRuntime().refresher = refresher;
 }
 
 /** Notified when the session is definitively gone (refresh rejected). */
 export function onSessionEnded(listener: SessionEndedListener): () => void {
-  sessionEndedListeners.add(listener);
-  return () => sessionEndedListeners.delete(listener);
+  const listeners = sessionRuntime().sessionEndedListeners;
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Notified when an authenticated request is rejected with 403 (permissions may have changed). */
+export function onAccessDenied(listener: AccessDeniedListener): () => void {
+  const listeners = sessionRuntime().accessDeniedListeners;
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function notifyAccessDenied(error: ApiError): void {
+  if (error.status !== 403 || !ACCESS_DENIED_CODES.has(error.code)) return;
+  for (const listener of sessionRuntime().accessDeniedListeners) listener(error);
 }
 
 function notifySessionEnded(): void {
   if (shouldSuppressSessionEnded()) return;
   accessTokenStore.clear();
-  for (const listener of sessionEndedListeners) listener();
+  for (const listener of sessionRuntime().sessionEndedListeners) listener();
 }
 
 async function withCrossTabLock<T>(task: () => Promise<T>): Promise<T> {
@@ -70,19 +107,20 @@ async function withCrossTabLock<T>(task: () => Promise<T>): Promise<T> {
   return task();
 }
 
-/** Single-flight refresh shared by every caller in this tab. */
+/** Single-flight refresh shared by every caller in this tab (and across chunk copies). */
 export function refreshAccessToken(): Promise<RefreshOutcome> {
-  const refresher = sessionRefresher;
-  if (!refresher) return Promise.resolve('unauthenticated');
-  refreshInFlight ??= withCrossTabLock(refresher)
+  const state = sessionRuntime();
+  if (!state.refresher) return Promise.resolve('unauthenticated');
+  const refresher = state.refresher;
+  state.inFlight ??= withCrossTabLock(refresher)
     .then((outcome) => {
       if (outcome === 'unauthenticated') notifySessionEnded();
       return outcome;
     })
     .finally(() => {
-      refreshInFlight = null;
+      state.inFlight = null;
     });
-  return refreshInFlight;
+  return state.inFlight;
 }
 
 async function send(path: string, options: ApiRequestOptions): Promise<Response> {
@@ -123,7 +161,7 @@ async function parse<T>(response: Response): Promise<T> {
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   // No token in memory (e.g. after a reload): restore it before the first call.
-  if (options.auth && !accessTokenStore.get() && sessionRefresher) {
+  if (options.auth && !accessTokenStore.get() && sessionRuntime().refresher) {
     const outcome = await refreshAccessToken();
     if (outcome === 'unauthenticated') {
       throw new ApiError('http', 'Your session has ended.', 401, API_ERROR_CODES.SESSION_EXPIRED);
@@ -136,6 +174,7 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   const error = await ApiError.fromResponse(response);
   if (!(options.auth && response.status === 401 && REFRESHABLE_CODES.has(error.code))) {
     if (options.auth && shouldNotifySessionEnded(error)) notifySessionEnded();
+    if (options.auth) notifyAccessDenied(error);
     throw error;
   }
 
@@ -149,5 +188,6 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   if (retried.ok) return parse<T>(retried);
   const retryError = await ApiError.fromResponse(retried);
   if (retried.status === 401 && shouldNotifySessionEnded(retryError)) notifySessionEnded();
+  notifyAccessDenied(retryError);
   throw retryError;
 }

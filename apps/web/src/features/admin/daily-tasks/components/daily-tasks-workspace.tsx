@@ -17,7 +17,8 @@ import {
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
 import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
-import { listEmployees } from '@/features/admin/employees/api/employees';
+import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { listAssignableEmployees } from '@/features/admin/employees/api/employees';
 import { listProjects } from '@/features/admin/projects/api/projects';
 import {
   fetchDailyTaskBoard,
@@ -57,6 +58,9 @@ export function DailyTasksWorkspace({
   defaultView?: WorkspaceView;
 }) {
   const searchParams = useSearchParams();
+  const { has } = useAdminAccess();
+  const canAssignTasks = has('tasks.create') && has('tasks.assign');
+  const canManageWorkflow = has('tasks.update');
   const workspaceMode = searchParams.get('workspace') === 'my' ? 'my' : 'team';
   const clientToday = useMemo(() => localDateInputValue(), []);
   const [assignDate, setAssignDate] = useState(clientToday);
@@ -166,7 +170,7 @@ export function DailyTasksWorkspace({
 
   useEffect(() => {
     void fetchDailyTaskWorkflowStages().then((r) => setStages(r.stages));
-    void listEmployees({ pageSize: 100, status: 'ACTIVE' }).then((r) =>
+    void listAssignableEmployees().then((r) =>
       setEmployees(r.items.map((e) => ({ id: e.id, displayName: e.displayName }))),
     );
     void listProjects({ pageSize: 100, status: 'ACTIVE' }).then((r) =>
@@ -199,6 +203,7 @@ export function DailyTasksWorkspace({
   };
 
   const openAssign = (options?: { date?: string; workflowStageId?: string }) => {
+    if (!canAssignTasks) return;
     setEditTask(null);
     setAssignPrefillDate(options?.date ?? assignDate);
     setAssignPrefillStageId(options?.workflowStageId);
@@ -253,15 +258,17 @@ export function DailyTasksWorkspace({
                     <TabsTrigger value="calendar">Calendar</TabsTrigger>
                   </TabsList>
                 </Tabs>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
-                  onClick={() => openAssign({})}
-                >
-                  <Plus aria-hidden="true" />
-                  Assign Task
-                </Button>
+                {canAssignTasks ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+                    onClick={() => openAssign({})}
+                  >
+                    <Plus aria-hidden="true" />
+                    Assign Task
+                  </Button>
+                ) : null}
               </div>
             }
             bottomRow={
@@ -387,8 +394,10 @@ export function DailyTasksWorkspace({
                     onOpenTask={(task) => openTask(task)}
                     onEditTask={openEdit}
                     onRescheduleTask={(task) => openTask(task, { focusReschedule: true })}
-                    onAssignTask={(workflowStageId) => openAssign({ workflowStageId })}
-                    onManageWorkflow={() => setWorkflowOpen(true)}
+                    onAssignTask={
+                      canAssignTasks ? (workflowStageId) => openAssign({ workflowStageId }) : undefined
+                    }
+                    onManageWorkflow={canManageWorkflow ? () => setWorkflowOpen(true) : undefined}
                   />
                 </div>
               </>
@@ -425,7 +434,7 @@ export function DailyTasksWorkspace({
                   setView('kanban');
                 }}
                 onOpenTask={(task) => openTask(task)}
-                onCreateForDate={(date) => openAssign({ date })}
+                onCreateForDate={canAssignTasks ? (date) => openAssign({ date }) : undefined}
               />
             </div>
           ) : null}

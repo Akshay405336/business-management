@@ -4,16 +4,9 @@ import {
   type AdminNavGroup,
   type AdminNavItem,
 } from './admin-nav-config';
+import { canAccessAdminPath } from './admin-route-permissions';
 
 export type AdminNavGroupWithAccess = AdminNavGroup;
-
-function itemAllowed(
-  required: readonly PermissionKey[],
-  granted: ReadonlySet<PermissionKey>,
-): boolean {
-  if (required.length === 0) return true;
-  return required.some((key) => granted.has(key));
-}
 
 export function filterAdminNav(
   permissions: readonly PermissionKey[],
@@ -25,7 +18,7 @@ export function filterAdminNav(
     const items: AdminNavItem[] = [];
     for (const item of group.items) {
       if (item.kind === 'soon') continue;
-      if (itemAllowed(item.requiredPermissions, granted)) items.push(item);
+      if (canAccessAdminPath(item.href, granted)) items.push(item);
     }
     if (items.length > 0) {
       groups.push({ ...group, items });

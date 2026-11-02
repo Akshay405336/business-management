@@ -1,5 +1,5 @@
 import type { EmployeeSalaryStructureInput } from '@techwin/validation';
-import type { EmployeeDetail, EmployeeEmploymentType } from '../types';
+import type { EmployeeDetail, EmployeeEmploymentStatus, EmployeeEmploymentType } from '../types';
 import type { EmployeeProfileImageFormValue } from '../components/employee-profile-image-field';
 
 export type EmployeeFormState = {
@@ -10,13 +10,19 @@ export type EmployeeFormState = {
   alternatePhone: string;
   employeeCode: string;
   jobTitle: string;
+  department: string;
   employmentType: EmployeeEmploymentType;
+  employmentStatus: EmployeeEmploymentStatus;
   dateOfJoining: string;
   workLocation: string;
   probationEndDate: string;
   employmentEndDate: string;
   notes: string;
   profileImage: EmployeeProfileImageFormValue;
+  /** Create only: provision a sign-in account for this employee. */
+  loginEnabled: boolean;
+  password: string;
+  confirmPassword: string;
 };
 
 export function emptyEmployeeProfileImage(): EmployeeProfileImageFormValue {
@@ -37,18 +43,24 @@ export function emptyEmployeeForm(): EmployeeFormState {
     alternatePhone: '',
     employeeCode: '',
     jobTitle: '',
+    department: '',
     employmentType: 'FULL_TIME',
+    employmentStatus: 'ACTIVE',
     dateOfJoining: '',
     workLocation: '',
     probationEndDate: '',
     employmentEndDate: '',
     notes: '',
     profileImage: emptyEmployeeProfileImage(),
+    loginEnabled: false,
+    password: '',
+    confirmPassword: '',
   };
 }
 
 export function employeeDetailToForm(detail: EmployeeDetail): EmployeeFormState {
   return {
+    ...emptyEmployeeForm(),
     firstName: detail.firstName,
     lastName: detail.lastName,
     workEmail: detail.workEmail,
@@ -56,7 +68,9 @@ export function employeeDetailToForm(detail: EmployeeDetail): EmployeeFormState 
     alternatePhone: detail.alternatePhone ?? '',
     employeeCode: detail.employeeCode,
     jobTitle: detail.jobTitle,
+    department: detail.department ?? '',
     employmentType: detail.employmentType,
+    employmentStatus: detail.employmentStatus,
     dateOfJoining: detail.dateOfJoining,
     workLocation: detail.workLocation ?? '',
     probationEndDate: detail.probationEndDate ?? '',
@@ -87,6 +101,7 @@ export function employeeFormToPayload(
     phone: form.phone,
     alternatePhone: form.alternatePhone.trim() ? form.alternatePhone : null,
     jobTitle: form.jobTitle.trim(),
+    department: form.department.trim() || null,
     employmentType: form.employmentType,
     dateOfJoining: form.dateOfJoining,
     probationEndDate: form.probationEndDate.trim() ? form.probationEndDate : null,
@@ -97,5 +112,19 @@ export function employeeFormToPayload(
       ? { profileImageStoredObjectId: options.profileImageStoredObjectId }
       : {}),
     ...(options.includeSalary ? { salaryStructure: options.salaryForm } : {}),
+  };
+}
+
+/** Create-only fields: initial status and optional login account. */
+export function employeeFormToCreateExtras(form: EmployeeFormState) {
+  return {
+    employmentStatus: form.employmentStatus,
+    ...(form.loginEnabled
+      ? {
+          loginEnabled: true,
+          password: form.password,
+          confirmPassword: form.confirmPassword,
+        }
+      : {}),
   };
 }

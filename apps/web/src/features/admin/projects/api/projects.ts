@@ -1,4 +1,4 @@
-import { PROJECT_ROUTES } from '@techwin/contracts';
+import { PROJECT_ROUTES, type ProjectClientOptionListResponse } from '@techwin/contracts';
 import { apiRequest } from '@/shared/api/api-client';
 import { buildQueryString } from '@/features/admin/crm/utils/query-string';
 import type {
@@ -36,6 +36,15 @@ export function previewProjectNumber(signal?: AbortSignal): Promise<ProjectNumbe
 
 export function listProjectManagers(signal?: AbortSignal): Promise<ProjectManagersResponse> {
   return apiRequest<ProjectManagersResponse>(PROJECT_ROUTES.projectManagers, { auth: true, signal });
+}
+
+export function listProjectClientOptions(
+  signal?: AbortSignal,
+): Promise<ProjectClientOptionListResponse> {
+  return apiRequest<ProjectClientOptionListResponse>(PROJECT_ROUTES.projectClientOptions, {
+    auth: true,
+    signal,
+  });
 }
 
 export function listClientQuotations(

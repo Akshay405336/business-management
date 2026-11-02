@@ -28,7 +28,8 @@ import {
   CRM_PIPELINE_FORM_TEXTAREA_CLASS,
 } from '@/features/admin/crm/constants';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
-import { listEmployees } from '@/features/admin/employees/api/employees';
+import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { listAssignableEmployees } from '@/features/admin/employees/api/employees';
 import { getProject, listProjects } from '@/features/admin/projects/api/projects';
 import type { ProjectPhase } from '@/features/admin/projects/types';
 import { cn } from '@/shared/lib/utils';
@@ -77,6 +78,7 @@ export function DailyTaskAssignDialog({
 }) {
   const isEdit = Boolean(editTask);
   const toast = useAdminToast();
+  const canAssign = useAdminAccess().has('tasks.assign');
   const pendingPhaseIdRef = useRef<string | null>(null);
   const { pending, run } = useAsyncAction();
   const [dailyStages, setDailyStages] = useState<readonly DailyTaskWorkflowStage[]>([]);
@@ -143,7 +145,7 @@ export function DailyTaskAssignDialog({
         '';
       if (fallback) setWorkflowStageId(fallback);
     });
-    void listEmployees({ pageSize: 100, status: 'ACTIVE' }).then((r) => {
+    void listAssignableEmployees().then((r) => {
       const active = r.items.map((e) => ({ id: e.id, displayName: e.displayName, jobTitle: e.jobTitle }));
       const activeIds = new Set(active.map((e) => e.id));
       const assignedElsewhere = (editTask?.assignees ?? [])
@@ -234,7 +236,7 @@ export function DailyTaskAssignDialog({
             category: data.category ?? null,
             priority: data.priority,
             dueDate: data.dueDate ?? null,
-            employeeIds: data.employeeIds,
+            ...(canAssign ? { employeeIds: data.employeeIds } : {}),
             ...(data.type === 'PROJECT'
               ? { projectId: data.projectId, projectPhaseId: data.projectPhaseId }
               : {}),
@@ -417,6 +419,7 @@ export function DailyTaskAssignDialog({
                     <input
                       type="checkbox"
                       checked={employeeIds.includes(employee.id)}
+                      disabled={!canAssign}
                       onChange={() => toggleEmployee(employee.id)}
                     />
                     <span className="text-sm font-medium">{employee.displayName}</span>

@@ -25,15 +25,19 @@ export function RolePermissionMatrix({
   catalog,
   selected,
   readOnly,
+  grantable,
   onToggle,
   onReplaceSelection,
 }: {
   catalog: readonly PermissionDefinition[];
   selected: ReadonlySet<PermissionKey>;
   readOnly: boolean;
+  /** Permissions the editor may toggle; omitted means all (platform super admin). */
+  grantable?: ReadonlySet<PermissionKey>;
   onToggle: (key: PermissionKey, checked: boolean) => void;
   onReplaceSelection: (keys: readonly PermissionKey[]) => void;
 }) {
+  const canToggle = (key: PermissionKey) => !grantable || grantable.has(key);
   const [search, setSearch] = useState('');
   const [collapsedModules, setCollapsedModules] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -73,6 +77,7 @@ export function RolePermissionMatrix({
     if (readOnly) return;
     const keys = new Set(selected);
     for (const key of moduleKeys(moduleName)) {
+      if (!canToggle(key)) continue;
       if (checked) keys.add(key);
       else keys.delete(key);
     }
@@ -81,7 +86,7 @@ export function RolePermissionMatrix({
 
   const clearSelection = () => {
     if (readOnly) return;
-    onReplaceSelection([]);
+    onReplaceSelection([...selected].filter((key) => !canToggle(key)));
   };
 
   const visibleItems = (moduleName: string) => {
@@ -175,13 +180,16 @@ export function RolePermissionMatrix({
                         >
                           <Checkbox
                             checked={selected.has(item.key)}
-                            disabled={readOnly}
+                            disabled={readOnly || !canToggle(item.key)}
                             onCheckedChange={(value) => onToggle(item.key, value === true)}
                             aria-label={`${item.action}: ${item.description}`}
                           />
                           <span className="grid min-w-0 gap-0.5">
                             <span className="text-sm font-medium">{item.action}</span>
-                            <span className="text-muted-foreground text-xs">{item.description}</span>
+                            <span className="text-muted-foreground text-xs">
+                              {item.description}
+                              {!readOnly && !canToggle(item.key) ? ' (you do not have this permission)' : ''}
+                            </span>
                           </span>
                         </label>
                       </li>

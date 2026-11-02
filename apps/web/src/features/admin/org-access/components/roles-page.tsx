@@ -79,6 +79,7 @@ import {
   updateOrgRole,
 } from '../api/org-access';
 import { DEFAULT_ORG_ROLE_PAGE_SIZE, ROLE_SEARCH_DEBOUNCE_MS } from '../constants';
+import { useAuthenticatedAdmin } from '@/features/admin/auth/hooks/use-admin-session';
 import { useMyPermissions } from '../hooks/use-my-permissions';
 import type { OrganizationRoleStatus, OrgRoleListItem } from '../types';
 import { applyOrgAccessFieldErrors, describeOrgAccessError } from '../utils/errors';
@@ -118,7 +119,12 @@ function RoleStatusBadge({ status }: { status: OrganizationRoleStatus }) {
 export function RolesPage() {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
-  const { has } = useMyPermissions();
+  const { has, permissions } = useMyPermissions();
+  const { admin } = useAuthenticatedAdmin();
+  const grantablePermissions = useMemo(
+    () => (admin.role === 'SUPER_ADMIN' ? undefined : new Set(permissions)),
+    [admin.role, permissions],
+  );
 
   const canRead = has('roles.read');
   const canCreate = has('roles.create');
@@ -703,6 +709,7 @@ export function RolesPage() {
                     catalog={permissionCatalog}
                     selected={selectedPermissions}
                     readOnly={permissionsReadOnly || (editorMode === 'edit' && !canUpdate)}
+                    grantable={grantablePermissions}
                     onToggle={togglePermission}
                     onReplaceSelection={replacePermissions}
                   />

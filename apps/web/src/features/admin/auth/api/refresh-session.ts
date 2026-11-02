@@ -26,11 +26,7 @@ export async function refreshSession(): Promise<RefreshOutcome> {
     accessTokenStore.set(response.accessToken);
     return 'refreshed';
   } catch (error) {
-    if (
-      isApiError(error) &&
-      error.kind === 'http' &&
-      (error.status === 401 || error.status === 403)
-    ) {
+    if (isApiError(error) && error.kind === 'http' && error.status === 401) {
       accessTokenStore.clear();
       return 'unauthenticated';
     }

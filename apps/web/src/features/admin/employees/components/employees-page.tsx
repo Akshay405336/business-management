@@ -54,6 +54,8 @@ import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
 import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
+import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { useAuthenticatedAdmin } from '@/features/admin/auth/hooks/use-admin-session';
 import { cn } from '@/shared/lib/utils';
 import { changeEmployeeStatus, deleteEmployee, listEmployees } from '../api/employees';
 import { DEFAULT_EMPLOYEE_PAGE_SIZE, EMPLOYEE_EMPLOYMENT_TYPES, EMPLOYEE_STATUSES } from '../constants';
@@ -64,7 +66,11 @@ import type {
   EmployeeListQuery,
 } from '../types';
 import { describeEmployeeError } from '../utils/errors';
-import { labelEmploymentType, labelEmployeeStatus } from '../utils/labels';
+import {
+  describeEmployeeDeletion,
+  labelEmploymentType,
+  labelEmployeeStatus,
+} from '../utils/labels';
 import { EmployeeAvatar } from './employee-avatar';
 import { EmployeeDetailDialog } from './employee-detail-dialog';
 import { EmployeeFormDialog } from './employee-form-dialog';
@@ -89,6 +95,11 @@ function employeeStatusBadgeClass(status: EmployeeEmploymentStatus): string {
 export function EmployeesPage() {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
+  const { has, hasAny } = useAdminAccess();
+  const { admin } = useAuthenticatedAdmin();
+  const canCreate = has('employees.create');
+  const canUpdate = has('employees.update');
+  const canDeleteLoginAccounts = hasAny('users.deactivate', 'memberships.manage');
 
   const [items, setItems] = useState<readonly EmployeeListItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -196,7 +207,13 @@ export function EmployeesPage() {
       employee.employmentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     try {
       await run(() => changeEmployeeStatus(employee.id, { status: next }));
-      toast.success(next === 'ACTIVE' ? 'Employee activated.' : 'Employee deactivated.');
+      toast.success(
+        next === 'ACTIVE'
+          ? 'Employee activated.'
+          : employee.loginAccess
+            ? 'Employee deactivated. Their sign-in access was revoked.'
+            : 'Employee deactivated.',
+      );
       await load();
     } catch (failure) {
       toast.error(describeEmployeeError(failure));
@@ -206,8 +223,8 @@ export function EmployeesPage() {
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
-      await run(() => deleteEmployee(deleteTarget.id));
-      toast.success('Employee deleted.');
+      const result = await run(() => deleteEmployee(deleteTarget.id));
+      toast.success(describeEmployeeDeletion(result?.loginAccount ?? 'NONE'));
       setDeleteTarget(null);
       await load();
     } catch (failure) {
@@ -219,6 +236,12 @@ export function EmployeesPage() {
     setDetailId(employee.id);
     setDetailOpen(true);
   };
+
+  const isOwnAccount = (employee: EmployeeListItem) =>
+    employee.platformAdminId !== null && employee.platformAdminId === admin.id;
+
+  const canDeleteEmployee = (employee: EmployeeListItem) =>
+    !isOwnAccount(employee) && (!employee.loginAccess?.ownsAccount || canDeleteLoginAccounts);
 
   return (
     <div className="grid w-full min-w-0 max-w-full gap-3 pt-1">
@@ -327,15 +350,17 @@ export function EmployeesPage() {
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
-                  onClick={openCreate}
-                >
-                  <Plus aria-hidden="true" />
-                  Add employee
-                </Button>
+                {canCreate ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+                    onClick={openCreate}
+                  >
+                    <Plus aria-hidden="true" />
+                    Add employee
+                  </Button>
+                ) : null}
               </>
             }
           />
@@ -356,14 +381,13 @@ export function EmployeesPage() {
             tableClassName="table-fixed [&_[data-slot=table-head]]:h-auto [&_[data-slot=table-head]]:py-3 [&_[data-slot=table-cell]]:py-3"
             tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
             phase={tablePhase}
-            colSpan={7}
+            colSpan={6}
             skeletonColumns={CRM_EMPLOYEES_TABLE_SKELETON}
             header={
               <TableRow className="hover:bg-transparent">
                 <TableHead className={CRM_EMPLOYEES_TABLE_COLUMN_CLASS.employee}>Employee</TableHead>
-                <TableHead className={CRM_EMPLOYEES_TABLE_COLUMN_CLASS.jobTitle}>Job title</TableHead>
-                <TableHead className={CRM_EMPLOYEES_TABLE_COLUMN_CLASS.email}>Work email</TableHead>
-                <TableHead className={CRM_EMPLOYEES_TABLE_COLUMN_CLASS.phone}>Phone</TableHead>
+                <TableHead className={CRM_EMPLOYEES_TABLE_COLUMN_CLASS.jobTitle}>Designation</TableHead>
+                <TableHead className={CRM_EMPLOYEES_TABLE_COLUMN_CLASS.contact}>Contact</TableHead>
                 <TableHead className={CRM_EMPLOYEES_TABLE_COLUMN_CLASS.joined}>Joined</TableHead>
                 <TableHead className={cn(CRM_EMPLOYEES_TABLE_COLUMN_CLASS.status, 'whitespace-nowrap')}>
                   Status
@@ -434,8 +458,11 @@ export function EmployeesPage() {
                     </TooltipTrigger>
                     <TooltipContent side="top">{employee.jobTitle}</TooltipContent>
                   </Tooltip>
+                  {employee.department ? (
+                    <p className="text-muted-foreground truncate text-[11px]">{employee.department}</p>
+                  ) : null}
                 </TableCell>
-                <TableCell className={cn(CRM_EMPLOYEES_TABLE_COLUMN_CLASS.email, 'min-w-0')}>
+                <TableCell className={cn(CRM_EMPLOYEES_TABLE_COLUMN_CLASS.contact, 'min-w-0')}>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <span className="text-muted-foreground block truncate text-sm">{employee.workEmail}</span>
@@ -444,9 +471,7 @@ export function EmployeesPage() {
                       {employee.workEmail}
                     </TooltipContent>
                   </Tooltip>
-                </TableCell>
-                <TableCell className={cn(CRM_EMPLOYEES_TABLE_COLUMN_CLASS.phone, 'min-w-0')}>
-                  <span className="text-muted-foreground block truncate text-sm tabular-nums">
+                  <span className="text-muted-foreground block truncate text-[11px] tabular-nums">
                     {employee.phone}
                   </span>
                 </TableCell>
@@ -463,47 +488,57 @@ export function EmployeesPage() {
                     {labelEmployeeStatus(employee.employmentStatus)}
                   </Badge>
                 </TableCell>
-                <TableCell className={cn(CRM_EMPLOYEES_TABLE_COLUMN_CLASS.actions, 'min-w-0 pl-4')}>
-                  <div className="flex w-full shrink-0 items-center justify-end gap-1">
-                    <TableIconButton
-                      label={
-                        employee.employmentStatus === 'ACTIVE'
-                          ? `Deactivate ${employee.displayName}`
-                          : `Activate ${employee.displayName}`
-                      }
-                      tone="default"
-                      className={
-                        employee.employmentStatus === 'ACTIVE'
-                          ? 'text-red-800 hover:bg-red-800/10 hover:text-red-900'
-                          : 'text-emerald-800 hover:bg-emerald-800/10 hover:text-emerald-900'
-                      }
-                      disabled={pending || employee.employmentStatus === 'TERMINATED'}
-                      onClick={() => void toggleStatus(employee)}
-                    >
-                      {employee.employmentStatus === 'ACTIVE' ? (
-                        <ToggleRight className="size-4 stroke-[2]" aria-hidden="true" />
-                      ) : (
-                        <ToggleLeft className="size-4 stroke-[2]" aria-hidden="true" />
-                      )}
-                    </TableIconButton>
-                    <TableIconButton
-                      label={`Edit ${employee.displayName}`}
-                      tone="default"
-                      className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
-                      disabled={pending}
-                      onClick={() => openEdit(employee)}
-                    >
-                      <SquarePen className="size-4" aria-hidden="true" />
-                    </TableIconButton>
-                    <TableIconButton
-                      label={`Delete ${employee.displayName}`}
-                      tone="default"
-                      className="text-neutral-900 hover:bg-neutral-900/10 hover:text-black"
-                      disabled={pending}
-                      onClick={() => setDeleteTarget(employee)}
-                    >
-                      <Trash2 className="size-4" aria-hidden="true" />
-                    </TableIconButton>
+                <TableCell className={cn(CRM_EMPLOYEES_TABLE_COLUMN_CLASS.actions, 'min-w-0')}>
+                  <div className="flex w-full shrink-0 items-center justify-end gap-2.5">
+                    {canUpdate ? (
+                      <TableIconButton
+                        label={
+                          employee.employmentStatus === 'ACTIVE'
+                            ? `Deactivate ${employee.displayName}`
+                            : `Activate ${employee.displayName}`
+                        }
+                        tone="default"
+                        className={
+                          employee.employmentStatus === 'ACTIVE'
+                            ? 'text-red-800 hover:bg-red-800/10 hover:text-red-900'
+                            : 'text-emerald-800 hover:bg-emerald-800/10 hover:text-emerald-900'
+                        }
+                        disabled={
+                          pending ||
+                          employee.employmentStatus === 'TERMINATED' ||
+                          isOwnAccount(employee)
+                        }
+                        onClick={() => void toggleStatus(employee)}
+                      >
+                        {employee.employmentStatus === 'ACTIVE' ? (
+                          <ToggleRight className="size-4 stroke-[2]" aria-hidden="true" />
+                        ) : (
+                          <ToggleLeft className="size-4 stroke-[2]" aria-hidden="true" />
+                        )}
+                      </TableIconButton>
+                    ) : null}
+                    {canUpdate ? (
+                      <TableIconButton
+                        label={`Edit ${employee.displayName}`}
+                        tone="default"
+                        className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                        disabled={pending}
+                        onClick={() => openEdit(employee)}
+                      >
+                        <SquarePen className="size-4" aria-hidden="true" />
+                      </TableIconButton>
+                    ) : null}
+                    {canUpdate ? (
+                      <TableIconButton
+                        label={`Delete ${employee.displayName}`}
+                        tone="default"
+                        className="text-neutral-900 hover:bg-neutral-900/10 hover:text-black"
+                        disabled={pending || !canDeleteEmployee(employee)}
+                        onClick={() => setDeleteTarget(employee)}
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                      </TableIconButton>
+                    ) : null}
                   </div>
                 </TableCell>
               </TableRow>
@@ -527,16 +562,21 @@ export function EmployeesPage() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete employee?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Delete {deleteTarget?.displayName ?? 'this employee'} permanently?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes {deleteTarget?.displayName ?? 'this employee'} from your organization.
-              Direct reports must be reassigned first. This action cannot be undone.
+              This action permanently deletes the employee and their exclusively linked login account.
+              This cannot be undone.
+              {deleteTarget?.loginAccess && !deleteTarget.loginAccess.ownsAccount
+                ? ' Their sign-in account was not created for this employee, so it will be kept.'
+                : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <AlertDialogAction disabled={pending} onClick={() => void confirmDelete()}>
-              Delete
+              Delete permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

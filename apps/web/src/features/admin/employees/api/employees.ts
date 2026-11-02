@@ -1,7 +1,11 @@
 import { EMPLOYEE_ROUTES } from '@techwin/contracts';
 import { apiRequest } from '@/shared/api/api-client';
 import { buildQueryString } from '@/features/admin/crm/utils/query-string';
-import type { EmployeeProfileImageUploadResponse } from '@techwin/contracts';
+import type {
+  AssignableEmployeeListResponse,
+  DeleteEmployeeResponse,
+  EmployeeProfileImageUploadResponse,
+} from '@techwin/contracts';
 import type {
   ChangeEmployeeStatusRequest,
   CreateEmployeeRequest,
@@ -23,6 +27,17 @@ export function listEmployees(
     auth: true,
     signal,
   });
+}
+
+/** Active employees for assignment pickers; available to task/project roles without HR access. */
+export function listAssignableEmployees(
+  search?: string,
+  signal?: AbortSignal,
+): Promise<AssignableEmployeeListResponse> {
+  return apiRequest<AssignableEmployeeListResponse>(
+    `${EMPLOYEE_ROUTES.assignableEmployees}${buildQueryString({ search })}`,
+    { auth: true, signal },
+  );
 }
 
 export function previewEmployeeCode(signal?: AbortSignal): Promise<EmployeeCodePreviewResponse> {
@@ -55,8 +70,11 @@ export function changeEmployeeStatus(
   });
 }
 
-export function deleteEmployee(id: string): Promise<void> {
-  return apiRequest<void>(EMPLOYEE_ROUTES.employee(id), { method: 'DELETE', auth: true });
+export function deleteEmployee(id: string): Promise<DeleteEmployeeResponse> {
+  return apiRequest<DeleteEmployeeResponse>(EMPLOYEE_ROUTES.employee(id), {
+    method: 'DELETE',
+    auth: true,
+  });
 }
 
 export async function uploadEmployeeProfileImage(

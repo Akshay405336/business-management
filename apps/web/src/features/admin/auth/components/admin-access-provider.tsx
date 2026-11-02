@@ -20,8 +20,11 @@ import { describeOrgAccessError } from '@/features/admin/org-access/utils/errors
 import { filterAdminNav, type AdminNavGroupWithAccess } from '@/features/admin/navigation/filter-admin-nav';
 import { canAccessAdminPath } from '@/features/admin/navigation/admin-route-permissions';
 import { useRouter, usePathname } from 'next/navigation';
+import { onAccessDenied } from '@/shared/api/api-client';
 import { loginPath } from '../utils/auth-errors';
 import { readPostAuthBootstrap } from '../utils/post-auth-bootstrap';
+
+const ACCESS_DENIED_REFRESH_INTERVAL_MS = 5_000;
 
 function createInitialPermissions(): readonly PermissionKey[] | null {
   return readPostAuthBootstrap()?.permissions ?? null;
@@ -72,6 +75,19 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const lastSilentRefreshAt = useRef(0);
+
+  useEffect(() => {
+    return onAccessDenied(() => {
+      const now = Date.now();
+      if (now - lastSilentRefreshAt.current < ACCESS_DENIED_REFRESH_INTERVAL_MS) return;
+      lastSilentRefreshAt.current = now;
+      getMyPermissions()
+        .then((response) => setPermissions(response.permissions))
+        .catch(() => undefined);
+    });
   }, []);
 
   useEffect(() => {

@@ -36,7 +36,7 @@ function TaskKanbanColumn({
 }: {
   column: DailyTaskBoardColumn;
   isDropTarget?: boolean;
-  onAddTask: () => void;
+  onAddTask?: () => void;
   children: ReactNode;
 }) {
   const stage = column.stage;
@@ -66,16 +66,18 @@ function TaskKanbanColumn({
               {column.tasks.length}
             </span>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="size-9 shrink-0 rounded-lg border-dashed border-black/15 bg-card/80 shadow-none hover:bg-card"
-            aria-label={`Add task to ${stage.name}`}
-            onClick={onAddTask}
-          >
-            <Plus className="size-4" />
-          </Button>
+          {onAddTask ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-9 shrink-0 rounded-lg border-dashed border-black/15 bg-card/80 shadow-none hover:bg-card"
+              aria-label={`Add task to ${stage.name}`}
+              onClick={onAddTask}
+            >
+              <Plus className="size-4" />
+            </Button>
+          ) : null}
         </div>
         <div
           aria-hidden
@@ -106,8 +108,8 @@ export function DailyTaskKanbanBoard({
   onOpenTask: (task: DailyTaskListItem) => void;
   onEditTask: (task: DailyTaskListItem) => void;
   onRescheduleTask: (task: DailyTaskListItem) => void;
-  onAssignTask: (workflowStageId: string) => void;
-  onManageWorkflow: () => void;
+  onAssignTask?: (workflowStageId: string) => void;
+  onManageWorkflow?: () => void;
 }) {
   const toast = useAdminToast();
   const [activeTask, setActiveTask] = useState<DailyTaskListItem | null>(null);
@@ -166,16 +168,18 @@ export function DailyTaskKanbanBoard({
     >
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
         <p className="text-foreground text-sm font-semibold tracking-tight">Daily workflow</p>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button type="button" variant="ghost" size="icon-sm" className="size-8" aria-label="Board options">
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onManageWorkflow}>Manage workflow stages</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {onManageWorkflow ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-sm" className="size-8" aria-label="Board options">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={onManageWorkflow}>Manage workflow stages</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
       <div
         role="region"
@@ -187,7 +191,7 @@ export function DailyTaskKanbanBoard({
             key={column.stage.id}
             column={column}
             isDropTarget={overStageId === column.stage.id}
-            onAddTask={() => onAssignTask(column.stage.id)}
+            onAddTask={onAssignTask ? () => onAssignTask(column.stage.id) : undefined}
           >
             {column.tasks.length === 0 ? (
               <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center rounded-md border border-dashed border-black/15 bg-card/50 px-2 py-6 text-center text-xs">

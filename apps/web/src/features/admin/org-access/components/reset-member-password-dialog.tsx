@@ -1,11 +1,7 @@
 'use client';
 
-import {
-  PLATFORM_PASSWORD_MIN_LENGTH,
-  platformNewPasswordSchema,
-  resetMemberPasswordRequestSchema,
-} from '@techwin/validation';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { platformNewPasswordSchema, resetMemberPasswordRequestSchema } from '@techwin/validation';
+import { Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 import { Button } from '@/components/ui/button';
@@ -25,15 +21,14 @@ import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
 import { cn } from '@/shared/lib/utils';
 import { humanizeOrgAccessFieldError, mapOrgAccessZodFieldErrors } from '../utils/errors';
 import type { OrgMemberListItem } from '../types';
+import { PASSWORD_REQUIREMENTS, PasswordToggle } from './password-toggle';
 
 const FORM_ID = 'reset-member-password-form';
-
-const PASSWORD_REQUIREMENTS = `At least ${PLATFORM_PASSWORD_MIN_LENGTH} characters with upper- and lower-case letters, a digit, and a symbol.`;
 
 type ResetMemberPasswordDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  member: OrgMemberListItem | null;
+  member: Pick<OrgMemberListItem, 'displayName' | 'email'> | null;
   pending: boolean;
   apiFieldErrors?: Record<string, string>;
   onDismissApiFieldError?: (key: string) => void;
@@ -222,27 +217,5 @@ export function ResetMemberPasswordDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function PasswordToggle({
-  pressed,
-  onToggle,
-  disabled,
-}: {
-  pressed: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onToggle}
-      className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50"
-      aria-label={pressed ? 'Hide password' : 'Show password'}
-    >
-      {pressed ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
-    </button>
   );
 }

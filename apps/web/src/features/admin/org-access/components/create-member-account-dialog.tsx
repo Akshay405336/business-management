@@ -2,11 +2,10 @@
 
 import {
   optionalLeadPhoneInputSchema,
-  PLATFORM_PASSWORD_MIN_LENGTH,
   provisionMemberRequestSchema,
   safeParseProvisionMemberRequest,
 } from '@techwin/validation';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 import { Badge } from '@/components/ui/badge';
@@ -33,10 +32,9 @@ import { ORG_ACCESS_CREATE_ACCOUNT_GENERIC_ERROR } from '../utils/org-access-for
 import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
 import { cn } from '@/shared/lib/utils';
 import type { OrgRoleListItem } from '../types';
+import { PASSWORD_REQUIREMENTS, PasswordToggle } from './password-toggle';
 
 const CREATE_ACCOUNT_FORM_ID = 'create-member-account-form';
-
-const PASSWORD_REQUIREMENTS = `At least ${PLATFORM_PASSWORD_MIN_LENGTH} characters with upper- and lower-case letters, a digit, and a symbol.`;
 
 type CreateMemberAccountDialogProps = {
   open: boolean;
@@ -332,8 +330,8 @@ export function CreateMemberAccountDialog({
                 >
                   <legend className="sr-only">Assigned roles</legend>
                   <p className="text-muted-foreground mb-2 text-xs leading-snug">
-                    Choose one or more organization roles this member can use after sign-in. Only roles you are
-                    allowed to assign are listed.
+                    Choose the roles this member can use after sign-in. Owner is the built-in role and
+                    is never assigned automatically. Only roles you are allowed to assign are listed.
                   </p>
                   {selectedRoles.length > 0 ? (
                     <div className="mb-2 flex min-w-0 flex-wrap gap-1" aria-live="polite">
@@ -388,7 +386,7 @@ export function CreateMemberAccountDialog({
               </CrmFormField>
 
               <p className="text-muted-foreground text-xs leading-snug">
-                Link employee records from the Employees module after the account is created.
+                An employee record with the same work email is linked to this account automatically.
               </p>
             </div>
           </div>
@@ -411,27 +409,5 @@ export function CreateMemberAccountDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function PasswordToggle({
-  pressed,
-  onToggle,
-  disabled,
-}: {
-  pressed: boolean;
-  onToggle: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onToggle}
-      className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-md outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50"
-      aria-label={pressed ? 'Hide password' : 'Show password'}
-    >
-      {pressed ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}
-    </button>
   );
 }
