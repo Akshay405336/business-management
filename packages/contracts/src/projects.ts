@@ -9,6 +9,7 @@ export const PROJECT_ROUTES = {
   projectComplete: (id: string) => `${API_PREFIX}/projects/${id}/complete`,
   projectNumberPreview: `${API_PREFIX}/projects/number-preview`,
   projectManagers: `${API_PREFIX}/projects/managers`,
+  projectClientOptions: `${API_PREFIX}/projects/client-options`,
   clientQuotations: (clientId: string) => `${API_PREFIX}/projects/clients/${clientId}/quotations`,
 } as const;
 
@@ -41,6 +42,19 @@ export interface ProjectManagerOption {
   readonly id: string;
   readonly displayName: string;
   readonly email: string;
+}
+
+/** Client fields needed to pick a project client without CRM access. */
+export interface ProjectClientOption {
+  readonly id: string;
+  readonly name: string;
+  readonly primaryContact: string;
+  readonly phone: string | null;
+  readonly status: 'ACTIVE' | 'INACTIVE';
+}
+
+export interface ProjectClientOptionListResponse {
+  readonly clients: readonly ProjectClientOption[];
 }
 
 export interface ProjectPhase {

@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { employeeSalaryStructureSchema } from './employee-salary.js';
 import { profileImageStoredObjectIdSchema } from './stored-object.js';
 import { leadEmailSchema, leadPhoneSchema } from './lead-contact.js';
-
-const uuid = z.string().uuid();
+import { PLATFORM_PASSWORD_MAX_LENGTH, platformNewPasswordSchema } from './platform-auth.schemas.js';
 
 export const employeeEmploymentStatusSchema = z.enum([
   'ACTIVE',
@@ -32,7 +31,8 @@ const employeeContactFields = {
 };
 
 const employeeEmploymentFields = {
-  jobTitle: z.string().trim().min(1, 'Enter a job title.').max(120),
+  jobTitle: z.string().trim().min(1, 'Enter a designation.').max(120),
+  department: z.string().trim().max(120, 'Department is too long.').nullable().optional(),
   employmentType: employeeEmploymentTypeSchema,
   dateOfJoining: dateOnly,
   probationEndDate: dateOnly.nullable().optional(),
@@ -41,17 +41,53 @@ const employeeEmploymentFields = {
   profileImageUrl: z.string().url().max(512).nullable().optional(),
   profileImageStoredObjectId: profileImageStoredObjectIdSchema,
   notes: z.string().max(4000).optional(),
-  platformAdminId: uuid.nullable().optional(),
+};
+
+const employeeLoginFields = {
+  loginEnabled: z.boolean().optional(),
+  password: z.string().max(PLATFORM_PASSWORD_MAX_LENGTH, 'Password is too long.').optional(),
+  confirmPassword: z.string().max(PLATFORM_PASSWORD_MAX_LENGTH).optional(),
 };
 
 export const createEmployeeRequestSchema = z
   .object({
     ...employeeContactFields,
     ...employeeEmploymentFields,
+    ...employeeLoginFields,
+    employmentStatus: employeeEmploymentStatusSchema.optional(),
     salaryStructure: employeeSalaryStructureSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.loginEnabled) {
+      const password = platformNewPasswordSchema.safeParse(value.password ?? '');
+      if (!password.success) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['password'],
+          message: password.error.issues[0]?.message ?? 'Enter a valid password.',
+        });
+      }
+      if (!value.confirmPassword) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['confirmPassword'],
+          message: 'Confirm the password.',
+        });
+      } else if (value.confirmPassword !== value.password) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['confirmPassword'],
+          message: 'Passwords do not match.',
+        });
+      }
+    } else if (value.password || value.confirmPassword) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['loginEnabled'],
+        message: 'Enable sign-in to set a password.',
+      });
+    }
     if (value.probationEndDate && value.probationEndDate < value.dateOfJoining) {
       ctx.addIssue({
         code: 'custom',
@@ -76,6 +112,7 @@ const updateEmployeeFieldsSchema = z
     phone: employeeContactFields.phone.optional(),
     alternatePhone: employeeContactFields.alternatePhone,
     jobTitle: employeeEmploymentFields.jobTitle.optional(),
+    department: employeeEmploymentFields.department,
     employmentType: employeeEmploymentFields.employmentType.optional(),
     dateOfJoining: employeeEmploymentFields.dateOfJoining.optional(),
     probationEndDate: employeeEmploymentFields.probationEndDate,
@@ -84,7 +121,6 @@ const updateEmployeeFieldsSchema = z
     profileImageUrl: employeeEmploymentFields.profileImageUrl,
     profileImageStoredObjectId: employeeEmploymentFields.profileImageStoredObjectId,
     notes: employeeEmploymentFields.notes,
-    platformAdminId: employeeEmploymentFields.platformAdminId,
     salaryStructure: employeeSalaryStructureSchema.optional(),
   })
   .strict();
@@ -129,6 +165,20 @@ export function parseEmployeeListQuery(input: unknown): z.infer<typeof employeeL
     if (key in record) picked[key] = record[key];
   }
   return employeeListQuerySchema.parse(picked);
+}
+
+export const assignableEmployeeQuerySchema = z
+  .object({
+    search: z.string().max(200).optional(),
+  })
+  .strict();
+
+export function parseAssignableEmployeeQuery(
+  input: unknown,
+): z.infer<typeof assignableEmployeeQuerySchema> {
+  const record =
+    input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  return assignableEmployeeQuerySchema.parse('search' in record ? { search: record.search } : {});
 }
 
 export type CreateEmployeeRequest = z.infer<typeof createEmployeeRequestSchema>;

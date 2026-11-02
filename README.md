@@ -71,7 +71,7 @@ pnpm start:api    # node apps/api/dist/main.js
 pnpm start:web    # next start --port 3000
 ```
 
-Set `NODE_ENV=production`, a 48+ character `JWT_ACCESS_SECRET`, `COOKIE_SECURE=true` behind HTTPS, and `TRUST_PROXY` to match your reverse proxy.
+Set `NODE_ENV=production`, a 48+ character `JWT_ACCESS_SECRET`, `COOKIE_SECURE=true` behind HTTPS, and `TRUST_PROXY` to match your reverse proxy. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) and [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 
 ## Docker Compose
 
@@ -80,7 +80,7 @@ Dockerfiles live only under `docker/` and expect the **repository root** as the 
 ```bash
 cp .env.example .env   # fill secrets; POSTGRES_* are used by Compose
 docker compose up --build
-docker compose exec api ./node_modules/.bin/prisma migrate deploy
+docker compose exec api node node_modules/prisma/build/index.js migrate deploy
 docker compose exec api node dist/modules/auth/cli/synchronize-super-admin.js
 ```
 
@@ -97,6 +97,8 @@ pnpm build
 ```
 
 `pnpm check:architecture` rejects domain/infrastructure leaks, circular imports, spec/test files, and Dockerfiles outside `docker/`.
+
+Handover documentation: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/FINAL-VERIFICATION.md](docs/FINAL-VERIFICATION.md), [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## API
 

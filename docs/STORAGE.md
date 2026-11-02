@@ -15,6 +15,9 @@ Set in Coolify (or `.env` locally). Never commit secrets.
 | `AWS_S3_BUCKET` | e.g. `techwin-s3` |
 | `STORAGE_PRESIGNED_TTL_SECONDS` | Presigned download lifetime (default 900). |
 | `STORAGE_EMPLOYEE_PROFILE_MAX_BYTES` | Profile image limit (default 5 MB). |
+| `MEDIA_CLEANUP_WORKER_ENABLED` | When `true` (default), the API runs a background worker that drains `storage_cleanup_jobs`. Set `false` on extra replicas. |
+| `MEDIA_CLEANUP_INTERVAL_MS` | Tick interval in ms (default 60000). |
+| `MEDIA_CLEANUP_BATCH_SIZE` | Jobs processed per tick (default 20). |
 
 ## IAM (least privilege)
 
@@ -30,7 +33,9 @@ With `STORAGE_PROVIDER=local` (default when `NODE_ENV=development`), files are w
 
 ## Failed cleanup
 
-If S3 delete fails after a DB unlink, a row is inserted into `storage_cleanup_jobs`. Re-run cleanup by calling `StoredFileService.processCleanupQueue()` from an operational script or a future admin task; pending jobs retry up to five times.
+If S3 delete fails after a DB unlink, a row is inserted into `storage_cleanup_jobs`. The API **`StoredObjectCleanupJobRunner`** processes that queue on a timer (see `MEDIA_CLEANUP_*` env vars). It uses the same Redis exclusive-lock pattern as the WhatsApp worker: only one replica runs a tick at a time; others skip until the lock is free. When Redis is down, a replica may still run cleanup (best-effort, same as WhatsApp).
+
+Each job stays `PENDING` until the object delete succeeds or **`failCleanupJob`** marks it `FAILED` after **five** attempts. Failures log the error category without object secrets. Disable the worker on secondary API instances with `MEDIA_CLEANUP_WORKER_ENABLED=false` in Coolify.
 
 ## Credential rotation
 

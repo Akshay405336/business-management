@@ -125,6 +125,7 @@ function detectCycles(graph, label) {
 // ---------------------------------------------------------------------------
 
 const SECURITY_CONTRACTS = 'infrastructure/security/security.contracts.ts';
+const CROSS_CUTTING_AREAS = new Set(['security-contracts', 'common', 'shared', 'platform']);
 const FRAMEWORK_OR_DRIVER_PACKAGES = [
   /^@prisma\//,
   /^express$/,
@@ -154,6 +155,8 @@ function classifyApiFile(filePath) {
   if (relative === SECURITY_CONTRACTS) return { relative, area: 'security-contracts' };
   if (top === 'infrastructure') return { relative, area: 'shared-infrastructure' };
   if (top === 'common') return { relative, area: 'common' };
+  if (top === 'shared') return { relative, area: 'shared' };
+  if (top === 'platform') return { relative, area: 'platform' };
   if (top === 'config') return { relative, area: 'config' };
   if (top === 'generated') return { relative, area: 'generated' };
   return { relative, area: 'root' };
@@ -216,10 +219,22 @@ function checkApi() {
       if (
         (from.area === 'shared-infrastructure' ||
           from.area === 'common' ||
+          from.area === 'shared' ||
           from.area === 'config') &&
         to.area === 'module'
       ) {
         violations.push(`[api] ${from.area} must not depend on feature modules: ${where}`);
+      }
+      if (from.area === 'platform' && to.area === 'module' && !to.isPublicApi) {
+        const tenantContextRepoImport =
+          from.relative.startsWith('platform/tenant-context/') &&
+          to.layer === 'domain' &&
+          to.relative.includes('/repositories/');
+        if (!tenantContextRepoImport) {
+          violations.push(
+            `[api] platform must use modules/${to.moduleName}/index.ts: ${where}`,
+          );
+        }
       }
       if (from.area === 'config' && to.area !== 'config') {
         violations.push(`[api] config must be self-contained: ${where}`);
@@ -243,7 +258,7 @@ function checkApi() {
               `[api] application may only depend on domain and application: ${where}`,
             );
           }
-          if (!sameModule && to.area !== 'security-contracts') {
+          if (!sameModule && !CROSS_CUTTING_AREAS.has(to.area)) {
             violations.push(
               `[api] application may only use shared code via security contracts: ${where}`,
             );

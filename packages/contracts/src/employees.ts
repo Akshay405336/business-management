@@ -5,6 +5,7 @@ export const EMPLOYEE_ROUTES = {
   employee: (id: string) => `${API_PREFIX}/employees/${id}`,
   employeeStatus: (id: string) => `${API_PREFIX}/employees/${id}/status`,
   employeeCodePreview: `${API_PREFIX}/employees/code-preview`,
+  assignableEmployees: `${API_PREFIX}/employees/assignable`,
   employeeProfileImageUpload: `${API_PREFIX}/employees/profile-image`,
   employeeStoredProfileImageContent: (storedObjectId: string) =>
     `${API_PREFIX}/employees/profile-stored-objects/${storedObjectId}/content`,
@@ -34,6 +35,25 @@ export interface EmployeeSalaryStructure {
   readonly estimatedNetSalary: number;
 }
 
+export type EmployeeLoginStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'DEACTIVATED';
+
+export interface EmployeeLoginRole {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+}
+
+/** Sign-in account linked to the employee; never includes credentials. */
+export interface EmployeeLoginAccess {
+  readonly membershipId: string;
+  readonly status: EmployeeLoginStatus;
+  readonly isOwner: boolean;
+  /** Created together with the employee, so deleting the employee deletes the account. */
+  readonly ownsAccount: boolean;
+  readonly roles: readonly EmployeeLoginRole[];
+  readonly lastLoginAt: string | null;
+}
+
 export interface EmployeeListItem {
   readonly id: string;
   readonly employeeCode: string;
@@ -43,12 +63,42 @@ export interface EmployeeListItem {
   readonly workEmail: string;
   readonly phone: string;
   readonly jobTitle: string;
+  readonly department: string | null;
   readonly employmentType: EmployeeEmploymentType;
   readonly employmentStatus: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
   readonly profileImageUrl: string | null;
   /** Linked platform admin account used for task assignment and login. */
   readonly platformAdminId: string | null;
+  readonly loginAccess: EmployeeLoginAccess | null;
+}
+
+/** Minimal employee projection for task assignment pickers. */
+export interface AssignableEmployee {
+  readonly id: string;
+  readonly employeeCode: string;
+  readonly displayName: string;
+  readonly jobTitle: string;
+  readonly profileImageUrl: string | null;
+  readonly platformAdminId: string | null;
+}
+
+export interface AssignableEmployeeListResponse {
+  readonly items: readonly AssignableEmployee[];
+}
+
+/**
+ * What happened to the employee's sign-in account on permanent deletion. NONE: no linked
+ * account; ACCOUNT_PRESERVED: the linked account was not created for this employee.
+ */
+export type EmployeeDeletionLoginOutcome =
+  | 'NONE'
+  | 'ACCOUNT_DELETED'
+  | 'MEMBERSHIP_REMOVED'
+  | 'ACCOUNT_PRESERVED';
+
+export interface DeleteEmployeeResponse {
+  readonly loginAccount: EmployeeDeletionLoginOutcome;
 }
 
 export interface EmployeeDetail extends EmployeeListItem {

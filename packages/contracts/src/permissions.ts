@@ -40,6 +40,7 @@ export const PERMISSION_KEYS = [
   'tasks.create',
   'tasks.update',
   'tasks.delete',
+  'tasks.assign',
   'finance.read',
   'finance.manage',
   'expenses.read',
@@ -136,6 +137,12 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { key: 'tasks.create', module: 'Tasks', action: 'Create', description: 'Create project tasks.' },
   { key: 'tasks.update', module: 'Tasks', action: 'Edit', description: 'Update and move project tasks.' },
   { key: 'tasks.delete', module: 'Tasks', action: 'Delete', description: 'Delete project tasks.' },
+  {
+    key: 'tasks.assign',
+    module: 'Tasks',
+    action: 'Assign',
+    description: 'Choose or change who daily and project tasks are assigned to.',
+  },
   { key: 'finance.read', module: 'Finance', action: 'View', description: 'View finance dashboards and records.' },
   { key: 'finance.manage', module: 'Finance', action: 'Manage', description: 'Manage finance configuration and records.' },
   { key: 'expenses.read', module: 'Expenses', action: 'View', description: 'View expenses.' },
@@ -199,9 +206,11 @@ export const SYSTEM_ROLE_KEYS = {
   owner: 'owner',
   admin: 'admin',
   projectManager: 'project_manager',
+  projectManagement: 'project_management',
   sales: 'sales',
   financial: 'financial',
   member: 'member',
+  employee: 'employee',
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE_KEYS)[keyof typeof SYSTEM_ROLE_KEYS];

@@ -7,6 +7,9 @@
 #   docker compose up --build
 #   docker compose exec api node node_modules/prisma/build/index.js migrate deploy
 #   docker compose exec api node dist/modules/auth/cli/synchronize-super-admin.js
+#
+# Run `migrate deploy` once per release before or after new API containers roll out;
+# do not run migrations from every replica at container startup (see docs/DEPLOYMENT.md).
 # Volumes are never deleted by this file.
 
 name: techwin
@@ -68,7 +71,7 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:4000/api/v1/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:4000/api/v1/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 5s
