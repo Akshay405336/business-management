@@ -25,6 +25,7 @@ import {
 import { useAdminAccess } from './admin-access-provider';
 import { TechwinLogo, TechwinMark } from '@/shared/components/techwin-logo';
 import { cn } from '@/shared/lib/utils';
+import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { useAuthenticatedAdmin } from '../hooks/use-admin-session';
 
 const NAV_ICON_CLASS = 'size-[18px] shrink-0 stroke-[1.75]';
@@ -48,6 +49,7 @@ function usesCollapsibleGroup(group: AdminNavGroup): boolean {
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const { admin } = useAuthenticatedAdmin();
+  const { membershipRoleLabel } = usePermissions();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -100,6 +102,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <AdminAppHeader
           title={title}
           admin={admin}
+          membershipRoleLabel={membershipRoleLabel}
           mobileNavTrigger={
             <AdminMobileNavTrigger onClick={() => setMobileOpen(true)} />
           }

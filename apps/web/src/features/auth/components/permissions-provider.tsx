@@ -1,6 +1,6 @@
 'use client';
 
-import type { PermissionKey } from '@techwin/contracts';
+import type { MyOrganizationRole, PermissionKey } from '@techwin/contracts';
 import { Loader2 } from 'lucide-react';
 import {
   createContext,
@@ -23,6 +23,11 @@ import { loginPath } from '@/features/admin/auth/utils/auth-errors';
 import { onAccessDenied } from '@/shared/api/api-client';
 import { useRouter } from 'next/navigation';
 import {
+  formatMembershipRoleLabel,
+  membershipAccessContext,
+  type MembershipAccessContext,
+} from '../membership/membership-access';
+import {
   defaultDashboardPath,
   resolvePortalKind,
   type PortalKind,
@@ -34,6 +39,9 @@ export type PermissionsContextValue = {
   readonly portal: PortalKind;
   readonly permissions: readonly PermissionKey[];
   readonly permissionSet: ReadonlySet<PermissionKey>;
+  readonly roles: readonly MyOrganizationRole[];
+  readonly membershipRoleLabel: string;
+  readonly navAccess: MembershipAccessContext;
   readonly loading: false;
   readonly has: (key: PermissionKey) => boolean;
   readonly hasAny: (...keys: PermissionKey[]) => boolean;
@@ -44,12 +52,23 @@ export type PermissionsContextValue = {
 
 const PermissionsContext = createContext<PermissionsContextValue | null>(null);
 
-function createInitialPermissions(): readonly PermissionKey[] | null {
-  return readPostAuthBootstrap()?.permissions ?? null;
+type AccessSnapshot = {
+  readonly permissions: readonly PermissionKey[];
+  readonly roles: readonly MyOrganizationRole[];
+};
+
+function readBootstrapSnapshot(): AccessSnapshot | null {
+  const bootstrap = readPostAuthBootstrap();
+  if (!bootstrap) return null;
+  return { permissions: bootstrap.permissions, roles: bootstrap.roles };
+}
+
+function createInitialSnapshot(): AccessSnapshot | null {
+  return readBootstrapSnapshot();
 }
 
 function createInitialLoading(): boolean {
-  return readPostAuthBootstrap()?.permissions === undefined;
+  return readBootstrapSnapshot() === null;
 }
 
 export function usePermissions(): PermissionsContextValue {
@@ -63,21 +82,19 @@ export function usePermissions(): PermissionsContextValue {
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { admin } = useAuthenticatedAdmin();
-  const [permissions, setPermissions] = useState<readonly PermissionKey[] | null>(
-    createInitialPermissions,
-  );
+  const [snapshot, setSnapshot] = useState<AccessSnapshot | null>(createInitialSnapshot);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(createInitialLoading);
-  const skipInitialLoad = useRef(createInitialPermissions() !== null);
+  const skipInitialLoad = useRef(createInitialSnapshot() !== null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
       const response = await getMyPermissions(signal);
-      setPermissions(response.permissions);
+      setSnapshot({ permissions: response.permissions, roles: response.roles ?? [] });
     } catch (failure) {
-      setPermissions([]);
+      setSnapshot({ permissions: [], roles: [] });
       setError(describeOrgAccessError(failure));
     } finally {
       setLoading(false);
@@ -92,7 +109,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       if (now - lastSilentRefreshAt.current < ACCESS_DENIED_REFRESH_INTERVAL_MS) return;
       lastSilentRefreshAt.current = now;
       getMyPermissions()
-        .then((response) => setPermissions(response.permissions))
+        .then((response) =>
+          setSnapshot({ permissions: response.permissions, roles: response.roles ?? [] }),
+        )
         .catch(() => undefined);
     });
   }, []);
@@ -108,33 +127,38 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   const value = useMemo((): PermissionsContextValue | null => {
-    if (!permissions) return null;
+    if (!snapshot) return null;
+    const { permissions, roles } = snapshot;
     const permissionSet = new Set(permissions);
     const has = (key: PermissionKey) => permissionSet.has(key);
     const hasAny = (...keys: PermissionKey[]) => keys.some((key) => permissionSet.has(key));
     const hasAll = (...keys: PermissionKey[]) => keys.every((key) => permissionSet.has(key));
-    const portal = resolvePortalKind(admin, permissions);
+    const portal = resolvePortalKind(admin, permissions, roles);
+    const navAccess = membershipAccessContext(admin, roles);
     return {
       portal,
       permissions,
       permissionSet,
+      roles,
+      membershipRoleLabel: formatMembershipRoleLabel(admin, roles),
+      navAccess,
       loading: false,
       has,
       hasAny,
       hasAll,
-      defaultDashboard: defaultDashboardPath(portal),
+      defaultDashboard: defaultDashboardPath(portal, permissions, { admin, roles }),
       refresh: async () => {
         invalidateMyPermissionsCache();
         await load();
       },
     };
-  }, [admin, load, permissions]);
+  }, [admin, load, snapshot]);
 
   if (loading || !value) {
     return <PermissionsLoadingState />;
   }
 
-  if (error && permissions?.length === 0) {
+  if (error && snapshot?.permissions.length === 0) {
     return (
       <PermissionsErrorState
         message={error}

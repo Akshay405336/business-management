@@ -19,7 +19,7 @@ import {
 } from '../utils/labels';
 import { describeEmployeeError } from '../utils/errors';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
-import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { EmployeeAvatar } from './employee-avatar';
 import { EmployeeStatusBadge } from './employee-status-badge';
 
@@ -40,7 +40,7 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 }
 
 export function EmployeeDetailDialog({ employeeId, open, onOpenChange }: Props) {
-  const { has } = useAdminAccess();
+  const { has } = usePermissions();
   const canReadCompensation = has('employees.compensation.read');
   const [detail, setDetail] = useState<EmployeeDetail | null>(null);
   const [loading, setLoading] = useState(false);

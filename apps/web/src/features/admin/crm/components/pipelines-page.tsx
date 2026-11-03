@@ -51,6 +51,7 @@ import {
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '../constants';
 import {
@@ -128,6 +129,7 @@ function reportBulkActionResult(
 export function PipelinesPage() {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
+  const { dashboardBreadcrumb } = usePortalNavigation();
   const [pipelines, setPipelines] = useState<readonly CrmPipeline[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -376,7 +378,7 @@ export function PipelinesPage() {
   const statusChangeIsDeactivate = statusTarget?.status === 'ACTIVE';
 
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/admin/dashboard' },
+    dashboardBreadcrumb,
     { label: 'CRM' },
     { label: 'Pipeline' },
   ] as const;

@@ -38,6 +38,7 @@ export function useTotpVerification() {
           resolvePostAuthRedirect({
             admin: session.admin,
             permissions: bootstrap?.permissions ?? [],
+            roles: bootstrap?.roles ?? [],
           }),
         );
       } catch (failure) {

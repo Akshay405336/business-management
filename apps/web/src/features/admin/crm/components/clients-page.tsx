@@ -4,6 +4,7 @@ import { leadEmailSchema, leadPhoneSchema, clientNameFieldSchema, createClientRe
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { useZodFormFields } from '@/shared/form/use-zod-form-fields';
 import { clearFormFieldError, mergeFieldErrors, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import { Loader2, Pencil, Plus, Power, Search, Trash2, Users } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -95,6 +96,7 @@ const emptyForm = (): ClientForm => ({
 
 export function ClientsPage() {
   const searchParams = useSearchParams();
+  const { dashboardBreadcrumb } = usePortalNavigation();
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
 
@@ -344,7 +346,7 @@ export function ClientsPage() {
   };
 
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/admin/dashboard' },
+    dashboardBreadcrumb,
     { label: 'CRM' },
     { label: 'Clients' },
   ] as const;

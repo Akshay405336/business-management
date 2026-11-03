@@ -56,6 +56,10 @@ export class PrismaOrgAccessRepository implements OrgAccessRepository {
     );
   }
 
+  resolveActiveMembershipRoles(organizationId: string, adminId: string) {
+    return this.permissions.resolveActiveMembershipRoles(organizationId, adminId);
+  }
+
   invalidatePermissionCache(organizationId: string, adminId?: string): Promise<void> {
     return this.permissions.invalidatePermissionCache(organizationId, adminId);
   }

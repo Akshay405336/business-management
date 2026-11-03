@@ -12,8 +12,10 @@ import {
   ensureOrganizationRoleBootstrap,
   findRoleIdByKey,
   permissionCacheKey,
+  resolveActiveMembershipRolesFromDb,
   resolvePermissionsFromDb,
   uniquePermissionKeys,
+  type ActiveMembershipRoleSummary,
 } from './org-access-persistence.shared.js';
 
 export class OrgAccessPermissionsPersistence {
@@ -21,6 +23,13 @@ export class OrgAccessPermissionsPersistence {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
   ) {}
+
+  resolveActiveMembershipRoles = async (
+    organizationId: string,
+    adminId: string,
+  ): Promise<readonly ActiveMembershipRoleSummary[]> => {
+    return resolveActiveMembershipRolesFromDb(this.prisma, organizationId, adminId);
+  };
 
   resolveEffectivePermissions = async (
     organizationId: string,

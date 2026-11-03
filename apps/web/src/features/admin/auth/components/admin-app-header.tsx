@@ -66,13 +66,17 @@ export function AdminAppHeader({
   title,
   admin,
   mobileNavTrigger,
+  membershipRoleLabel,
 }: {
   title: string;
   admin: PlatformAdminProfile;
   mobileNavTrigger: ReactNode;
+  membershipRoleLabel?: string;
 }) {
   const { signOut, isSigningOut } = useAdminSession();
-  const roleLabel = admin.role.replaceAll('_', ' ');
+  const roleLabel =
+    membershipRoleLabel?.trim() ||
+    (admin.role === 'SUPER_ADMIN' ? 'Super Admin' : admin.role.replaceAll('_', ' '));
   const showRoleSubtitle = normalizeLabel(roleLabel) !== normalizeLabel(admin.displayName);
 
   return (
@@ -137,7 +141,7 @@ export function AdminAppHeader({
                   {admin.displayName}
                 </span>
                 {showRoleSubtitle ? (
-                  <span className="text-muted-foreground truncate text-xs capitalize">
+                  <span className="text-muted-foreground truncate text-xs uppercase tracking-wide">
                     {roleLabel}
                   </span>
                 ) : null}

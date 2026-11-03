@@ -27,12 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import { CONSENT_META, formatDateTime, initialsOf } from '../utils/whatsapp-format';
-
-function crmHref(link: WhatsAppCrmLink): string {
-  return link.kind === 'LEAD' ? `/admin/leads/${link.id}` : `/admin/clients/${link.id}`;
-}
 
 export function WhatsAppContactPanel({
   detail,
@@ -51,6 +48,11 @@ export function WhatsAppContactPanel({
   onCrmLink: (kind: 'LEAD' | 'CLIENT', id: string | null) => Promise<void>;
   className?: string;
 }) {
+  const { toPortalPath } = usePortalNavigation();
+  const crmHref = (link: WhatsAppCrmLink) =>
+    link.kind === 'LEAD'
+      ? `${toPortalPath('/admin/leads')}/${link.id}`
+      : `${toPortalPath('/admin/clients')}/${link.id}`;
   const { conversation, canAssign, canReply } = detail;
   const contact = conversation.contact;
   const consent = CONSENT_META[contact.consentStatus];

@@ -15,7 +15,7 @@ import {
 
 export function EmployeeShell({ children }: { children: ReactNode }) {
   const { admin } = useAuthenticatedAdmin();
-  const { permissions } = usePermissions();
+  const { permissions, membershipRoleLabel } = usePermissions();
   const pathname = usePathname();
   const navItems = filterEmployeeNav(permissions);
 
@@ -55,6 +55,7 @@ export function EmployeeShell({ children }: { children: ReactNode }) {
         <AdminAppHeader
           title="Employee portal"
           admin={admin}
+          membershipRoleLabel={membershipRoleLabel}
           mobileNavTrigger={<AdminMobileNavTrigger />}
         />
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>

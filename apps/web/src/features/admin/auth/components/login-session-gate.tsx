@@ -27,11 +27,12 @@ export function LoginSessionGate({ children }: { children: ReactNode }) {
       try {
         const session = await getCurrentSession(controller.signal);
         if (controller.signal.aborted) return;
-        const { permissions } = await getMyPermissions(controller.signal);
+        const { permissions, roles } = await getMyPermissions(controller.signal);
         if (controller.signal.aborted) return;
         const destination = resolvePostAuthRedirect({
           admin: session.admin,
           permissions,
+          roles: roles ?? [],
           returnTo: searchParams.get('returnTo'),
         });
         router.replace(destination);

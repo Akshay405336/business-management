@@ -115,8 +115,15 @@ export interface PermissionCatalogResponse {
   readonly permissions: readonly PermissionCatalogItem[];
 }
 
+export interface MyOrganizationRole {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+}
+
 export interface MyPermissionsResponse {
   readonly permissions: readonly PermissionKey[];
+  readonly roles: readonly MyOrganizationRole[];
 }
 
 export interface CreateInvitationResponse {

@@ -27,10 +27,14 @@ export function VerifyTotpGate({ children }: { children: ReactNode }) {
       try {
         const session = await getCurrentSession(controller.signal);
         if (controller.signal.aborted) return;
-        const { permissions } = await getMyPermissions(controller.signal);
+        const { permissions, roles } = await getMyPermissions(controller.signal);
         if (!controller.signal.aborted) {
           router.replace(
-            resolvePostAuthRedirect({ admin: session.admin, permissions }),
+            resolvePostAuthRedirect({
+              admin: session.admin,
+              permissions,
+              roles: roles ?? [],
+            }),
           );
         }
       } catch {

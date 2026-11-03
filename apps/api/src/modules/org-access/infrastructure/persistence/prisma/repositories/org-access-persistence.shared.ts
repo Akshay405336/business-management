@@ -394,6 +394,38 @@ export function assertOrgRoleMutable(role: { readonly key: string }, action: 'mo
   );
 }
 
+export type ActiveMembershipRoleSummary = {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+};
+
+export async function resolveActiveMembershipRolesFromDb(
+  prisma: Pick<PrismaService, 'organizationMembership'>,
+  organizationId: string,
+  adminId: string,
+): Promise<readonly ActiveMembershipRoleSummary[]> {
+  const membership = await prisma.organizationMembership.findFirst({
+    where: { organizationId, adminId, status: 'ACTIVE' },
+    include: {
+      roleLinks: {
+        include: {
+          role: { select: { id: true, key: true, name: true, status: true } },
+        },
+      },
+    },
+  });
+  if (!membership) return [];
+
+  return membership.roleLinks
+    .filter((link) => link.role.status === 'ACTIVE')
+    .map((link) => ({
+      id: link.role.id,
+      key: link.role.key,
+      name: link.role.name,
+    }));
+}
+
 export async function resolvePermissionsFromDb(
   prisma: Pick<PrismaService, 'organizationMembership'>,
   organizationId: string,

@@ -36,6 +36,7 @@ import {
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAdminToast } from '@/features/admin/components/toast';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import {
   addWhatsAppNote,
@@ -100,6 +101,8 @@ async function withMessage<T>(task: () => Promise<T>): Promise<T> {
 
 export function WhatsAppInboxPage() {
   const toast = useAdminToast();
+  const { toPortalPath } = usePortalNavigation();
+  const whatsappChannelsHref = toPortalPath('/admin/whatsapp/channels');
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -508,7 +511,7 @@ export function WhatsAppInboxPage() {
         <Alert variant="info">
           <AlertDescription>
             No WhatsApp number is connected yet.{' '}
-            <Link href="/admin/whatsapp/channels" className="font-medium underline">
+            <Link href={whatsappChannelsHref} className="font-medium underline">
               Connect a channel
             </Link>{' '}
             to start receiving messages.

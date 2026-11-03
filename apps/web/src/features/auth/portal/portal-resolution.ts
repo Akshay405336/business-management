@@ -1,34 +1,45 @@
-import {
-  EMPLOYEE_PORTAL_PERMISSIONS,
-  type PermissionKey,
-  type PlatformAdminProfile,
-} from '@techwin/contracts';
+import type { MyOrganizationRole, PermissionKey, PlatformAdminProfile } from '@techwin/contracts';
+import { filterAdminNav } from '@/features/admin/navigation/filter-admin-nav';
 import { canAccessAdminPath } from '@/features/admin/navigation/admin-route-permissions';
 import { canAccessEmployeePath } from '@/features/employee/navigation/employee-route-permissions';
+import { filterProjectManagerNav } from '@/features/project-manager/navigation/project-manager-nav-config';
+import { canAccessProjectManagerPath } from '@/features/project-manager/navigation/project-manager-route-permissions';
+import { membershipAccessContext } from '../membership/membership-access';
+import { portalDashboardPath } from './portal-paths';
+import { resolvePortalKind, type PortalKind } from './portal-policy';
 
-export type PortalKind = 'admin' | 'employee';
+export type { PortalKind };
 
-const EMPLOYEE_PORTAL_SET = new Set<string>(EMPLOYEE_PORTAL_PERMISSIONS);
+export { resolvePortalKind };
 
-export function resolvePortalKind(
-  admin: PlatformAdminProfile,
+export function defaultDashboardPath(
+  portal: PortalKind,
   permissions: readonly PermissionKey[],
-): PortalKind {
-  if (admin.role === 'SUPER_ADMIN') return 'admin';
-  if (permissions.length === 0) return 'admin';
-  const usesEmployeePortal = permissions.every((key) => EMPLOYEE_PORTAL_SET.has(key));
-  return usesEmployeePortal ? 'employee' : 'admin';
+  input: {
+    readonly admin: PlatformAdminProfile;
+    readonly roles: readonly MyOrganizationRole[];
+  },
+): string {
+  if (portal === 'employee') return portalDashboardPath('employee');
+  if (portal === 'project-manager') {
+    const nav = filterProjectManagerNav(permissions);
+    const first = nav.flatMap((group) => group.items).find((item) => item.kind === 'link');
+    return first?.href ?? portalDashboardPath('project-manager');
+  }
+
+  const access = membershipAccessContext(input.admin, input.roles);
+  const navGroups = filterAdminNav(permissions, access);
+  const firstLink = navGroups
+    .flatMap((group) => group.items)
+    .find((item) => item.kind === 'link');
+  return firstLink?.href ?? portalDashboardPath('admin');
 }
 
-export function defaultDashboardPath(portal: PortalKind): string {
-  return portal === 'employee' ? '/employee/dashboard' : '/admin/dashboard';
-}
-
-/** Validates a same-origin in-app return path for the authenticated portal. */
 export function sanitizeReturnPath(
   value: string | null | undefined,
   portal: PortalKind,
   permissions: ReadonlySet<PermissionKey>,
+  access: ReturnType<typeof membershipAccessContext>,
 ): string | null {
   if (!value) return null;
   const path = value.trim();
@@ -37,7 +48,12 @@ export function sanitizeReturnPath(
 
   if (portal === 'admin') {
     if (!path.startsWith('/admin')) return null;
-    return canAccessAdminPath(path, permissions) ? path : null;
+    return canAccessAdminPath(path, permissions, access) ? path : null;
+  }
+
+  if (portal === 'project-manager') {
+    if (!path.startsWith('/project-manager')) return null;
+    return canAccessProjectManagerPath(path, permissions) ? path : null;
   }
 
   if (!path.startsWith('/employee')) return null;
@@ -47,10 +63,12 @@ export function sanitizeReturnPath(
 export function resolvePostAuthRedirect(input: {
   readonly admin: PlatformAdminProfile;
   readonly permissions: readonly PermissionKey[];
+  readonly roles: readonly MyOrganizationRole[];
   readonly returnTo?: string | null;
 }): string {
-  const portal = resolvePortalKind(input.admin, input.permissions);
+  const portal = resolvePortalKind(input.admin, input.permissions, input.roles);
   const permissionSet = new Set(input.permissions);
-  const safeReturn = sanitizeReturnPath(input.returnTo, portal, permissionSet);
-  return safeReturn ?? defaultDashboardPath(portal);
+  const access = membershipAccessContext(input.admin, input.roles);
+  const safeReturn = sanitizeReturnPath(input.returnTo, portal, permissionSet, access);
+  return safeReturn ?? defaultDashboardPath(portal, input.permissions, input);
 }

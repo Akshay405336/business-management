@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TableCell, TableHead, TableRow } from '@/components/ui/table';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import {
@@ -55,6 +56,8 @@ const SEARCH_DEBOUNCE_MS = 400;
 export function ProposalsPage() {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
+  const { toPortalPath, dashboardBreadcrumb } = usePortalNavigation();
+  const proposalsBasePath = toPortalPath('/admin/proposals');
 
   const [proposals, setProposals] = useState<readonly CrmProposal[]>([]);
   const [total, setTotal] = useState(0);
@@ -187,7 +190,7 @@ export function ProposalsPage() {
   };
 
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/admin/dashboard' },
+    dashboardBreadcrumb,
     { label: 'CRM' },
     { label: 'Proposals & Quotations' },
   ] as const;
@@ -343,7 +346,7 @@ export function ProposalsPage() {
                   </TableIconButton>
                 ) : null}
                 <TableIconButton label={`Print ${proposal.documentNumber}`} asChild>
-                  <Link href={`/admin/proposals/${proposal.id}/print`} target="_blank">
+                  <Link href={`${proposalsBasePath}/${proposal.id}/print`} target="_blank">
                     <ExternalLink className="size-4" aria-hidden="true" />
                   </Link>
                 </TableIconButton>

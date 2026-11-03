@@ -12,11 +12,12 @@ import {
  */
 export async function finalizePlatformSignIn(response: PlatformVerifyTotpResponse): Promise<void> {
   suppressPlatformSessionEndedFor(15_000);
-  const { permissions } = await getMyPermissions();
+  const { permissions, roles } = await getMyPermissions();
   armPostAuthBootstrap({
     accessToken: response.accessToken,
     admin: response.admin,
     session: sessionSummaryFromAuthResponse(response),
     permissions,
+    roles,
   });
 }

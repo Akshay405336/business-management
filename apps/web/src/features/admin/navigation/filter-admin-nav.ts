@@ -1,4 +1,5 @@
 import type { PermissionKey } from '@techwin/contracts';
+import type { MembershipAccessContext } from '@/features/auth/membership/membership-access';
 import {
   ADMIN_NAV_GROUPS,
   type AdminNavGroup,
@@ -10,6 +11,7 @@ export type AdminNavGroupWithAccess = AdminNavGroup;
 
 export function filterAdminNav(
   permissions: readonly PermissionKey[],
+  access?: MembershipAccessContext,
 ): readonly AdminNavGroupWithAccess[] {
   const granted = new Set(permissions);
   const groups: AdminNavGroupWithAccess[] = [];
@@ -18,7 +20,7 @@ export function filterAdminNav(
     const items: AdminNavItem[] = [];
     for (const item of group.items) {
       if (item.kind === 'soon') continue;
-      if (canAccessAdminPath(item.href, granted)) items.push(item);
+      if (canAccessAdminPath(item.href, granted, access)) items.push(item);
     }
     if (items.length > 0) {
       groups.push({ ...group, items });

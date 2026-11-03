@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 
 export function WhatsAppPageShell({
@@ -20,11 +21,12 @@ export function WhatsAppPageShell({
   children: ReactNode;
   className?: string;
 }) {
+  const { dashboardBreadcrumb } = usePortalNavigation();
   return (
     <div className={cn('mx-auto grid w-full max-w-[1400px] gap-3', className)}>
       <AdminBreadcrumb
         breadcrumbs={[
-          { label: 'Dashboard', href: '/admin/dashboard' },
+          dashboardBreadcrumb,
           { label: 'Communications' },
           { label: title },
         ]}

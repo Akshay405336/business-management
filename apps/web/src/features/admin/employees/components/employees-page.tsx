@@ -54,7 +54,7 @@ import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
 import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
-import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { useAuthenticatedAdmin } from '@/features/admin/auth/hooks/use-admin-session';
 import { cn } from '@/shared/lib/utils';
 import { changeEmployeeStatus, deleteEmployee, listEmployees } from '../api/employees';
@@ -95,7 +95,7 @@ function employeeStatusBadgeClass(status: EmployeeEmploymentStatus): string {
 export function EmployeesPage() {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
-  const { has, hasAny } = useAdminAccess();
+  const { has, hasAny } = usePermissions();
   const { admin } = useAuthenticatedAdmin();
   const canCreate = has('employees.create');
   const canUpdate = has('employees.update');

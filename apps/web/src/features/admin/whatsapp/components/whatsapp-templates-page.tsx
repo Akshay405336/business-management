@@ -36,6 +36,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { useMyPermissions } from '@/features/admin/org-access/hooks/use-my-permissions';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import {
   listWhatsAppChannels,
@@ -77,6 +78,8 @@ const TOOLBAR_CONTROL_CLASS = 'h-9 shrink-0 rounded-lg border-slate-200 shadow-x
 
 export function WhatsAppTemplatesPage() {
   const toast = useAdminToast();
+  const { dashboardBreadcrumb, toPortalPath } = usePortalNavigation();
+  const whatsappChannelsHref = toPortalPath('/admin/whatsapp/channels');
   const { has } = useMyPermissions();
   const canSubmit = has('whatsapp.templates.manage');
   const canSync = has('whatsapp.templates.manage') || has('whatsapp.channels.manage');
@@ -168,9 +171,9 @@ export function WhatsAppTemplatesPage() {
     <div className="mx-auto grid w-full max-w-[1400px] gap-4 pb-8 pt-1">
       <AdminBreadcrumb
         breadcrumbs={[
-          { label: 'Dashboard', href: '/admin/dashboard' },
+          dashboardBreadcrumb,
           { label: 'Communications' },
-          { label: 'WhatsApp', href: '/admin/whatsapp/channels' },
+          { label: 'WhatsApp', href: whatsappChannelsHref },
           { label: 'Templates' },
         ]}
         className="mb-0.5"
@@ -345,7 +348,7 @@ export function WhatsAppTemplatesPage() {
           {channels.length === 0 ? (
             <>
               No channel connected.{' '}
-              <Link href="/admin/whatsapp/channels" className="font-medium text-[#128C7E] underline">
+              <Link href={whatsappChannelsHref} className="font-medium text-[#128C7E] underline">
                 Connect WhatsApp
               </Link>{' '}
               first.

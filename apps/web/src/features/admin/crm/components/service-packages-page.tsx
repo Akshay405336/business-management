@@ -71,6 +71,7 @@ import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { useAdminToast } from '@/features/admin/components/toast';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import {
   changeServicePackageStatus,
   createServicePackage,
@@ -225,6 +226,7 @@ const fieldLabel = (
 export function ServicePackagesPage() {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
+  const { dashboardBreadcrumb } = usePortalNavigation();
   const [packages, setPackages] = useState<readonly CrmServicePackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -513,7 +515,7 @@ export function ServicePackagesPage() {
   };
 
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/admin/dashboard' },
+    dashboardBreadcrumb,
     { label: 'CRM' },
     { label: 'Service Packages' },
   ] as const;

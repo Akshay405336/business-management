@@ -33,7 +33,10 @@ const nextConfig: NextConfig = {
     return [{ source: '/api/v1/:path*', destination: `${apiInternalUrl}/api/v1/:path*` }];
   },
   redirects() {
-    return [{ source: '/admin', destination: '/admin/dashboard', permanent: false }];
+    return [
+      { source: '/admin', destination: '/admin/dashboard', permanent: false },
+      { source: '/project-manager', destination: '/project-manager/dashboard', permanent: false },
+    ];
   },
   headers() {
     return [{ source: '/:path*', headers: securityHeaders }];

@@ -83,6 +83,12 @@ export interface OrgMembershipRef {
   readonly status: OrganizationMembershipStatus;
 }
 
+export interface OrgMembershipRoleSummary {
+  readonly id: string;
+  readonly key: string;
+  readonly name: string;
+}
+
 export interface OrgAccessRepository {
   ensureOrganizationAccessBootstrap(organizationId: string, adminId: string): Promise<void>;
   assertActiveMembership(organizationId: string, adminId: string): Promise<void>;
@@ -91,6 +97,10 @@ export interface OrgAccessRepository {
     adminId: string,
     isPlatformSuperAdmin: boolean,
   ): Promise<readonly PermissionKey[]>;
+  resolveActiveMembershipRoles(
+    organizationId: string,
+    adminId: string,
+  ): Promise<readonly OrgMembershipRoleSummary[]>;
   invalidatePermissionCache(organizationId: string, adminId?: string): Promise<void>;
   listMembers(organizationId: string, filters: OrgMemberListFilters): Promise<PaginatedOrgMembers>;
   getMember(organizationId: string, membershipId: string): Promise<OrgMemberRecord | null>;

@@ -29,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { useAdminToast } from '@/features/admin/components/toast';
 import {
   CrmFieldLabel,
@@ -149,7 +149,7 @@ export function EmployeeFormDialog({
 }) {
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
-  const { has } = useAdminAccess();
+  const { has } = usePermissions();
   const canManageCompensation = has('employees.compensation.manage');
   const canReadCompensation = has('employees.compensation.read');
   const isCreate = editingId === null;

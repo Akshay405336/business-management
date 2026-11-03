@@ -1,4 +1,8 @@
 import type { PermissionKey } from '@techwin/contracts';
+import {
+  canAccessWorkspaceDashboard,
+  type MembershipAccessContext,
+} from '@/features/auth/membership/membership-access';
 
 /**
  * Single source of truth for admin page access (any listed permission grants access).
@@ -49,8 +53,12 @@ export function permissionsForAdminPath(pathname: string): readonly PermissionKe
 export function canAccessAdminPath(
   pathname: string,
   permissions: ReadonlySet<PermissionKey>,
+  access?: MembershipAccessContext,
 ): boolean {
   const path = normalizePath(pathname);
+  if (access && (path === '/admin' || path === '/admin/dashboard')) {
+    if (!canAccessWorkspaceDashboard(access)) return false;
+  }
   const required = permissionsForAdminPath(path);
   if (required === null) return !path.startsWith('/admin');
   if (required.length === 0) return true;

@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import { createLeadActivity, getLead, listLeadActivities } from '../api/leads';
 import { convertClientFromLead } from '../api/clients';
@@ -93,6 +94,8 @@ export function LeadDetailDialog({
   onEditLead?: (leadId: string) => void;
 }) {
   const toast = useAdminToast();
+  const { toPortalPath } = usePortalNavigation();
+  const clientsHref = toPortalPath('/admin/clients');
   const [lead, setLead] = useState<CrmLead | null>(null);
   const [activities, setActivities] = useState<readonly CrmLeadActivity[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -459,7 +462,7 @@ export function LeadDetailDialog({
             ) : null}
             {lead.convertedClientId ? (
               <Button type="button" className={cn('h-11 px-5', LEAD_FORM_PRIMARY_BTN)} asChild>
-                <Link href={`/admin/clients?clientId=${lead.convertedClientId}`}>
+                <Link href={`${clientsHref}?clientId=${lead.convertedClientId}`}>
                   View client
                 </Link>
               </Button>

@@ -137,8 +137,11 @@ export class OrgAccessController {
     @Req() request: Request & { platformAuth?: { admin: { role: string } } },
   ): Promise<MyPermissionsResponse> {
     const actor = toOrgAccessActor(ctx, request.platformAuth?.admin.role === 'SUPER_ADMIN');
-    const permissions = await this.getMyPermissions.execute({ actor });
-    return { permissions: [...permissions] as PermissionKey[] };
+    const snapshot = await this.getMyPermissions.execute({ actor });
+    return {
+      permissions: [...snapshot.permissions] as PermissionKey[],
+      roles: [...snapshot.roles],
+    };
   }
 
   @Get('permissions')

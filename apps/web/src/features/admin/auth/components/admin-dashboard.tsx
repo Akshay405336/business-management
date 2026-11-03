@@ -13,10 +13,12 @@ import { isApiError } from '@/shared/api/api-error';
 import { listSessions, revokeSession } from '../api/list-sessions';
 import type { PlatformSessionSummary } from '../types/auth.types';
 import { describeAuthError } from '../utils/auth-errors';
+import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { useAdminSession, useAuthenticatedAdmin } from '../hooks/use-admin-session';
 
 export function AdminDashboard() {
   const { admin, session } = useAuthenticatedAdmin();
+  const { membershipRoleLabel } = usePermissions();
   const { signOutEverywhere, isSigningOut } = useAdminSession();
 
   return (
@@ -37,7 +39,7 @@ export function AdminDashboard() {
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Info label="Name" value={admin.displayName} />
           <Info label="Email" value={admin.email} />
-          <Info label="Role" value={admin.role.replaceAll('_', ' ')} />
+          <Info label="Role" value={membershipRoleLabel} />
           <Info label="Last sign-in" value={formatDateTime(admin.lastLoginAt)} />
           <Info label="This session" value={session.id} />
           <Info label="Session expires" value={formatDateTime(session.expiresAt)} />

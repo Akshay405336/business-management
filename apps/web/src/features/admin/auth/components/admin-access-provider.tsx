@@ -38,7 +38,7 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
     return {
       permissions: access.permissions,
       permissionSet: access.permissionSet,
-      navGroups: filterAdminNav(access.permissions),
+      navGroups: filterAdminNav(access.permissions, access.navAccess),
       loading: false,
       has: access.has,
       hasAny: access.hasAny,
@@ -48,12 +48,12 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
   }, [access]);
 
   const redirectTarget = useMemo(() => {
-    if (canAccessAdminPath(pathname, value.permissionSet)) return null;
+    if (canAccessAdminPath(pathname, value.permissionSet, access.navAccess)) return null;
     const fallback =
       value.navGroups.flatMap((group) => group.items).find((item) => item.kind === 'link')?.href ??
-      '/admin/dashboard';
+      access.defaultDashboard;
     return pathname !== fallback ? fallback : null;
-  }, [pathname, value]);
+  }, [access.defaultDashboard, access.navAccess, pathname, value]);
 
   useEffect(() => {
     if (redirectTarget) router.replace(redirectTarget);

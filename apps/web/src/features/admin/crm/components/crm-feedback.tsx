@@ -11,6 +11,7 @@ import {
   formFieldControlShellClass,
   formFieldLabelClass,
 } from '@/shared/form/form-layout';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 
 export function CrmPageHeader({
@@ -24,13 +25,11 @@ export function CrmPageHeader({
   actions?: ReactNode;
   breadcrumbs?: readonly { label: string; href?: string }[];
 }) {
+  const { dashboardBreadcrumb } = usePortalNavigation();
   return (
     <AdminPageHeader
       breadcrumbs={
-        breadcrumbs ?? [
-          { label: 'Dashboard', href: '/admin/dashboard' },
-          { label: title },
-        ]
+        breadcrumbs ?? [dashboardBreadcrumb, { label: title }]
       }
       title={title}
       description={description}

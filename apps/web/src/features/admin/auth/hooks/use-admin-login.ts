@@ -32,6 +32,7 @@ export function useAdminLogin() {
         const destination = resolvePostAuthRedirect({
           admin: result.admin,
           permissions: bootstrap?.permissions ?? [],
+          roles: bootstrap?.roles ?? [],
           returnTo: searchParams.get('returnTo'),
         });
         router.replace(destination);

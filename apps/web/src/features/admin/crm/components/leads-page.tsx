@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
 import {
   Select,
@@ -74,6 +75,8 @@ function orderActivePipelines(pipelines: readonly CrmPipeline[]): CrmPipeline[] 
 
 export function LeadsPage() {
   const router = useRouter();
+  const { toPortalPath, dashboardBreadcrumb } = usePortalNavigation();
+  const leadsHref = toPortalPath('/admin/leads');
   const searchParams = useSearchParams();
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
@@ -117,9 +120,9 @@ export function LeadsPage() {
         if (value === null || value === '') params.delete(key);
         else params.set(key, value);
       }
-      router.replace(`/admin/leads?${params.toString()}`);
+      router.replace(`${leadsHref}?${params.toString()}`);
     },
-    [router, searchParams],
+    [leadsHref, router, searchParams],
   );
 
   useEffect(() => {
@@ -318,7 +321,7 @@ export function LeadsPage() {
   };
 
   const breadcrumbs = [
-    { label: 'Dashboard', href: '/admin/dashboard' },
+    dashboardBreadcrumb,
     { label: 'CRM' },
     { label: 'Leads' },
   ] as const;
