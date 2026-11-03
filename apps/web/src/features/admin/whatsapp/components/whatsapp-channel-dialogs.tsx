@@ -72,11 +72,14 @@ export function WebhookSetupPanel({
 }) {
   return (
     <div className="grid gap-2 rounded-lg border bg-neutral-50/60 p-3">
-      <p className="text-sm font-medium">Configure the webhook in Meta</p>
+      <p className="text-sm font-medium">Activate webhooks in Meta (when ready)</p>
       <p className="text-muted-foreground text-xs">
-        In your Meta app go to WhatsApp → Configuration → Webhook, paste these values, then
-        subscribe to the <code>messages</code> field (and{' '}
-        <code>message_template_status_update</code> for template reviews).
+        Your channel is saved and credentials are encrypted. Finish this step when your public
+        webhook URL is reachable. In Meta go to WhatsApp → Configuration → Webhook, paste these
+        values, verify, then subscribe to <code>messages</code> (and{' '}
+        <code>message_template_status_update</code> for template reviews). Until verification
+        succeeds, the channel stays in &quot;Webhook not verified&quot; and inbound events will not
+        arrive.
       </p>
       <CopyField label="Callback URL" value={channel.webhookUrl} />
       {verifyToken ? (
@@ -176,7 +179,8 @@ export function ConnectChannelDialog({
           <DialogTitle>Connect WhatsApp channel</DialogTitle>
           <DialogDescription>
             Uses the official WhatsApp Business Cloud API. Credentials are encrypted on the server
-            and never shown again.
+            and never shown again. Meta webhook verification can be completed later to receive
+            inbound messages.
           </DialogDescription>
         </DialogHeader>
 

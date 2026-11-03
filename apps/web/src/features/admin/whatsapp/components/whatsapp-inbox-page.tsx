@@ -516,8 +516,8 @@ export function WhatsAppInboxPage() {
         </Alert>
       ) : null}
 
-      <div className="grid h-[calc(100dvh-13rem)] min-h-[520px] overflow-hidden rounded-xl border bg-white lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_300px]">
-        <div className={cn('min-h-0', selectedId ? 'hidden lg:flex lg:flex-col' : 'flex flex-col')}>
+      <div className="grid h-[calc(100dvh-13rem)] min-h-[520px] min-w-0 overflow-hidden rounded-xl border bg-white lg:grid-cols-[minmax(260px,32%)_minmax(0,1fr)]">
+        <div className={cn('min-h-0 min-w-0', selectedId ? 'hidden lg:flex lg:flex-col' : 'flex flex-col')}>
           <WhatsAppConversationList
             folder={folder}
             counts={counts}
@@ -540,7 +540,7 @@ export function WhatsAppInboxPage() {
         </div>
 
         <section
-          className={cn('min-h-0 flex-col bg-[#f4f1ec]', selectedId ? 'flex' : 'hidden lg:flex')}
+          className={cn('min-h-0 min-w-0 flex-col bg-[#f4f1ec]', selectedId ? 'flex' : 'hidden lg:flex')}
         >
           {!selectedId ? (
             <div className="text-muted-foreground grid flex-1 place-items-center p-6 text-center text-sm">
@@ -623,13 +623,14 @@ export function WhatsAppInboxPage() {
                 ) : null}
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="xl:hidden"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
                   aria-label="Contact details"
                   onClick={() => setContactSheetOpen(true)}
                 >
                   <PanelRight aria-hidden="true" />
+                  <span className="hidden sm:inline">Details</span>
                 </Button>
                 {(detail?.canReply || detail?.canAssign) && conversation.status !== 'SPAM' ? (
                   <DropdownMenu>
@@ -725,20 +726,12 @@ export function WhatsAppInboxPage() {
             </>
           )}
         </section>
-
-        <div className="hidden min-h-0 xl:grid">
-          {contactPanel ?? (
-            <div className="text-muted-foreground grid place-items-center border-l p-6 text-center text-xs">
-              Contact details appear here.
-            </div>
-          )}
-        </div>
       </div>
 
       <Sheet open={contactSheetOpen} onOpenChange={setContactSheetOpen}>
-        <SheetContent side="right" className="w-[320px] p-0">
-          <SheetTitle className="sr-only">Contact details</SheetTitle>
-          {contactPanel}
+        <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-md">
+          <SheetTitle className="border-b px-4 py-3 text-base font-semibold">Contact details</SheetTitle>
+          <div className="min-h-0 flex-1 overflow-hidden">{contactPanel}</div>
         </SheetContent>
       </Sheet>
 

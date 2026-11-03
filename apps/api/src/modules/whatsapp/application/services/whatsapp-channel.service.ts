@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
   WhatsAppChannelListResponse,
   WhatsAppChannelSummary,
@@ -36,6 +36,8 @@ type ChannelActor = Pick<WhatsAppActor, 'organizationId' | 'adminId'>;
 
 @Injectable()
 export class WhatsAppChannelService {
+  private readonly logger = new Logger(WhatsAppChannelService.name);
+
   constructor(
     @Inject(WHATSAPP_CHANNEL_STORE) private readonly channels: WhatsAppChannelStore,
     @Inject(WHATSAPP_PROVIDER) private readonly provider: WhatsAppProviderPort,
@@ -227,7 +229,14 @@ export class WhatsAppChannelService {
     };
     try {
       const info = await this.provider.verifyPhoneNumber(providerCredentials);
-      await this.provider.subscribeApp(providerCredentials);
+      try {
+        await this.provider.subscribeApp(providerCredentials);
+      } catch (subscribeError) {
+        this.logger.warn(
+          `Meta app subscription failed for channel ${id}; credentials are still saved. Configure the webhook in Meta when ready.`,
+          subscribeError instanceof Error ? subscribeError.stack : String(subscribeError),
+        );
+      }
       await this.channels.recordVerification(organizationId, id, { ok: true, info });
       const channel = await this.get(organizationId, id);
       return {

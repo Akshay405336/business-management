@@ -223,6 +223,9 @@ export const listWhatsAppTemplates = (
     },
   );
 
+export const fetchWhatsAppTemplate = (id: string, signal?: AbortSignal) =>
+  apiRequest<WhatsAppTemplateSummary>(WHATSAPP_ROUTES.template(id), { auth: true, signal });
+
 export const submitWhatsAppTemplate = (body: WhatsAppCreateTemplateRequest) =>
   apiRequest<WhatsAppTemplateSummary>(WHATSAPP_ROUTES.templates, {
     method: 'POST',

@@ -147,10 +147,11 @@ export function WhatsAppChannelsPage() {
       {setup && !setup.webhookBaseUrl ? (
         <Alert variant="info">
           <CircleAlert aria-hidden="true" />
-          <AlertTitle>Public webhook URL not configured</AlertTitle>
+          <AlertTitle>Webhook URL not set on the server yet</AlertTitle>
           <AlertDescription>
-            Set WHATSAPP_WEBHOOK_BASE_URL to the public HTTPS address of the API so Meta can deliver
-            messages.
+            You can connect channels and store credentials now. When you are ready to receive
+            messages from Meta, set <code className="text-xs">WHATSAPP_WEBHOOK_BASE_URL</code> to
+            your public HTTPS API address and complete webhook verification in the Meta app.
           </AlertDescription>
         </Alert>
       ) : null}

@@ -41,6 +41,7 @@ export function WhatsAppContactPanel({
   onAssign,
   onConsent,
   onCrmLink,
+  className,
 }: {
   detail: WhatsAppConversationDetail;
   assignees: readonly WhatsAppAssigneeSummary[];
@@ -48,6 +49,7 @@ export function WhatsAppContactPanel({
   onAssign: (employeeId: string | null) => Promise<void>;
   onConsent: (status: 'OPTED_IN' | 'OPTED_OUT', source: string) => Promise<void>;
   onCrmLink: (kind: 'LEAD' | 'CLIENT', id: string | null) => Promise<void>;
+  className?: string;
 }) {
   const { conversation, canAssign, canReply } = detail;
   const contact = conversation.contact;
@@ -73,7 +75,7 @@ export function WhatsAppContactPanel({
   };
 
   return (
-    <aside className="grid content-start gap-4 overflow-y-auto border-l bg-white p-4">
+    <aside className={cn('grid h-full content-start gap-4 overflow-y-auto bg-white p-4', className)}>
       <div className="grid justify-items-center gap-2 text-center">
         <span className="grid size-14 place-items-center rounded-full bg-emerald-100 text-lg font-semibold text-emerald-800">
           {initialsOf(contact.displayName)}

@@ -15,6 +15,7 @@ import type { Request } from 'express';
 import { ReceiveWhatsAppWebhookHandler } from '../../../application/receive-whatsapp-webhook/receive-whatsapp-webhook.handler.js';
 import { VerifyWhatsAppWebhookHandler } from '../../../application/verify-whatsapp-webhook/verify-whatsapp-webhook.handler.js';
 import { WhatsAppExceptionFilter } from '../filters/whatsapp-exception.filter.js';
+import { metaWebhookVerifyParams } from '../../../application/shared/meta-webhook-verify-query.js';
 
 /**
  * Public Meta webhook endpoint. Authenticity comes from the per-channel secret URL
@@ -32,11 +33,12 @@ export class WhatsAppWebhookController {
   @Get(':channelKey')
   @Header('Content-Type', 'text/plain; charset=utf-8')
   verify(@Param('channelKey') channelKey: string, @Req() request: Request): Promise<string> {
+    const { mode, token, challenge } = metaWebhookVerifyParams(request);
     return this.verifyWebhook.execute({
       channelKey,
-      mode: request.query['hub.mode'],
-      token: request.query['hub.verify_token'],
-      challenge: request.query['hub.challenge'],
+      mode,
+      token,
+      challenge,
     });
   }
 

@@ -14,6 +14,7 @@ import {
   type WhatsAppChannelStore,
   type WhatsAppWebhookEventStore,
 } from '../repositories/whatsapp-stores.js';
+import { normalizeMetaVerifyField } from '../shared/meta-webhook-verify-query.js';
 
 const WEBHOOK_KEY = /^[A-Za-z0-9_-]{16,64}$/;
 const CHALLENGE = /^[A-Za-z0-9_.-]{1,256}$/;
@@ -53,19 +54,25 @@ export class WhatsAppWebhookService {
     await enforceRateLimit(this.rateLimiter, WHATSAPP_RATE_LIMITS.webhook, webhookKey);
     const channel = await this.channels.findForWebhook(webhookKey);
     if (!channel || !channel.isActive) throw new WhatsAppNotFoundError('Webhook');
-    const { mode, token, challenge } = query;
-    if (
-      mode !== 'subscribe' ||
-      typeof token !== 'string' ||
-      typeof challenge !== 'string' ||
-      !CHALLENGE.test(challenge) ||
-      !channel.verifyTokenHash ||
-      !constantTimeEqualHex(sha256Hex(token), channel.verifyTokenHash)
-    ) {
+    const mode = normalizeMetaVerifyField(query.mode);
+    const token = normalizeMetaVerifyField(query.token);
+    const challenge = normalizeMetaVerifyField(query.challenge);
+    const modeOk = mode === 'subscribe';
+    const tokenPresent = Boolean(token);
+    const challengeOk = Boolean(challenge && CHALLENGE.test(challenge));
+    const hasVerifyHash = Boolean(channel.verifyTokenHash);
+    const tokenMatch =
+      hasVerifyHash &&
+      tokenPresent &&
+      constantTimeEqualHex(sha256Hex(token!), channel.verifyTokenHash!);
+    if (!(modeOk && tokenPresent && challengeOk && hasVerifyHash && tokenMatch)) {
+      this.logger.warn(
+        `Webhook verify rejected channelId=${channel.id} modeOk=${modeOk} tokenPresent=${tokenPresent} challengeOk=${challengeOk} hasVerifyHash=${hasVerifyHash} tokenMatch=${tokenMatch}`,
+      );
       throw new WhatsAppWebhookRejectedError();
     }
     await this.channels.markWebhookVerified(channel.id);
-    return challenge;
+    return challenge!;
   }
 
   /**

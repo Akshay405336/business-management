@@ -2,11 +2,17 @@
 
 import type { WhatsAppChannelSummary, WhatsAppTemplateSummary } from '@techwin/contracts';
 import { whatsappCreateTemplateRequestSchema } from '@techwin/validation';
-import { FilePlus2, RefreshCw, Search } from 'lucide-react';
+import {
+  LayoutGrid,
+  List,
+  MessageCircle,
+  Plus,
+  RefreshCw,
+  Search,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,6 +33,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { useMyPermissions } from '@/features/admin/org-access/hooks/use-my-permissions';
 import { cn } from '@/shared/lib/utils';
@@ -36,19 +43,37 @@ import {
   submitWhatsAppTemplate,
   syncWhatsAppTemplates,
 } from '../api/whatsapp';
-import {
-  describeWhatsAppError,
-  formatDateTime,
-  TEMPLATE_STATUS_CLASS,
-} from '../utils/whatsapp-format';
-import { WhatsAppPageShell } from './whatsapp-page-shell';
+import { describeWhatsAppError } from '../utils/whatsapp-format';
+import { WhatsAppTemplateDetailDialog } from './whatsapp-template-detail-dialog';
 import { TemplatePreview } from './whatsapp-template-dialog';
+import {
+  WhatsAppTemplateCard,
+  WhatsAppTemplateListRow,
+} from './whatsapp-template-card';
 
 const STATUSES = ['APPROVED', 'PENDING', 'REJECTED', 'PAUSED', 'DISABLED'] as const;
+const CATEGORIES = ['MARKETING', 'UTILITY', 'AUTHENTICATION'] as const;
 
-function sampleValues(template: WhatsAppTemplateSummary): string[] {
-  return template.parameters.map((parameter) => `{{${parameter.name}}}`);
+type SortOption = 'newest' | 'oldest' | 'name-asc' | 'name-desc';
+type ViewMode = 'grid' | 'list';
+
+function sortTemplates(
+  items: readonly WhatsAppTemplateSummary[],
+  sort: SortOption,
+): WhatsAppTemplateSummary[] {
+  const list = [...items];
+  list.sort((a, b) => {
+    if (sort === 'name-asc') return a.name.localeCompare(b.name);
+    if (sort === 'name-desc') return b.name.localeCompare(a.name);
+    const aTime = a.lastSyncedAt ? Date.parse(a.lastSyncedAt) : 0;
+    const bTime = b.lastSyncedAt ? Date.parse(b.lastSyncedAt) : 0;
+    if (sort === 'oldest') return aTime - bTime || a.name.localeCompare(b.name);
+    return bTime - aTime || a.name.localeCompare(b.name);
+  });
+  return list;
 }
+
+const TOOLBAR_CONTROL_CLASS = 'h-9 shrink-0 rounded-lg border-slate-200 shadow-xs';
 
 export function WhatsAppTemplatesPage() {
   const toast = useAdminToast();
@@ -61,7 +86,10 @@ export function WhatsAppTemplatesPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [channelId, setChannelId] = useState('all');
   const [status, setStatus] = useState('all');
+  const [category, setCategory] = useState('all');
   const [search, setSearch] = useState('');
+  const [sort, setSort] = useState<SortOption>('newest');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [syncing, setSyncing] = useState(false);
   const [viewing, setViewing] = useState<WhatsAppTemplateSummary | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -95,12 +123,21 @@ export function WhatsAppTemplatesPage() {
   const activeChannels = channels.filter((channel) => channel.status !== 'DISCONNECTED');
 
   const visible = useMemo(() => {
+    if (!templates) return null;
+    let list = [...templates];
     const term = search.trim().toLowerCase();
-    if (!templates || !term) return templates;
-    return templates.filter(
-      (template) => template.name.includes(term) || template.bodyText.toLowerCase().includes(term),
-    );
-  }, [templates, search]);
+    if (term) {
+      list = list.filter(
+        (template) =>
+          template.name.toLowerCase().includes(term) ||
+          template.bodyText.toLowerCase().includes(term),
+      );
+    }
+    if (category !== 'all') {
+      list = list.filter((template) => template.category.toUpperCase() === category);
+    }
+    return sortTemplates(list, sort);
+  }, [templates, search, category, sort]);
 
   const sync = async () => {
     const targets =
@@ -128,20 +165,44 @@ export function WhatsAppTemplatesPage() {
   };
 
   return (
-    <WhatsAppPageShell
-      title="WhatsApp Templates"
-      description="Message templates approved by Meta. Templates are required to message customers outside the 24-hour window."
-      toolbar={
-        <>
+    <div className="mx-auto grid w-full max-w-[1400px] gap-4 pb-8 pt-1">
+      <AdminBreadcrumb
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/admin/dashboard' },
+          { label: 'Communications' },
+          { label: 'WhatsApp', href: '/admin/whatsapp/channels' },
+          { label: 'Templates' },
+        ]}
+        className="mb-0.5"
+      />
+
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <span
+            className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#25D366]/10 text-[#128C7E]"
+            aria-hidden="true"
+          >
+            <MessageCircle className="size-6" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">Message templates</h1>
+            <p className="mt-0.5 max-w-2xl text-sm text-slate-600">
+              Manage your WhatsApp message templates from Meta. Templates are required to message
+              customers outside the 24-hour window.
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {canSync ? (
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className={cn(TOOLBAR_CONTROL_CLASS, 'bg-white')}
               disabled={syncing}
               onClick={() => void sync()}
             >
-              <RefreshCw className={cn(syncing && 'animate-spin')} aria-hidden="true" />
+              <RefreshCw className={cn('size-4', syncing && 'animate-spin')} aria-hidden="true" />
               {syncing ? 'Syncing…' : 'Sync from Meta'}
             </Button>
           ) : null}
@@ -149,59 +210,114 @@ export function WhatsAppTemplatesPage() {
             <Button
               type="button"
               size="sm"
+              className={cn(
+                TOOLBAR_CONTROL_CLASS,
+                'border-0 bg-[#25D366] text-white hover:bg-[#1da851]',
+              )}
               disabled={activeChannels.length === 0}
               onClick={() => setCreateOpen(true)}
             >
-              <FilePlus2 aria-hidden="true" />
-              New template
+              <Plus className="size-4" aria-hidden="true" />
+              Create template
             </Button>
           ) : null}
-        </>
-      }
-      bottomRow={
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-64">
-            <Search
-              className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-              aria-hidden="true"
-            />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search templates"
-              className="h-8 pl-8"
-              aria-label="Search templates"
-            />
-          </div>
-          <Select value={channelId} onValueChange={setChannelId}>
-            <SelectTrigger className="h-8 w-48" aria-label="Channel">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All channels</SelectItem>
-              {channels.map((channel) => (
-                <SelectItem key={channel.id} value={channel.id}>
-                  {channel.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger className="h-8 w-40" aria-label="Status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {STATUSES.map((entry) => (
-                <SelectItem key={entry} value={entry}>
-                  {entry.charAt(0) + entry.slice(1).toLowerCase()}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
-      }
-    >
+      </header>
+
+      <div className="flex flex-col gap-2 rounded-xl border border-slate-200/90 bg-white p-3 shadow-xs lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="relative min-w-0 flex-1 basis-[12rem]">
+          <Search
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-slate-400"
+            aria-hidden="true"
+          />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search templates…"
+            className={cn(TOOLBAR_CONTROL_CLASS, 'w-full bg-slate-50/50 pl-9')}
+            aria-label="Search templates"
+          />
+        </div>
+        <Select value={channelId} onValueChange={setChannelId}>
+          <SelectTrigger className={cn(TOOLBAR_CONTROL_CLASS, 'w-full sm:w-[10.5rem]')} aria-label="Channel">
+            <SelectValue placeholder="All channels" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All channels</SelectItem>
+            {channels.map((channel) => (
+              <SelectItem key={channel.id} value={channel.id}>
+                {channel.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className={cn(TOOLBAR_CONTROL_CLASS, 'w-full sm:w-[9.5rem]')} aria-label="Status">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {STATUSES.map((entry) => (
+              <SelectItem key={entry} value={entry}>
+                {entry.charAt(0) + entry.slice(1).toLowerCase()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger className={cn(TOOLBAR_CONTROL_CLASS, 'w-full sm:w-[10rem]')} aria-label="Category">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {CATEGORIES.map((entry) => (
+              <SelectItem key={entry} value={entry}>
+                {entry.charAt(0) + entry.slice(1).toLowerCase()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={sort} onValueChange={(value) => setSort(value as SortOption)}>
+          <SelectTrigger className={cn(TOOLBAR_CONTROL_CLASS, 'w-full sm:w-[10.5rem]')} aria-label="Sort">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="name-asc">Name A–Z</SelectItem>
+            <SelectItem value="name-desc">Name Z–A</SelectItem>
+          </SelectContent>
+        </Select>
+        <div
+          className="flex h-9 shrink-0 items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50/80 p-0.5"
+          role="group"
+          aria-label="View mode"
+        >
+          <Button
+            type="button"
+            variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+            size="icon-sm"
+            className="size-8 rounded-md"
+            aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
+            onClick={() => setViewMode('grid')}
+          >
+            <LayoutGrid className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="icon-sm"
+            className="size-8 rounded-md"
+            aria-label="List view"
+            aria-pressed={viewMode === 'list'}
+            onClick={() => setViewMode('list')}
+          >
+            <List className="size-4" />
+          </Button>
+        </div>
+      </div>
+
       {loadError ? (
         <Alert variant="destructive">
           <AlertDescription>{loadError}</AlertDescription>
@@ -209,116 +325,70 @@ export function WhatsAppTemplatesPage() {
       ) : null}
 
       {visible === null && !loadError ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} className="h-40 rounded-xl" />
-          ))}
-        </div>
+        viewMode === 'grid' ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-72 rounded-xl" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {Array.from({ length: 4 }, (_, index) => (
+              <Skeleton key={index} className="h-36 rounded-xl" />
+            ))}
+          </div>
+        )
       ) : null}
 
       {visible?.length === 0 ? (
-        <div className="text-muted-foreground rounded-xl border bg-white p-10 text-center text-sm">
+        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-12 text-center text-sm text-slate-600">
           {channels.length === 0 ? (
             <>
               No channel connected.{' '}
-              <Link href="/admin/whatsapp/channels" className="font-medium underline">
+              <Link href="/admin/whatsapp/channels" className="font-medium text-[#128C7E] underline">
                 Connect WhatsApp
               </Link>{' '}
               first.
             </>
           ) : (
-            'No templates yet. Sync from Meta to import the templates on your WhatsApp Business Account.'
+            'No templates match your filters. Sync from Meta to import templates from your WhatsApp Business Account.'
           )}
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {visible?.map((template) => (
-          <button
-            key={template.id}
-            type="button"
-            onClick={() => setViewing(template)}
-            className="grid content-start gap-2 rounded-xl border bg-white p-4 text-left transition-shadow hover:shadow-sm"
-          >
-            <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{template.name}</p>
-                <p className="text-muted-foreground text-xs">
-                  {template.language} · {template.category.toLowerCase()} · {template.channelName}
-                </p>
-              </div>
-              <Badge variant="outline" className={TEMPLATE_STATUS_CLASS[template.status] ?? ''}>
-                {template.status.toLowerCase()}
-              </Badge>
-            </div>
-            <p className="line-clamp-3 text-sm whitespace-pre-wrap text-neutral-700">
-              {template.bodyText}
-            </p>
-            <div className="text-muted-foreground mt-auto flex flex-wrap items-center gap-2 text-[11px]">
-              <span>
-                {template.parameters.length} variable{template.parameters.length === 1 ? '' : 's'}
-              </span>
-              {!template.sendable ? (
-                <Badge variant="outline">Media header — not sendable here</Badge>
-              ) : null}
-              {template.rejectedReason ? (
-                <span className="text-red-600">Reason: {template.rejectedReason}</span>
-              ) : null}
-            </div>
-          </button>
-        ))}
-      </div>
+      {visible && visible.length > 0 ? (
+        viewMode === 'grid' ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {visible.map((template) => (
+              <WhatsAppTemplateCard
+                key={template.id}
+                template={template}
+                onView={() => setViewing(template)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {visible.map((template) => (
+              <WhatsAppTemplateListRow
+                key={template.id}
+                template={template}
+                onView={() => setViewing(template)}
+              />
+            ))}
+          </div>
+        )
+      ) : null}
 
-      <Dialog
+      <WhatsAppTemplateDetailDialog
+        templateId={viewing?.id ?? null}
         open={viewing !== null}
-        onOpenChange={(open) => (open ? undefined : setViewing(null))}
-      >
-        <DialogContent className="sm:max-w-lg">
-          {viewing ? (
-            <>
-              <DialogHeader>
-                <DialogTitle>{viewing.name}</DialogTitle>
-                <DialogDescription>
-                  {viewing.language} · {viewing.category.toLowerCase()} · {viewing.channelName}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-3 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={TEMPLATE_STATUS_CLASS[viewing.status] ?? ''}>
-                    {viewing.status.toLowerCase()}
-                  </Badge>
-                  {viewing.qualityScore ? (
-                    <Badge variant="outline">Quality: {viewing.qualityScore}</Badge>
-                  ) : null}
-                  <span className="text-muted-foreground text-xs">
-                    Last synced {formatDateTime(viewing.lastSyncedAt)}
-                  </span>
-                </div>
-                {viewing.rejectedReason ? (
-                  <Alert variant="destructive">
-                    <AlertDescription>
-                      Meta rejected this template: {viewing.rejectedReason}
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
-                <TemplatePreview template={viewing} values={sampleValues(viewing)} />
-                {viewing.parameters.length > 0 ? (
-                  <div className="grid gap-1">
-                    <p className="text-muted-foreground text-xs font-medium">Variables</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {viewing.parameters.map((parameter, index) => (
-                        <Badge key={index} variant="secondary">
-                          {parameter.component.toLowerCase()} {`{{${parameter.name}}}`}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+        onOpenChange={(open) => {
+          if (!open) setViewing(null);
+        }}
+        canManage={canSubmit}
+        onUpdated={() => void load()}
+      />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -341,7 +411,7 @@ export function WhatsAppTemplatesPage() {
           />
         </DialogContent>
       </Dialog>
-    </WhatsAppPageShell>
+    </div>
   );
 }
 
