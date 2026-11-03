@@ -187,6 +187,7 @@ export class OrgAccessController {
       phone: body.phone,
       password: body.password,
       roleIds: body.roleIds,
+      employeeId: body.employeeId,
     });
     return toOrgMemberListItem(record);
   }

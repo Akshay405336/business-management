@@ -162,6 +162,27 @@ export const ORG_ROLES_TABLE_COLUMN_CLASS = {
   actions: 'w-[15%] min-w-[10rem]',
 } as const;
 
+/** Width classes for org members listing table (`table-fixed`). */
+export const ORG_MEMBERS_TABLE_COLUMN_CLASS = {
+  name: 'w-[20%] min-w-[9rem]',
+  email: 'w-[32%] min-w-[11rem]',
+  role: 'w-[20%] min-w-[8rem]',
+  status: 'w-[14%] min-w-[7rem]',
+  actions: 'w-[14%] min-w-[10rem]',
+} as const;
+
+export const ORG_MEMBERS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
+  { variant: 'textWide', className: ORG_MEMBERS_TABLE_COLUMN_CLASS.name },
+  { variant: 'textWide', className: ORG_MEMBERS_TABLE_COLUMN_CLASS.email },
+  { variant: 'badge', className: ORG_MEMBERS_TABLE_COLUMN_CLASS.role },
+  { variant: 'badge', className: ORG_MEMBERS_TABLE_COLUMN_CLASS.status },
+  {
+    variant: 'actions',
+    className: ORG_MEMBERS_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${ORG_MEMBERS_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
+];
+
 export const ORG_ROLES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
   { variant: 'textWide', className: ORG_ROLES_TABLE_COLUMN_CLASS.name },
   { variant: 'text', className: ORG_ROLES_TABLE_COLUMN_CLASS.key },

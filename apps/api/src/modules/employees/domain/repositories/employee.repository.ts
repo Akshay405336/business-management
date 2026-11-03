@@ -103,6 +103,8 @@ export interface EmployeeListFilters {
   readonly employmentType?: EmployeeEmploymentType;
   readonly sortBy: 'displayName' | 'employeeCode' | 'dateOfJoining' | 'updatedAt';
   readonly sortDir: 'asc' | 'desc';
+  /** Unlinked profiles eligible for sign-in account creation (Users module). */
+  readonly accountLinkable?: boolean;
 }
 
 export interface PaginatedEmployees {
@@ -123,7 +125,6 @@ export interface CreateEmployeeInput {
   readonly jobTitle: string;
   readonly department?: string | null;
   readonly employmentType: EmployeeEmploymentType;
-  readonly employmentStatus?: EmployeeEmploymentStatus;
   readonly dateOfJoining: string;
   readonly probationEndDate?: string | null;
   readonly employmentEndDate?: string | null;

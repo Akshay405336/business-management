@@ -69,7 +69,6 @@ import { EmployeeExceptionFilter } from '../filters/employee-exception.filter.js
 import { toEmployeeActor } from '../mappers/employee-actor.mapper.js';
 import {
   toCreateEmployeeInput,
-  toCreateEmployeeLogin,
   toUpdateEmployeeInput,
 } from '../mappers/employee-request.mapper.js';
 import {
@@ -254,7 +253,6 @@ export class EmployeesController {
       actor: toEmployeeActor(ctx),
       accessActor,
       input: toCreateEmployeeInput(body),
-      login: toCreateEmployeeLogin(body),
     });
     const includeCompensation = await canReadEmployeeCompensation(
       this.permissionChecker,

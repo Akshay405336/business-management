@@ -200,6 +200,12 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
   ): Promise<PaginatedEmployees> {
     const where: Prisma.EmployeeWhereInput = {
       organizationId,
+      ...(filters.accountLinkable
+        ? {
+            platformAdminId: null,
+            employmentStatus: { in: ['ACTIVE', 'ON_LEAVE'] },
+          }
+        : {}),
       ...(filters.status ? { employmentStatus: filters.status } : {}),
       ...(filters.employmentType ? { employmentType: filters.employmentType } : {}),
       ...(filters.search?.trim()
@@ -312,7 +318,7 @@ export class PrismaEmployeeRepository implements EmployeeRepository {
     loginAccount?: NewEmployeeLoginAccount | null,
   ): Promise<EmployeeRecord> {
     const displayName = `${input.firstName.trim()} ${input.lastName.trim()}`.trim();
-    const employmentStatus = input.employmentStatus ?? 'ACTIVE';
+    const employmentStatus = 'ACTIVE';
     let row: EmployeeRow;
     try {
       row = await this.prisma.$transaction(async (tx) => {

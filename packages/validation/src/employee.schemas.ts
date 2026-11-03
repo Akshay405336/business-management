@@ -2,7 +2,6 @@ import { z } from 'zod';
 import { employeeSalaryStructureSchema } from './employee-salary.js';
 import { profileImageStoredObjectIdSchema } from './stored-object.js';
 import { leadEmailSchema, leadPhoneSchema } from './lead-contact.js';
-import { PLATFORM_PASSWORD_MAX_LENGTH, platformNewPasswordSchema } from './platform-auth.schemas.js';
 
 export const employeeEmploymentStatusSchema = z.enum([
   'ACTIVE',
@@ -43,51 +42,18 @@ const employeeEmploymentFields = {
   notes: z.string().max(4000).optional(),
 };
 
-const employeeLoginFields = {
-  loginEnabled: z.boolean().optional(),
-  password: z.string().max(PLATFORM_PASSWORD_MAX_LENGTH, 'Password is too long.').optional(),
-  confirmPassword: z.string().max(PLATFORM_PASSWORD_MAX_LENGTH).optional(),
-};
-
 export const createEmployeeRequestSchema = z
   .object({
-    ...employeeContactFields,
+    firstName: employeeContactFields.firstName,
+    lastName: z.string().trim().max(80),
+    workEmail: employeeContactFields.workEmail,
+    phone: employeeContactFields.phone,
+    alternatePhone: employeeContactFields.alternatePhone,
     ...employeeEmploymentFields,
-    ...employeeLoginFields,
-    employmentStatus: employeeEmploymentStatusSchema.optional(),
     salaryStructure: employeeSalaryStructureSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
-    if (value.loginEnabled) {
-      const password = platformNewPasswordSchema.safeParse(value.password ?? '');
-      if (!password.success) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['password'],
-          message: password.error.issues[0]?.message ?? 'Enter a valid password.',
-        });
-      }
-      if (!value.confirmPassword) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['confirmPassword'],
-          message: 'Confirm the password.',
-        });
-      } else if (value.confirmPassword !== value.password) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['confirmPassword'],
-          message: 'Passwords do not match.',
-        });
-      }
-    } else if (value.password || value.confirmPassword) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['loginEnabled'],
-        message: 'Enable sign-in to set a password.',
-      });
-    }
     if (value.probationEndDate && value.probationEndDate < value.dateOfJoining) {
       ctx.addIssue({
         code: 'custom',
@@ -153,13 +119,24 @@ export const employeeListQuerySchema = z
     employmentType: employeeEmploymentTypeSchema.optional(),
     sortBy: employeeListSortBySchema.optional(),
     sortDir: z.enum(['asc', 'desc']).optional(),
+    /** When true, only employees without a linked sign-in account and eligible for access. */
+    accountLinkable: z.union([z.literal('true'), z.literal('false'), z.boolean()]).optional(),
   })
   .strict();
 
 export function parseEmployeeListQuery(input: unknown): z.infer<typeof employeeListQuerySchema> {
   const record =
     input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
-  const keys = ['page', 'pageSize', 'search', 'status', 'employmentType', 'sortBy', 'sortDir'] as const;
+  const keys = [
+    'page',
+    'pageSize',
+    'search',
+    'status',
+    'employmentType',
+    'sortBy',
+    'sortDir',
+    'accountLinkable',
+  ] as const;
   const picked: Record<string, unknown> = {};
   for (const key of keys) {
     if (key in record) picked[key] = record[key];

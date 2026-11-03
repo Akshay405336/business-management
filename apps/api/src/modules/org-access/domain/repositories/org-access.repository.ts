@@ -191,6 +191,7 @@ export interface OrgAccessRepository {
       displayName: string;
       phone?: string | null;
       account: PreparedMemberAccount;
+      employeeId?: string;
     },
     actorAdminId: string,
   ): Promise<OrgMemberRecord>;

@@ -1,4 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { SYSTEM_ROLE_KEYS } from '@techwin/contracts';
+import { OrgAccessValidationError } from '../../domain/errors/org-access.errors.js';
 import {
   ORG_ACCESS_REPOSITORY,
   type OrgAccessRepository,
@@ -14,6 +16,24 @@ export class ProvisionMemberHandler {
   ) {}
 
   async execute(command: ProvisionMemberCommand) {
+    const employeeRoleId = await this.repository.resolveSystemRoleId(
+      command.organizationId,
+      SYSTEM_ROLE_KEYS.employee,
+    );
+    const includesEmployeeRole = command.roleIds.includes(employeeRoleId);
+
+    if (includesEmployeeRole && !command.employeeId) {
+      throw new OrgAccessValidationError('Select an employee to link with this account.', [
+        { path: 'employeeId', message: 'Select an employee.' },
+      ]);
+    }
+    if (command.employeeId && !includesEmployeeRole) {
+      throw new OrgAccessValidationError(
+        'Employee linking is only allowed when the Employee role is assigned.',
+        [{ path: 'employeeId', message: 'Remove the employee selection or assign the Employee role.' }],
+      );
+    }
+
     const account = await this.memberAccounts.prepareNewAccount({
       organizationId: command.organizationId,
       actorAdminId: command.actorAdminId,
@@ -23,7 +43,12 @@ export class ProvisionMemberHandler {
     });
     return this.repository.provisionMember(
       command.organizationId,
-      { displayName: command.displayName, phone: command.phone, account },
+      {
+        displayName: command.displayName,
+        phone: command.phone,
+        account,
+        employeeId: command.employeeId,
+      },
       command.actorAdminId,
     );
   }

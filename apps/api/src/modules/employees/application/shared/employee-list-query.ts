@@ -11,5 +11,7 @@ export function toEmployeeListFilters(query: EmployeeListQuery): EmployeeListFil
     employmentType: query.employmentType,
     sortBy: query.sortBy ?? 'displayName',
     sortDir: query.sortDir ?? 'asc',
+    accountLinkable:
+      query.accountLinkable === true || query.accountLinkable === 'true' ? true : undefined,
   };
 }

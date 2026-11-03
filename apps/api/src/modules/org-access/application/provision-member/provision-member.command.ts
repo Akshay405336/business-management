@@ -6,4 +6,5 @@ export type ProvisionMemberCommand = {
   readonly phone?: string | null;
   readonly password: string;
   readonly roleIds: readonly string[];
+  readonly employeeId?: string;
 };

@@ -16,7 +16,6 @@ export function toCreateEmployeeInput(body: CreateEmployeeRequest): CreateEmploy
     jobTitle: body.jobTitle,
     department: body.department ?? null,
     employmentType: body.employmentType,
-    ...(body.employmentStatus !== undefined ? { employmentStatus: body.employmentStatus } : {}),
     dateOfJoining: body.dateOfJoining,
     probationEndDate: body.probationEndDate ?? null,
     employmentEndDate: body.employmentEndDate ?? null,
@@ -39,14 +38,6 @@ export function toCreateEmployeeInput(body: CreateEmployeeRequest): CreateEmploy
         }
       : {}),
   };
-}
-
-/** Login credentials stay out of the employee record and go only to account creation. */
-export function toCreateEmployeeLogin(
-  body: CreateEmployeeRequest,
-): { password: string } | null {
-  if (!body.loginEnabled || !body.password) return null;
-  return { password: body.password };
 }
 
 export function toUpdateEmployeeInput(body: UpdateEmployeeRequest): UpdateEmployeeInput {

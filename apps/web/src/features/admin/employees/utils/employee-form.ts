@@ -19,10 +19,6 @@ export type EmployeeFormState = {
   employmentEndDate: string;
   notes: string;
   profileImage: EmployeeProfileImageFormValue;
-  /** Create only: provision a sign-in account for this employee. */
-  loginEnabled: boolean;
-  password: string;
-  confirmPassword: string;
 };
 
 export function emptyEmployeeProfileImage(): EmployeeProfileImageFormValue {
@@ -52,9 +48,6 @@ export function emptyEmployeeForm(): EmployeeFormState {
     employmentEndDate: '',
     notes: '',
     profileImage: emptyEmployeeProfileImage(),
-    loginEnabled: false,
-    password: '',
-    confirmPassword: '',
   };
 }
 
@@ -115,16 +108,3 @@ export function employeeFormToPayload(
   };
 }
 
-/** Create-only fields: initial status and optional login account. */
-export function employeeFormToCreateExtras(form: EmployeeFormState) {
-  return {
-    employmentStatus: form.employmentStatus,
-    ...(form.loginEnabled
-      ? {
-          loginEnabled: true,
-          password: form.password,
-          confirmPassword: form.confirmPassword,
-        }
-      : {}),
-  };
-}

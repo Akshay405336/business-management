@@ -30,6 +30,24 @@ export function listEmployees(
 }
 
 /** Active employees for assignment pickers; available to task/project roles without HR access. */
+/** Employees without a linked sign-in account (Users → Create Account, Employee role). */
+export function listAccountLinkableEmployees(
+  search?: string,
+  signal?: AbortSignal,
+): Promise<EmployeeListResponse> {
+  return listEmployees(
+    {
+      accountLinkable: true,
+      page: 1,
+      pageSize: 100,
+      search: search?.trim() || undefined,
+      sortBy: 'displayName',
+      sortDir: 'asc',
+    },
+    signal,
+  );
+}
+
 export function listAssignableEmployees(
   search?: string,
   signal?: AbortSignal,

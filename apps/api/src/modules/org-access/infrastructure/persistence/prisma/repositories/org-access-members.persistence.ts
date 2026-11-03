@@ -492,27 +492,70 @@ export class OrgAccessMembersPersistence {
       displayName: string;
       phone?: string | null;
       account: PreparedMemberAccount;
+      employeeId?: string;
     },
     actorAdminId: string,
   ): Promise<OrgMemberRecord> {
     const displayName = input.displayName.trim();
     if (!displayName) throw new OrgAccessValidationError('Display name is required.');
     const phone = normalizedLeadPhoneOrNull(input.phone ?? null);
-    const { account } = input;
+    const { account, employeeId } = input;
 
     let membershipId: string;
     try {
       membershipId = await this.prisma.$transaction(async (tx) => {
+        if (employeeId) {
+          const employee = await tx.employee.findFirst({
+            where: {
+              id: employeeId,
+              organizationId,
+              platformAdminId: null,
+              employmentStatus: { in: ['ACTIVE', 'ON_LEAVE'] },
+            },
+            select: { id: true },
+          });
+          if (!employee) {
+            throw new OrgAccessValidationError(
+              'The selected employee is not eligible for account linking.',
+              [{ path: 'employeeId', message: 'Choose an employee without a linked sign-in account.' }],
+            );
+          }
+        }
+
         const created = await createMemberAccountInTransaction(
           tx,
           organizationId,
-          { account, displayName, phone, membershipStatus: 'ACTIVE' },
+          {
+            account,
+            displayName,
+            phone,
+            membershipStatus: 'ACTIVE',
+            auditMetadata: employeeId ? { employeeId } : undefined,
+          },
           actorAdminId,
         );
-        await tx.employee.updateMany({
-          where: { organizationId, workEmail: account.email, platformAdminId: null },
-          data: { platformAdminId: created.adminId },
-        });
+
+        if (employeeId) {
+          const linked = await tx.employee.updateMany({
+            where: {
+              id: employeeId,
+              organizationId,
+              platformAdminId: null,
+              employmentStatus: { in: ['ACTIVE', 'ON_LEAVE'] },
+            },
+            data: { platformAdminId: created.adminId, ownsLoginAccount: true },
+          });
+          if (linked.count !== 1) {
+            throw new OrgAccessConflictError(
+              'This employee already has a linked sign-in account or is not eligible.',
+            );
+          }
+        } else {
+          await tx.employee.updateMany({
+            where: { organizationId, workEmail: account.email, platformAdminId: null },
+            data: { platformAdminId: created.adminId },
+          });
+        }
         return created.membershipId;
       });
     } catch (error) {

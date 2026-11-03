@@ -1,13 +1,24 @@
 'use client';
 
-import { orgMemberListQuerySchema, updateMemberRequestSchema } from '@techwin/validation';
-import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
-import { clearFormFieldError, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
-import { KeyRound, Pencil, Power, Search, Shield, Trash2, UserPlus, Users } from 'lucide-react';
+import { orgMemberListQuerySchema } from '@techwin/validation';
+import { focusFirstInvalidField } from '@/shared/form/form-control-state';
+import { clearFormFieldError } from '@/shared/form/zod-field-error';
+import {
+  CircleDot,
+  Loader2,
+  Plus,
+  KeyRound,
+  Search,
+  SquarePen,
+  Tags,
+  ToggleLeft,
+  ToggleRight,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,22 +30,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/shared/lib/utils';
@@ -44,17 +48,18 @@ import {
   deriveDataTablePhase,
   isDataTableRefreshing,
 } from '@/features/admin/components/data-table';
-import type { DataTableSkeletonColumn } from '@/features/admin/components/data-table-skeleton';
+import {
+  ORG_MEMBERS_TABLE_COLUMN_CLASS,
+  ORG_MEMBERS_TABLE_SKELETON,
+} from '@/features/admin/components/data-table-presets';
+import type { DataTableEmptyStateContent } from '@/features/admin/components/data-table-states';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
-import {
-  CrmErrorAlert,
-  CrmFormField,
-} from '@/features/admin/crm/components/crm-feedback';
+import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
 import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
+import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
-import { formatDateTime } from '@/shared/lib/format';
 import {
   assignOrgMemberRoles,
   changeOrgMemberStatus,
@@ -65,8 +70,9 @@ import {
   resetOrgMemberPassword,
   updateOrgMember,
 } from '../api/org-access';
-import { CreateMemberAccountDialog } from './create-member-account-dialog';
+import { MemberFormDialog } from './member-form-dialog';
 import { ResetMemberPasswordDialog } from './reset-member-password-dialog';
+import { invalidateMyPermissionsCache } from '../my-permissions-cache';
 import { DEFAULT_ORG_MEMBER_PAGE_SIZE, MEMBERSHIP_STATUSES } from '../constants';
 import { useAuthenticatedAdmin } from '@/features/admin/auth/hooks/use-admin-session';
 import { useMyPermissions } from '../hooks/use-my-permissions';
@@ -87,41 +93,17 @@ import { labelMembershipStatus } from '../utils/labels';
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-const MEMBERS_TABLE_COLUMN_CLASS = {
-  name: 'w-[14%] min-w-[9rem] overflow-hidden pr-3 align-middle',
-  email: 'w-[18%] min-w-[10rem] overflow-hidden px-3 align-middle',
-  employee: 'w-[12%] min-w-[8rem] overflow-hidden px-3 align-middle',
-  role: 'w-[14%] min-w-[8rem] overflow-hidden px-3 align-middle',
-  status: 'w-[10%] min-w-[7rem] overflow-hidden px-3 align-middle',
-  joined: 'w-[12%] min-w-[8rem] overflow-hidden px-3 align-middle',
-  lastLogin: 'w-[12%] min-w-[8rem] overflow-hidden px-3 align-middle',
-  actions: 'w-[8%] min-w-[10rem] px-3 align-middle',
-} as const;
-
-const MEMBERS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
-  { variant: 'textWide', className: MEMBERS_TABLE_COLUMN_CLASS.name },
-  { variant: 'textWide', className: MEMBERS_TABLE_COLUMN_CLASS.email },
-  { variant: 'text', className: MEMBERS_TABLE_COLUMN_CLASS.employee },
-  { variant: 'badge', className: MEMBERS_TABLE_COLUMN_CLASS.role },
-  { variant: 'badge', className: MEMBERS_TABLE_COLUMN_CLASS.status },
-  { variant: 'text', className: MEMBERS_TABLE_COLUMN_CLASS.joined },
-  { variant: 'text', className: MEMBERS_TABLE_COLUMN_CLASS.lastLogin },
-  {
-    variant: 'actions',
-    className: MEMBERS_TABLE_COLUMN_CLASS.actions,
-    headClassName: `${MEMBERS_TABLE_COLUMN_CLASS.actions} text-right`,
-  },
-];
-
 function MembershipStatusBadge({ status }: { status: OrganizationMembershipStatus }) {
-  return (
-    <Badge variant={status === 'ACTIVE' ? 'default' : 'outline'} className="font-normal">
+  return status === 'ACTIVE' ? (
+    <Badge className="border-transparent bg-emerald-600/10 font-normal text-emerald-700 hover:bg-emerald-600/10">
+      {labelMembershipStatus(status)}
+    </Badge>
+  ) : (
+    <Badge className="border-transparent bg-red-600/10 font-normal text-red-700 hover:bg-red-600/10">
       {labelMembershipStatus(status)}
     </Badge>
   );
 }
-
-const PHONE_PLACEHOLDER = 'Not provided';
 
 function TruncateWithTooltip({
   value,
@@ -140,16 +122,6 @@ function TruncateWithTooltip({
       </TooltipContent>
     </Tooltip>
   );
-}
-
-function formatPhoneNumber(value: string | null | undefined): string {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : PHONE_PLACEHOLDER;
-}
-
-function formatLastLoginAt(value: string | null | undefined): string {
-  if (!value) return 'Never';
-  return formatDateTime(value);
 }
 
 function MemberRoleBadges({ roles }: { roles: OrgMemberListItem['roles'] }) {
@@ -198,18 +170,12 @@ export function UsersPage() {
   const [resetPasswordTarget, setResetPasswordTarget] = useState<OrgMemberListItem | null>(null);
   const [resetPasswordErrors, setResetPasswordErrors] = useState<Record<string, string>>({});
 
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
-  const [editProfileTarget, setEditProfileTarget] = useState<OrgMemberListItem | null>(null);
-  const [editDisplayName, setEditDisplayName] = useState('');
-  const [editPhone, setEditPhone] = useState('');
-  const [editProfileErrors, setEditProfileErrors] = useState<Record<string, string>>({});
+  const [memberFormOpen, setMemberFormOpen] = useState(false);
+  const [memberFormMode, setMemberFormMode] = useState<'create' | 'edit' | 'view'>('create');
+  const [memberFormTarget, setMemberFormTarget] = useState<OrgMemberListItem | null>(null);
+  const [memberFormApiErrors, setMemberFormApiErrors] = useState<Record<string, string>>({});
 
-  const [rolesDialogOpen, setRolesDialogOpen] = useState(false);
-  const [rolesTarget, setRolesTarget] = useState<OrgMemberListItem | null>(null);
-  const [selectedRoleIds, setSelectedRoleIds] = useState<readonly string[]>([]);
-
-  const [createAccountOpen, setCreateAccountOpen] = useState(false);
-  const [createAccountApiErrors, setCreateAccountApiErrors] = useState<Record<string, string>>({});
+  const [statusTarget, setStatusTarget] = useState<OrgMemberListItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OrgMemberListItem | null>(null);
 
   const grantableRoles = useMemo(
@@ -299,66 +265,79 @@ export function UsersPage() {
   const filtersActive =
     search.trim().length > 0 || statusFilter !== 'ALL' || roleFilter !== 'ALL';
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchDraft('');
     setSearch('');
     setStatusFilter('ALL');
     setRoleFilter('ALL');
     setPage(1);
-  };
+  }, []);
 
   const tablePhase = deriveDataTablePhase({ loading, error, rowCount: total });
   const tableRefreshing = isDataTableRefreshing({ loading, rowCount: items.length });
 
-  const saveProfile = async () => {
-    if (!editProfileTarget) return;
-    setEditProfileErrors({});
-    const phoneTrimmed = editPhone.trim();
-    const parsed = updateMemberRequestSchema.safeParse({
-      displayName: editDisplayName.trim(),
-      phone: phoneTrimmed ? phoneTrimmed : null,
-    });
-    if (!parsed.success) {
-      setEditProfileErrors(zodErrorToFieldMap(parsed.error));
-      focusFirstInvalidField();
-      return;
-    }
-    try {
-      await run(() => updateOrgMember(editProfileTarget.membershipId, parsed.data));
-      toast.success('Member profile updated.');
-      setEditProfileOpen(false);
-      setEditProfileTarget(null);
-      await load();
-    } catch (failure) {
-      if (!applyOrgAccessFieldErrors(failure, setEditProfileErrors)) {
-        toast.error(describeOrgAccessError(failure));
-      }
-    }
+  const openMemberForm = (mode: 'create' | 'edit' | 'view', member: OrgMemberListItem | null = null) => {
+    setMemberFormMode(mode);
+    setMemberFormTarget(member);
+    setMemberFormApiErrors({});
+    setMemberFormOpen(true);
   };
 
-  const saveRoles = async () => {
-    if (!rolesTarget) return;
+  const refreshRoleOptions = async () => {
+    const rolesResponse = await listOrgRoles();
+    setRoleOptions(rolesResponse.items);
+  };
+
+  const handleEditSubmit = async (payload: {
+    displayName: string;
+    phone: string | null;
+    roleIds: string[];
+    status?: OrganizationMembershipStatus;
+  }) => {
+    if (!memberFormTarget) return;
     try {
       await run(() =>
-        assignOrgMemberRoles(rolesTarget.membershipId, { roleIds: [...selectedRoleIds] }),
+        updateOrgMember(memberFormTarget.membershipId, {
+          displayName: payload.displayName,
+          phone: payload.phone,
+        }),
       );
-      toast.success('Member roles updated.');
-      setRolesDialogOpen(false);
-      setRolesTarget(null);
+      if (canManageRoles) {
+        await run(() =>
+          assignOrgMemberRoles(memberFormTarget.membershipId, { roleIds: payload.roleIds }),
+        );
+        invalidateMyPermissionsCache();
+      }
+      if (
+        canChangeStatus &&
+        payload.status &&
+        payload.status !== memberFormTarget.status &&
+        (payload.status === 'ACTIVE' || payload.status === 'SUSPENDED')
+      ) {
+        await run(() =>
+          changeOrgMemberStatus(memberFormTarget.membershipId, { status: payload.status! }),
+        );
+      }
+      toast.success('Member updated.');
       await load();
-      const rolesResponse = await listOrgRoles();
-      setRoleOptions(rolesResponse.items);
+      await refreshRoleOptions();
     } catch (failure) {
-      toast.error(describeOrgAccessError(failure));
+      if (!applyOrgAccessFieldErrors(failure, setMemberFormApiErrors)) {
+        toast.error(describeOrgAccessError(failure));
+      }
+      throw failure;
     }
   };
 
-  const toggleMemberStatus = async (member: OrgMemberListItem) => {
-    if (member.status !== 'ACTIVE' && member.status !== 'SUSPENDED') return;
-    const next: OrganizationMembershipStatus = member.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+  const confirmStatusChange = async () => {
+    if (!statusTarget) return;
+    if (statusTarget.status !== 'ACTIVE' && statusTarget.status !== 'SUSPENDED') return;
+    const next: OrganizationMembershipStatus =
+      statusTarget.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
     try {
-      await run(() => changeOrgMemberStatus(member.membershipId, { status: next }));
+      await run(() => changeOrgMemberStatus(statusTarget.membershipId, { status: next }));
       toast.success(next === 'ACTIVE' ? 'Member activated.' : 'Member suspended.');
+      setStatusTarget(null);
       await load();
     } catch (failure) {
       toast.error(describeOrgAccessError(failure));
@@ -367,6 +346,36 @@ export function UsersPage() {
 
   const canDeleteMember = (member: OrgMemberListItem) =>
     canDeleteMembers && member.adminId !== admin.id && !member.isOwner;
+
+  const statusFilterActive = statusFilter !== 'ALL';
+  const roleFilterActive = roleFilter !== 'ALL';
+
+  const emptyTableContent = useMemo((): DataTableEmptyStateContent => {
+    if (search.trim()) {
+      return {
+        icon: Users,
+        title: 'No matching users',
+        description: 'Try different search terms or clear filters.',
+        secondaryAction: { label: 'Clear search', onClick: clearFilters },
+      };
+    }
+    if (roleFilterActive || statusFilterActive) {
+      return {
+        icon: Users,
+        title: 'No users match these filters',
+        description: 'Try different filters or clear them to see all members.',
+        secondaryAction: { label: 'Clear filters', onClick: clearFilters },
+      };
+    }
+    return {
+      icon: Users,
+      title: 'No users yet',
+      description: 'Create an account or invite a team member to get started.',
+      action: canProvision
+        ? { label: 'Create Account', onClick: () => openMemberForm('create') }
+        : undefined,
+    };
+  }, [canProvision, clearFilters, roleFilterActive, search, statusFilterActive]);
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
@@ -380,283 +389,292 @@ export function UsersPage() {
     }
   };
 
+  const statusChangeIsDeactivate = statusTarget?.status === 'ACTIVE';
+
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4 pb-8">
-      <AdminBreadcrumb breadcrumbs={[{ label: 'Users' }]} />
+    <div className="grid w-full min-w-0 max-w-full gap-3 pt-1 pb-8">
+      <AdminBreadcrumb breadcrumbs={[{ label: 'Users' }]} className="mb-0.5" />
 
       {!canRead ? (
         <CrmErrorAlert message="You do not have permission to view organization members." />
       ) : (
-        <section aria-label="Member directory" className="flex min-w-0 flex-col gap-4">
-          <CrmToolbarHeader
-            className="shadow-xs min-w-0"
-            layout="stacked"
-            title="Users"
-            description="Search members, manage roles, and create accounts or invitations."
-            toolbar={
-              <>
-                <form
-                  className={CRM_HEADER_SEARCH_FORM_CLASS}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    setSearch(searchDraft.trim());
-                    setPage(1);
-                  }}
-                >
-                  <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 w-full">
-                    <Input
-                      className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
-                      value={searchDraft}
-                      onChange={(event) => setSearchDraft(event.target.value)}
-                      placeholder="Search by name or email"
-                      aria-label="Search members"
-                    />
-                  </InputGroup>
-                </form>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}
-                >
-                  <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[9rem]" aria-label="Filter by status">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All statuses</SelectItem>
-                    {MEMBERSHIP_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {labelMembershipStatus(status)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[10rem]" aria-label="Filter by role">
-                    <SelectValue placeholder="Role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All roles</SelectItem>
-                    {roleOptions.map((role) => (
-                      <SelectItem key={role.id} value={role.id}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {filtersActive ? (
-                  <Button type="button" variant="ghost" className="h-9 shrink-0" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                ) : null}
-                {canProvision ? (
-                  <Button
-                    type="button"
-                    className="h-9 shrink-0"
-                    onClick={() => {
-                      setCreateAccountApiErrors({});
-                      setCreateAccountOpen(true);
+        <section aria-label="Member directory" className="workspace-surface min-w-0">
+          <div className="rounded-lg">
+            <CrmToolbarHeader
+              title="Users"
+              description="Manage members, access roles, and create accounts or invitations."
+              className="rounded-none border-0 bg-card shadow-none"
+              titleSectionClassName="xl:max-w-none xl:min-w-0 xl:flex-[1_1_auto]"
+              toolbar={
+                <>
+                  <form
+                    className={CRM_HEADER_SEARCH_FORM_CLASS}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                      setSearch(searchDraft.trim());
+                      setPage(1);
                     }}
                   >
-                    <UserPlus aria-hidden="true" />
-                    Create account
-                  </Button>
-                ) : null}
-              </>
-            }
-          />
+                    <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 max-w-full">
+                      <Input
+                        className={cn(
+                          CRM_PIPELINE_SEARCH_INPUT_CLASS,
+                          inputGroupPaddingClass({ leading: true }),
+                        )}
+                        value={searchDraft}
+                        onChange={(event) => setSearchDraft(event.target.value)}
+                        placeholder="Search by name or email"
+                        aria-label="Search members"
+                      />
+                    </InputGroup>
+                  </form>
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className={cn('shrink-0', statusFilterActive && 'border-primary/40 bg-primary/5')}
+                            aria-label="Filter by status"
+                          >
+                            <CircleDot aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Status</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuLabel>Status</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={statusFilter}
+                        onValueChange={(value) =>
+                          setStatusFilter(value as typeof statusFilter)
+                        }
+                      >
+                        <DropdownMenuRadioItem value="ALL">All statuses</DropdownMenuRadioItem>
+                        {MEMBERSHIP_STATUSES.map((status) => (
+                          <DropdownMenuRadioItem key={status} value={status}>
+                            {labelMembershipStatus(status)}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className={cn('shrink-0', roleFilterActive && 'border-primary/40 bg-primary/5')}
+                            aria-label="Filter by role"
+                          >
+                            <Tags aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Role</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuLabel>Role</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup value={roleFilter} onValueChange={setRoleFilter}>
+                        <DropdownMenuRadioItem value="ALL">All roles</DropdownMenuRadioItem>
+                        {roleOptions.map((role) => (
+                          <DropdownMenuRadioItem key={role.id} value={role.id}>
+                            {role.name}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {filtersActive ? (
+                    <Button type="button" variant="ghost" size="sm" className="h-9 shrink-0" onClick={clearFilters}>
+                      Clear
+                    </Button>
+                  ) : null}
+                  {canProvision ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+                      onClick={() => openMemberForm('create')}
+                    >
+                      <Plus aria-hidden="true" />
+                      Create Account
+                    </Button>
+                  ) : null}
+                </>
+              }
+            />
 
-          {error && items.length > 0 ? <CrmErrorAlert message={error} /> : null}
+            {error && items.length > 0 ? (
+              <div className="border-border border-b px-4 sm:px-5">
+                <CrmErrorAlert message={error} />
+              </div>
+            ) : null}
 
-          <DataTable
-            className="min-w-0 max-w-full"
-            tableClassName="table-fixed min-w-[72rem]"
-            phase={tablePhase}
-            colSpan={8}
-            skeletonColumns={MEMBERS_TABLE_SKELETON}
-            header={
-              <TableRow className="hover:bg-transparent">
-                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.name}>Name</TableHead>
-                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.email}>Email</TableHead>
-                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.employee}>Employee</TableHead>
-                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.role}>Role</TableHead>
-                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.status}>Status</TableHead>
-                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.joined}>Joined</TableHead>
-                <TableHead className={cn(MEMBERS_TABLE_COLUMN_CLASS.lastLogin, 'whitespace-nowrap')}>
-                  Last login
-                </TableHead>
-                <TableHead className={cn(MEMBERS_TABLE_COLUMN_CLASS.actions, 'text-right')}>
-                  Actions
-                </TableHead>
-              </TableRow>
-            }
-            empty={{
-              icon: Users,
-              title: filtersActive ? 'No members match your filters' : 'No members yet',
-              description: filtersActive
-                ? 'Try different search terms or clear filters.'
-                : canProvision
-                  ? 'Create an account to add someone to your organization.'
-                  : 'Members will appear here once they join.',
-              secondaryAction: filtersActive ? { label: 'Clear filters', onClick: clearFilters } : undefined,
-            }}
+            <div aria-hidden className="table-header-edge" />
+
+            <DataTable
+              frame="flush"
+              headerVariant="plain"
+              className="min-w-0 max-w-full gap-0"
+              tableClassName="table-fixed [&_[data-slot=table-head]]:h-auto [&_[data-slot=table-head]]:py-3 [&_[data-slot=table-cell]]:py-3"
+              tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
+              phase={tablePhase}
+              colSpan={5}
+              skeletonColumns={ORG_MEMBERS_TABLE_SKELETON}
+              header={
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className={ORG_MEMBERS_TABLE_COLUMN_CLASS.name}>Name</TableHead>
+                  <TableHead className={ORG_MEMBERS_TABLE_COLUMN_CLASS.email}>Email</TableHead>
+                  <TableHead className={ORG_MEMBERS_TABLE_COLUMN_CLASS.role}>Role</TableHead>
+                  <TableHead className={ORG_MEMBERS_TABLE_COLUMN_CLASS.status}>Status</TableHead>
+                  <TableHead className={cn(ORG_MEMBERS_TABLE_COLUMN_CLASS.actions, 'text-right')}>
+                    Actions
+                  </TableHead>
+                </TableRow>
+              }
+              empty={emptyTableContent}
             errorMessage={error}
             onRetry={() => void load()}
             refreshing={tableRefreshing}
-            footer={
-              <TablePagination
-                page={safePage}
-                pageSize={pageSize}
-                total={total}
-                loading={tablePhase === 'initial-loading'}
-                hideWhenEmpty={false}
-                onPageChange={setPage}
-                onPageSizeChange={(nextSize) => {
-                  setPageSize(nextSize);
-                  setPage(1);
-                }}
-              />
-            }
-          >
-            {items.map((member) => {
-              const isSelf = member.adminId === admin.id;
-              const phoneLabel = formatPhoneNumber(member.phoneNumber);
-              return (
-                <TableRow key={member.membershipId}>
-                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.name, 'min-w-0 font-medium')}>
-                    <TruncateWithTooltip value={member.displayName} />
-                    {member.isOwner ? (
-                      <Badge variant="outline" className="mt-1 text-[10px]">
-                        Owner
-                      </Badge>
-                    ) : null}
-                  </TableCell>
-                  <TableCell
-                    className={cn(MEMBERS_TABLE_COLUMN_CLASS.email, 'min-w-0 whitespace-normal')}
-                  >
-                    <div className="flex min-w-0 flex-col gap-1.5">
+              footer={
+                <TablePagination
+                  className="border-border border-t px-4 py-3 sm:px-5"
+                  page={safePage}
+                  pageSize={pageSize}
+                  total={total}
+                  loading={tablePhase === 'initial-loading'}
+                  hideWhenEmpty={false}
+                  onPageChange={setPage}
+                  onPageSizeChange={(nextSize) => {
+                    setPageSize(nextSize);
+                    setPage(1);
+                  }}
+                />
+              }
+            >
+              {items.map((member) => {
+                const isSelf = member.adminId === admin.id;
+                const canEditMember =
+                  !isSelf && (canUpdateProfile || canManageRoles || canRead);
+                const showStatusToggle =
+                  canChangeStatus &&
+                  !isSelf &&
+                  !member.isOwner &&
+                  (member.status === 'ACTIVE' || member.status === 'SUSPENDED');
+                return (
+                  <TableRow key={member.membershipId} className="border-0">
+                    <TableCell className={cn(ORG_MEMBERS_TABLE_COLUMN_CLASS.name, 'min-w-0')}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-foreground block truncate text-[13px] font-semibold">
+                            {member.displayName}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{member.displayName}</TooltipContent>
+                      </Tooltip>
+                      {member.isOwner ? (
+                        <Badge variant="outline" className="mt-1 text-[10px] font-normal">
+                          Owner
+                        </Badge>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className={cn(ORG_MEMBERS_TABLE_COLUMN_CLASS.email, 'min-w-0')}>
                       <TruncateWithTooltip
                         value={member.email}
                         className="text-muted-foreground text-sm"
                       />
-                      <TruncateWithTooltip
-                        value={phoneLabel}
-                        className={cn(
-                          'text-[11px] tabular-nums',
-                          phoneLabel === PHONE_PLACEHOLDER
-                            ? 'text-muted-foreground'
-                            : 'text-foreground',
-                        )}
-                      />
-                    </div>
-                  </TableCell>
-                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.employee, 'min-w-0 text-sm')}>
-                    <TruncateWithTooltip
-                      value={member.employeeDisplayName?.trim() || '—'}
-                      className={
-                        member.employeeDisplayName ? 'text-foreground' : 'text-muted-foreground'
-                      }
-                    />
-                  </TableCell>
-                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.role, 'min-w-0 whitespace-normal')}>
-                    <MemberRoleBadges roles={member.roles} />
-                  </TableCell>
-                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.status, 'min-w-0')}>
-                    <MembershipStatusBadge status={member.status} />
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      MEMBERS_TABLE_COLUMN_CLASS.joined,
-                      'text-muted-foreground min-w-0 text-sm tabular-nums',
-                    )}
-                  >
-                    <TruncateWithTooltip value={formatDateTime(member.joinedAt)} />
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      MEMBERS_TABLE_COLUMN_CLASS.lastLogin,
-                      'text-muted-foreground min-w-0 text-sm tabular-nums',
-                    )}
-                  >
-                    <TruncateWithTooltip value={formatLastLoginAt(member.lastLoginAt)} />
-                  </TableCell>
-                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.actions, 'min-w-0 text-right')}>
-                    <div className="flex w-full shrink-0 items-center justify-end gap-2.5">
-                      {canResetPassword && !isSelf ? (
-                        <TableIconButton
-                          label={`Reset password for ${member.displayName}`}
-                          tone="default"
-                          disabled={pending}
-                          onClick={() => {
-                            setResetPasswordTarget(member);
-                            setResetPasswordErrors({});
-                            setResetPasswordOpen(true);
-                          }}
-                        >
-                          <KeyRound className="size-4" aria-hidden="true" />
-                        </TableIconButton>
-                      ) : null}
-                      {canUpdateProfile && !isSelf ? (
-                        <TableIconButton
-                          label={`Edit ${member.displayName}`}
-                          tone="primary"
-                          disabled={pending}
-                          onClick={() => {
-                            setEditProfileTarget(member);
-                            setEditDisplayName(member.displayName);
-                            setEditPhone(member.phoneNumber ?? '');
-                            setEditProfileErrors({});
-                            setEditProfileOpen(true);
-                          }}
-                        >
-                          <Pencil className="size-4" aria-hidden="true" />
-                        </TableIconButton>
-                      ) : null}
-                      {canManageRoles && !isSelf ? (
-                        <TableIconButton
-                          label={`Manage roles for ${member.displayName}`}
-                          tone="primary"
-                          disabled={pending}
-                          onClick={() => {
-                            setRolesTarget(member);
-                            setSelectedRoleIds(member.roles.map((role) => role.id));
-                            setRolesDialogOpen(true);
-                          }}
-                        >
-                          <Shield className="size-4" aria-hidden="true" />
-                        </TableIconButton>
-                      ) : null}
-                      {canChangeStatus &&
-                      !isSelf &&
-                      !member.isOwner &&
-                      (member.status === 'ACTIVE' || member.status === 'SUSPENDED') ? (
-                        <TableIconButton
-                          label={
-                            member.status === 'ACTIVE'
-                              ? `Deactivate ${member.displayName}`
-                              : `Activate ${member.displayName}`
-                          }
-                          tone={member.status === 'ACTIVE' ? 'danger' : 'success'}
-                          disabled={pending}
-                          onClick={() => void toggleMemberStatus(member)}
-                        >
-                          <Power className="size-4" aria-hidden="true" />
-                        </TableIconButton>
-                      ) : null}
-                      {canDeleteMember(member) ? (
-                        <TableIconButton
-                          label={`Delete ${member.displayName}`}
-                          tone="danger"
-                          disabled={pending}
-                          onClick={() => setDeleteTarget(member)}
-                        >
-                          <Trash2 className="size-4" aria-hidden="true" />
-                        </TableIconButton>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </DataTable>
+                    </TableCell>
+                    <TableCell className={cn(ORG_MEMBERS_TABLE_COLUMN_CLASS.role, 'min-w-0')}>
+                      <MemberRoleBadges roles={member.roles} />
+                    </TableCell>
+                    <TableCell className={cn(ORG_MEMBERS_TABLE_COLUMN_CLASS.status, 'text-left')}>
+                      <MembershipStatusBadge status={member.status} />
+                    </TableCell>
+                    <TableCell className={cn(ORG_MEMBERS_TABLE_COLUMN_CLASS.actions, 'min-w-0 pl-4')}>
+                      <div className="flex w-full shrink-0 items-center justify-end gap-1">
+                        {showStatusToggle ? (
+                          <TableIconButton
+                            label={
+                              member.status === 'ACTIVE'
+                                ? `Deactivate ${member.displayName}`
+                                : `Activate ${member.displayName}`
+                            }
+                            tone="default"
+                            className={
+                              member.status === 'ACTIVE'
+                                ? 'text-red-800 hover:bg-red-800/10 hover:text-red-900'
+                                : 'text-emerald-800 hover:bg-emerald-800/10 hover:text-emerald-900'
+                            }
+                            disabled={pending}
+                            onClick={() => setStatusTarget(member)}
+                          >
+                            {member.status === 'ACTIVE' ? (
+                              <ToggleRight className="size-4 stroke-[2]" aria-hidden="true" />
+                            ) : (
+                              <ToggleLeft className="size-4 stroke-[2]" aria-hidden="true" />
+                            )}
+                          </TableIconButton>
+                        ) : null}
+                        {canResetPassword && !isSelf ? (
+                          <TableIconButton
+                            label={`Reset password for ${member.displayName}`}
+                            tone="default"
+                            className="text-blue-800 hover:bg-blue-800/10 hover:text-blue-900"
+                            disabled={pending}
+                            onClick={() => {
+                              setResetPasswordTarget(member);
+                              setResetPasswordOpen(true);
+                            }}
+                          >
+                            <KeyRound className="size-4" aria-hidden="true" />
+                          </TableIconButton>
+                        ) : null}
+                        {canEditMember ? (
+                          <TableIconButton
+                            label={
+                              canUpdateProfile || canManageRoles
+                                ? `Edit ${member.displayName}`
+                                : `View ${member.displayName}`
+                            }
+                            tone="default"
+                            className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                            disabled={pending}
+                            onClick={() =>
+                              openMemberForm(
+                                canUpdateProfile || canManageRoles ? 'edit' : 'view',
+                                member,
+                              )
+                            }
+                          >
+                            <SquarePen className="size-4" aria-hidden="true" />
+                          </TableIconButton>
+                        ) : null}
+                        {canDeleteMember(member) ? (
+                          <TableIconButton
+                            label={`Permanently delete ${member.displayName}`}
+                            tone="default"
+                            className="text-neutral-900 hover:bg-neutral-900/10 hover:text-black"
+                            disabled={pending}
+                            onClick={() => setDeleteTarget(member)}
+                          >
+                            <Trash2 className="size-4" aria-hidden="true" />
+                          </TableIconButton>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </DataTable>
+          </div>
         </section>
       )}
 
@@ -687,132 +705,37 @@ export function UsersPage() {
         }}
       />
 
-      <Dialog
-        open={editProfileOpen}
+      <MemberFormDialog
+        mode={memberFormMode}
+        open={memberFormOpen}
+        member={memberFormTarget}
+        grantableRoles={grantableRoles}
+        allRoles={roleOptions}
+        pending={pending}
+        readOnly={
+          memberFormMode === 'view' ||
+          (memberFormMode === 'edit' && !canUpdateProfile && !canManageRoles)
+        }
+        canManageRoles={canManageRoles}
+        canChangeStatus={canChangeStatus}
+        apiFieldErrors={memberFormApiErrors}
+        onDismissApiFieldError={(key) => clearFormFieldError(setMemberFormApiErrors, key)}
         onOpenChange={(open) => {
+          setMemberFormOpen(open);
           if (!open) {
-            setEditProfileOpen(false);
-            setEditProfileTarget(null);
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit member</DialogTitle>
-            <DialogDescription>Update profile details for {editProfileTarget?.email}.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <CrmFormField id="member-display-name" label="Full name" required error={editProfileErrors.displayName}>
-              <Input
-                id="member-display-name"
-                value={editDisplayName}
-                className={formControlStateClass(editProfileErrors.displayName ? 'invalid' : 'neutral')}
-                onChange={(event) => {
-                  clearFormFieldError(setEditProfileErrors, 'displayName');
-                  setEditDisplayName(event.target.value);
-                }}
-              />
-            </CrmFormField>
-            <CrmFormField id="member-phone" label="Phone number" error={editProfileErrors.phone}>
-              <Input
-                id="member-phone"
-                type="tel"
-                value={editPhone}
-                placeholder={PHONE_PLACEHOLDER}
-                className={formControlStateClass(editProfileErrors.phone ? 'invalid' : 'neutral')}
-                onChange={(event) => {
-                  clearFormFieldError(setEditProfileErrors, 'phone');
-                  setEditPhone(event.target.value);
-                }}
-              />
-            </CrmFormField>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditProfileOpen(false)} disabled={pending}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void saveProfile()} disabled={pending}>
-              Save changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={rolesDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setRolesDialogOpen(false);
-            setRolesTarget(null);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[85vh] max-w-md overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Assign roles</DialogTitle>
-            <DialogDescription>
-              Choose roles for {rolesTarget?.displayName ?? 'this member'}. Owner is the built-in
-              role and is never assigned automatically.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-2">
-            {grantableRoles.length === 0 ? (
-              <p className="text-muted-foreground text-sm">No assignable roles are available.</p>
-            ) : (
-              grantableRoles.map((role) => {
-                const checked = selectedRoleIds.includes(role.id);
-                return (
-                  <label
-                    key={role.id}
-                    className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-md border p-3"
-                  >
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(value) => {
-                        setSelectedRoleIds((previous) => {
-                          if (value === true) return previous.includes(role.id) ? previous : [...previous, role.id];
-                          return previous.filter((id) => id !== role.id);
-                        });
-                      }}
-                      aria-label={role.name}
-                    />
-                    <span className="text-sm font-medium">{role.name}</span>
-                  </label>
-                );
-              })
-            )}
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setRolesDialogOpen(false)} disabled={pending}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void saveRoles()} disabled={pending}>
-              Save roles
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <CreateMemberAccountDialog
-        open={createAccountOpen}
-        onOpenChange={(open) => {
-          setCreateAccountOpen(open);
-          if (!open) {
-            setCreateAccountApiErrors({});
+            setMemberFormTarget(null);
+            setMemberFormApiErrors({});
             void load();
           }
         }}
-        grantableRoles={grantableRoles}
-        pending={pending}
-        apiFieldErrors={createAccountApiErrors}
-        onDismissApiFieldError={(key) => clearFormFieldError(setCreateAccountApiErrors, key)}
         onSchemaContractError={(message) => toast.error(message)}
-        onSubmit={async (payload) => {
-          setCreateAccountApiErrors({});
+        onCreateSubmit={async (payload) => {
+          setMemberFormApiErrors({});
           try {
             await run(() => provisionOrgMember(payload));
             toast.success('Member account created.');
             await load();
+            await refreshRoleOptions();
           } catch (failure) {
             if (
               isApiError(failure) &&
@@ -821,7 +744,7 @@ export function UsersPage() {
               toast.error(ORG_ACCESS_CREATE_ACCOUNT_GENERIC_ERROR);
               throw failure;
             }
-            if (applyOrgAccessFieldErrors(failure, setCreateAccountApiErrors)) {
+            if (applyOrgAccessFieldErrors(failure, setMemberFormApiErrors)) {
               focusFirstInvalidField();
             } else {
               toast.error(describeOrgAccessError(failure));
@@ -829,7 +752,49 @@ export function UsersPage() {
             throw failure;
           }
         }}
+        onEditSubmit={handleEditSubmit}
       />
+
+      <AlertDialog open={statusTarget !== null} onOpenChange={(open) => !open && setStatusTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {statusChangeIsDeactivate ? 'Deactivate member?' : 'Activate member?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {statusTarget
+                ? statusChangeIsDeactivate
+                  ? `“${statusTarget.displayName}” will be suspended and cannot sign in until reactivated.`
+                  : `“${statusTarget.displayName}” will be activated and can sign in again.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!statusTarget || pending}
+              className={
+                statusChangeIsDeactivate ? 'bg-neutral-900 text-white hover:bg-neutral-800' : undefined
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmStatusChange();
+              }}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  {statusChangeIsDeactivate ? 'Deactivating…' : 'Activating…'}
+                </>
+              ) : statusChangeIsDeactivate ? (
+                'Deactivate'
+              ) : (
+                'Activate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

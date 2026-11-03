@@ -111,6 +111,8 @@ export const provisionMemberRequestSchema = z
     phone: optionalStoredPhoneSchema,
     password: platformNewPasswordSchema,
     roleIds: z.array(uuid).min(1, 'Select at least one role.'),
+    /** Required when assigning the organization Employee system role; links an existing profile. */
+    employeeId: uuid.optional(),
   })
   .strict();
 

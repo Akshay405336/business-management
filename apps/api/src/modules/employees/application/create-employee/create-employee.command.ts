@@ -6,6 +6,4 @@ export type CreateEmployeeCommand = {
   readonly actor: EmployeeActor;
   readonly accessActor: OrgAccessActor;
   readonly input: CreateEmployeeInput;
-  /** Sign-in access to create with the employee; omitted for HR-only records. */
-  readonly login?: { readonly password: string } | null;
 };
