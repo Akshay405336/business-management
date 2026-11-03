@@ -213,9 +213,21 @@ export const SYSTEM_ROLE_KEYS = {
   employee: 'employee',
 } as const;
 
+/** Permissions for the organization Employee system role (employee portal). */
+export const EMPLOYEE_PORTAL_PERMISSIONS: readonly PermissionKey[] = [
+  'projects.read',
+  'tasks.read',
+];
+
 export type SystemRoleKey = (typeof SYSTEM_ROLE_KEYS)[keyof typeof SYSTEM_ROLE_KEYS];
 
 /** Protected system role; only platform super admins receive owner membership automatically. */
 export const PROTECTED_SYSTEM_ROLE_KEYS: ReadonlySet<string> = new Set([
+  SYSTEM_ROLE_KEYS.owner,
+]);
+
+/** Organization roles that cannot be edited, deactivated, or deleted (stable keys, not display names). */
+export const IMMUTABLE_ORG_ROLE_KEYS: ReadonlySet<string> = new Set([
+  SYSTEM_ROLE_KEYS.admin,
   SYSTEM_ROLE_KEYS.owner,
 ]);

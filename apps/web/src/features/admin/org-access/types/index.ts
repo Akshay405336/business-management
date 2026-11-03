@@ -9,6 +9,7 @@ export type {
   OrganizationMembershipStatus,
   OrganizationInvitationStatus,
   OrganizationRoleStatus,
+  OrgRoleDeletionImpactResponse,
   OrgRoleDetail,
   OrgRoleListItem,
   OrgRoleListResponse,

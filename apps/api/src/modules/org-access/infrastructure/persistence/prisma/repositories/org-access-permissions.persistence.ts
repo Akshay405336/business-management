@@ -9,7 +9,7 @@ import {
 } from '../../../../domain/errors/org-access.errors.js';
 import {
   PERMISSION_CACHE_TTL_SECONDS,
-  ensureSystemRoles,
+  ensureOrganizationRoleBootstrap,
   findRoleIdByKey,
   permissionCacheKey,
   resolvePermissionsFromDb,
@@ -72,7 +72,7 @@ export class OrgAccessPermissionsPersistence {
 
   async ensureOrganizationAccessBootstrap(organizationId: string, adminId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      const roleIdsByKey = await ensureSystemRoles(tx, organizationId);
+      const roleIdsByKey = await ensureOrganizationRoleBootstrap(tx, organizationId);
       const admin = await tx.platformAdmin.findUnique({
         where: { id: adminId },
         select: { role: true },

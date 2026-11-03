@@ -1,15 +1,16 @@
-import type { Metadata } from 'next';
-import { Suspense } from 'react';
-import { AdminLoginForm } from '@/features/admin/auth/components/admin-login-form';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Sign in',
+type AdminLoginRedirectPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default function AdminLoginPage() {
-  return (
-    <Suspense>
-      <AdminLoginForm />
-    </Suspense>
-  );
+export default async function AdminLoginRedirectPage({ searchParams }: AdminLoginRedirectPageProps) {
+  const params = await searchParams;
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (typeof value === 'string') query.set(key, value);
+    else if (Array.isArray(value)) value.forEach((entry) => query.append(key, entry));
+  }
+  const suffix = query.size > 0 ? `?${query.toString()}` : '';
+  redirect(`/login${suffix}`);
 }

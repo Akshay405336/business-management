@@ -24,6 +24,8 @@ export function describeAuthError(error: unknown): string {
       return error.message;
     case API_ERROR_CODES.ACCOUNT_DISABLED:
       return 'This account is disabled. Contact another administrator.';
+    case API_ERROR_CODES.MEMBERSHIP_DENIED:
+      return 'Your organization membership is inactive. Contact an administrator.';
     case API_ERROR_CODES.RATE_LIMITED:
       return `Too many attempts. ${retryHint(error.retryAfterSeconds)}`;
     case API_ERROR_CODES.VALIDATION_FAILED:
@@ -57,6 +59,15 @@ export function parseLoginNotice(value: unknown): LoginNoticeReason | null {
 
 export const loginNoticeMessage = (reason: LoginNoticeReason): string => LOGIN_NOTICES[reason];
 
-export function loginPath(reason?: LoginNoticeReason): string {
-  return reason ? `/admin/login?reason=${reason}` : '/admin/login';
+export function loginPath(reason?: LoginNoticeReason, returnTo?: string | null): string {
+  const params = new URLSearchParams();
+  if (reason) params.set('reason', reason);
+  if (returnTo) {
+    const trimmed = returnTo.trim();
+    if (trimmed.startsWith('/') && !trimmed.startsWith('//') && !trimmed.includes('\\')) {
+      params.set('returnTo', trimmed);
+    }
+  }
+  const query = params.toString();
+  return query ? `/login?${query}` : '/login';
 }

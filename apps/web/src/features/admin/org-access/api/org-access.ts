@@ -18,6 +18,7 @@ import type {
   OrgMemberListItem,
   OrgMemberListQuery,
   OrgMemberListResponse,
+  OrgRoleDeletionImpactResponse,
   OrgRoleDetail,
   OrgRoleListItem,
   OrgRoleListResponse,
@@ -165,4 +166,14 @@ export function setOrgRolePermissions(
 
 export function deleteOrgRole(id: string): Promise<void> {
   return apiRequest<void>(ORG_ACCESS_ROUTES.role(id), { method: 'DELETE', auth: true });
+}
+
+export function getOrgRoleDeletionImpact(
+  id: string,
+  signal?: AbortSignal,
+): Promise<OrgRoleDeletionImpactResponse> {
+  return apiRequest<OrgRoleDeletionImpactResponse>(ORG_ACCESS_ROUTES.roleDeletionImpact(id), {
+    auth: true,
+    signal,
+  });
 }

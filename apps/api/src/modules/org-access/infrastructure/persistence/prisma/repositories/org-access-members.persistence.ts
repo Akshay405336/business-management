@@ -26,7 +26,7 @@ import {
   assertActorCanManageMember,
   assertRolesAssignable,
   countActiveOwners,
-  ensureSystemRoles,
+  ensureSystemRoleByKey,
   loadMembershipOrThrow,
   memberInclude,
   normalizeEmail,
@@ -453,7 +453,7 @@ export class OrgAccessMembersPersistence {
       });
     const existing = await findSystemRole();
     if (existing) return existing.id;
-    await this.prisma.$transaction((tx) => ensureSystemRoles(tx, organizationId));
+    await this.prisma.$transaction((tx) => ensureSystemRoleByKey(tx, organizationId, key));
     const configured = await findSystemRole();
     if (!configured) {
       throw new OrgAccessConflictError(

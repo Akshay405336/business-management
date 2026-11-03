@@ -75,7 +75,7 @@ export function TotpVerificationForm() {
       </form>
 
       <Button variant="ghost" className="text-muted-foreground justify-self-start" asChild>
-        <Link href="/admin/login">
+        <Link href="/login">
           <ArrowLeft aria-hidden="true" />
           Back to login
         </Link>

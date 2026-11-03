@@ -1,4 +1,5 @@
 import {
+  IMMUTABLE_ORG_ROLE_KEYS,
   isPermissionKey,
   PROTECTED_SYSTEM_ROLE_KEYS,
   SYSTEM_ROLE_KEYS,
@@ -9,6 +10,7 @@ import { Prisma, type CrmAuditEventType } from '../../../../../../generated/pris
 import { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
 import { DEFAULT_SYSTEM_ROLES } from '../../constants/default-system-roles.js';
 import {
+  OrgAccessConflictError,
   OrgAccessForbiddenError,
   OrgAccessNotFoundError,
   OrgAccessValidationError,
@@ -127,7 +129,10 @@ export function toMemberRecord(row: MembershipRow): OrgMemberRecord {
   };
 }
 
-export function toRoleRecord(row: RoleWithPermissions): OrgRoleRecord {
+export function toRoleRecord(
+  row: RoleWithPermissions,
+  pendingInvitationCount = 0,
+): OrgRoleRecord {
   return {
     id: row.id,
     key: row.key,
@@ -136,6 +141,7 @@ export function toRoleRecord(row: RoleWithPermissions): OrgRoleRecord {
     isSystem: row.isSystem,
     status: row.status,
     memberCount: row._count.memberships,
+    pendingInvitationCount,
     permissionKeys: uniquePermissionKeys(row.permissions.map((p) => p.permissionKey)),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -161,6 +167,43 @@ export async function syncSystemRolePermissions(
   });
 }
 
+async function upsertSystemRoleTemplate(
+  tx: Pick<PrismaService, 'organizationRole' | 'organizationRolePermission'>,
+  organizationId: string,
+  template: (typeof DEFAULT_SYSTEM_ROLES)[number],
+  keyToId: Map<string, string>,
+  customRoleKeys: ReadonlySet<string>,
+): Promise<void> {
+  if (customRoleKeys.has(template.key)) return;
+  let roleId = keyToId.get(template.key);
+  if (!roleId) {
+    roleId = randomUUID();
+    await tx.organizationRole.create({
+      data: {
+        id: roleId,
+        organizationId,
+        key: template.key,
+        name: template.name,
+        description: template.description,
+        isSystem: true,
+        status: 'ACTIVE',
+      },
+    });
+    keyToId.set(template.key, roleId);
+  } else {
+    await tx.organizationRole.update({
+      where: { id: roleId },
+      data: {
+        name: template.name,
+        description: template.description,
+        isSystem: true,
+      },
+    });
+  }
+  await syncSystemRolePermissions(tx, roleId, template.permissions);
+}
+
+/** Creates every default system role when the organization has none yet (initial tenant setup). */
 export async function ensureSystemRoles(
   tx: Pick<PrismaService, 'organizationRole' | 'organizationRolePermission'>,
   organizationId: string,
@@ -173,36 +216,70 @@ export async function ensureSystemRoles(
   const customRoleKeys = new Set(existing.filter((row) => !row.isSystem).map((row) => row.key));
 
   for (const template of DEFAULT_SYSTEM_ROLES) {
-    if (customRoleKeys.has(template.key)) continue;
-    let roleId = keyToId.get(template.key);
-    if (!roleId) {
-      roleId = randomUUID();
-      await tx.organizationRole.create({
-        data: {
-          id: roleId,
-          organizationId,
-          key: template.key,
-          name: template.name,
-          description: template.description,
-          isSystem: true,
-          status: 'ACTIVE',
-        },
-      });
-      keyToId.set(template.key, roleId);
-    } else {
-      await tx.organizationRole.update({
-        where: { id: roleId },
-        data: {
-          name: template.name,
-          description: template.description,
-          isSystem: true,
-        },
-      });
-    }
-    await syncSystemRolePermissions(tx, roleId, template.permissions);
+    await upsertSystemRoleTemplate(tx, organizationId, template, keyToId, customRoleKeys);
   }
 
   return keyToId;
+}
+
+/**
+ * Ensures immutable system roles (Owner, Admin) exist. Does not recreate roles an administrator deleted.
+ */
+export async function ensureProtectedSystemRoles(
+  tx: Pick<PrismaService, 'organizationRole' | 'organizationRolePermission'>,
+  organizationId: string,
+): Promise<Map<string, string>> {
+  const existing = await tx.organizationRole.findMany({
+    where: { organizationId },
+    select: { id: true, key: true, isSystem: true },
+  });
+  const keyToId = new Map(existing.map((row) => [row.key, row.id]));
+  const customRoleKeys = new Set(existing.filter((row) => !row.isSystem).map((row) => row.key));
+  const protectedTemplates = DEFAULT_SYSTEM_ROLES.filter((template) =>
+    IMMUTABLE_ORG_ROLE_KEYS.has(template.key),
+  );
+  for (const template of protectedTemplates) {
+    await upsertSystemRoleTemplate(tx, organizationId, template, keyToId, customRoleKeys);
+  }
+  return keyToId;
+}
+
+/** Ensures a single system role template exists (for employee assignment and similar flows). */
+export async function ensureSystemRoleByKey(
+  tx: Pick<PrismaService, 'organizationRole' | 'organizationRolePermission'>,
+  organizationId: string,
+  key: string,
+): Promise<string> {
+  const existing = await tx.organizationRole.findMany({
+    where: { organizationId },
+    select: { id: true, key: true, isSystem: true },
+  });
+  const keyToId = new Map(existing.map((row) => [row.key, row.id]));
+  const customRoleKeys = new Set(existing.filter((row) => !row.isSystem).map((row) => row.key));
+  const template = DEFAULT_SYSTEM_ROLES.find((row) => row.key === key);
+  if (!template) {
+    throw new OrgAccessValidationError(`Unknown system role key: ${key}`);
+  }
+  await upsertSystemRoleTemplate(tx, organizationId, template, keyToId, customRoleKeys);
+  const roleId = keyToId.get(key);
+  if (!roleId) {
+    throw new OrgAccessConflictError(
+      `The ${key} system role cannot be configured because a custom role already uses its key.`,
+    );
+  }
+  return roleId;
+}
+
+/** First org access creates all defaults; later requests only restore protected Owner/Admin roles. */
+export async function ensureOrganizationRoleBootstrap(
+  tx: Pick<PrismaService, 'organizationRole' | 'organizationRolePermission'>,
+  organizationId: string,
+): Promise<Map<string, string>> {
+  const roleCount = await tx.organizationRole.count({ where: { organizationId } });
+  if (roleCount === 0) {
+    return ensureSystemRoles(tx, organizationId);
+  }
+  return ensureProtectedSystemRoles(tx, organizationId);
 }
 
 export async function findRoleIdByKey(
@@ -299,6 +376,22 @@ export async function assertRolesAssignable(
 
 export function rolesIncludeOwner(roles: readonly { key: string }[]): boolean {
   return roles.some((role) => role.key === SYSTEM_ROLE_KEYS.owner);
+}
+
+export function assertOrgRoleMutable(role: { readonly key: string }, action: 'modify' | 'delete'): void {
+  if (!IMMUTABLE_ORG_ROLE_KEYS.has(role.key)) return;
+  if (role.key === SYSTEM_ROLE_KEYS.admin) {
+    throw new OrgAccessForbiddenError(
+      action === 'delete'
+        ? 'The Admin role is protected and cannot be deleted.'
+        : 'The Admin role is protected and cannot be modified or deactivated.',
+    );
+  }
+  throw new OrgAccessForbiddenError(
+    action === 'delete'
+      ? 'The Owner role is protected and cannot be deleted.'
+      : 'The Owner role is protected and cannot be modified or deactivated.',
+  );
 }
 
 export async function resolvePermissionsFromDb(

@@ -4,7 +4,6 @@ import { Prisma } from '../../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
 import {
   OrgAccessConflictError,
-  OrgAccessForbiddenError,
   OrgAccessValidationError,
 } from '../../../../domain/errors/org-access.errors.js';
 import type { OrgRoleRecord } from '../../../../domain/repositories/org-access.repository.js';
@@ -12,6 +11,7 @@ import type { OrganizationRoleStatus } from '../../../../domain/types/org-access
 import type { OrgAccessPermissionsPersistence } from './org-access-permissions.persistence.js';
 import {
   assertActorHoldsPermissions,
+  assertOrgRoleMutable,
   loadRoleOrThrow,
   roleInclude,
   toRoleRecord,
@@ -31,7 +31,20 @@ export class OrgAccessRolesPersistence {
       orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
       include: roleInclude(),
     });
-    return rows.map((row) => toRoleRecord(row));
+    if (rows.length === 0) return [];
+    const roleIds = rows.map((row) => row.id);
+    const pendingByRole = await this.prisma.organizationInvitationRole.groupBy({
+      by: ['roleId'],
+      where: {
+        roleId: { in: roleIds },
+        invitation: { organizationId, status: 'PENDING' },
+      },
+      _count: { _all: true },
+    });
+    const pendingMap = new Map(
+      pendingByRole.map((entry) => [entry.roleId, entry._count._all]),
+    );
+    return rows.map((row) => toRoleRecord(row, pendingMap.get(row.id) ?? 0));
   }
 
   async getRole(organizationId: string, roleId: string): Promise<OrgRoleRecord | null> {
@@ -39,7 +52,14 @@ export class OrgAccessRolesPersistence {
       where: { id: roleId, organizationId },
       include: roleInclude(),
     });
-    return row ? toRoleRecord(row) : null;
+    if (!row) return null;
+    const pendingInvitationCount = await this.prisma.organizationInvitationRole.count({
+      where: {
+        roleId,
+        invitation: { organizationId, status: 'PENDING' },
+      },
+    });
+    return toRoleRecord(row, pendingInvitationCount);
   }
 
   async createRole(
@@ -109,9 +129,7 @@ export class OrgAccessRolesPersistence {
     actorAdminId: string,
   ): Promise<OrgRoleRecord> {
     const existing = await loadRoleOrThrow(this.prisma, organizationId, roleId);
-    if (existing.isSystem) {
-      throw new OrgAccessForbiddenError('System roles cannot be modified.');
-    }
+    assertOrgRoleMutable(existing, 'modify');
     await assertActorHoldsPermissions(
       this.prisma,
       this.permissions.resolveEffectivePermissions,
@@ -121,6 +139,16 @@ export class OrgAccessRolesPersistence {
       'You cannot modify a role that has permissions you do not have.',
     );
     const row = await this.prisma.$transaction(async (tx) => {
+      if (input.status === 'INACTIVE' && existing.status === 'ACTIVE') {
+        const assignmentCount = await tx.organizationMembershipRole.count({ where: { roleId } });
+        if (assignmentCount > 0) {
+          throw new OrgAccessConflictError(
+            assignmentCount === 1
+              ? 'This role cannot be deactivated because it is assigned to 1 member.'
+              : `This role cannot be deactivated because it is assigned to ${assignmentCount} members.`,
+          );
+        }
+      }
       const updated = await tx.organizationRole.update({
         where: { id: roleId },
         data: {
@@ -149,9 +177,7 @@ export class OrgAccessRolesPersistence {
     actorAdminId: string,
   ): Promise<OrgRoleRecord> {
     const role = await loadRoleOrThrow(this.prisma, organizationId, roleId);
-    if (role.isSystem) {
-      throw new OrgAccessForbiddenError('System role permissions cannot be changed.');
-    }
+    assertOrgRoleMutable(role, 'modify');
     const normalized = uniquePermissionKeys(permissionKeys);
     await assertActorHoldsPermissions(
       this.prisma,
@@ -187,17 +213,87 @@ export class OrgAccessRolesPersistence {
     return toRoleRecord(row);
   }
 
+  async getRoleDeletionImpact(organizationId: string, roleId: string) {
+    await loadRoleOrThrow(this.prisma, organizationId, roleId);
+    const [memberLinks, employeeLinks, pendingInvites] = await Promise.all([
+      this.prisma.organizationMembershipRole.findMany({
+        where: { roleId, membership: { organizationId } },
+        select: {
+          membership: { select: { status: true, admin: { select: { employeeProfile: { select: { id: true } } } } } },
+        },
+      }),
+      this.prisma.organizationMembershipRole.count({
+        where: {
+          roleId,
+          membership: { organizationId, admin: { employeeProfile: { isNot: null } } },
+        },
+      }),
+      this.prisma.organizationInvitationRole.count({
+        where: {
+          roleId,
+          invitation: { organizationId, status: 'PENDING' },
+        },
+      }),
+    ]);
+    const activeMemberAssignments = memberLinks.filter(
+      (link) => link.membership.status === 'ACTIVE',
+    ).length;
+    const totalMemberAssignments = memberLinks.length;
+    const roleRow = await this.prisma.organizationRole.findFirst({
+      where: { id: roleId, organizationId },
+      select: { status: true },
+    });
+    const canDeactivate =
+      roleRow?.status === 'ACTIVE' && totalMemberAssignments === 0;
+    return {
+      canDelete: totalMemberAssignments === 0 && pendingInvites === 0,
+      canDeactivate,
+      totalMemberAssignments,
+      activeMemberAssignments,
+      employeeLinkedAssignments: employeeLinks,
+      pendingInvitationAssignments: pendingInvites,
+    };
+  }
+
   async deleteRole(organizationId: string, roleId: string, actorAdminId: string): Promise<void> {
     const role = await loadRoleOrThrow(this.prisma, organizationId, roleId);
-    if (role.isSystem) {
-      throw new OrgAccessForbiddenError('System roles cannot be deleted.');
-    }
-    if (role._count.memberships > 0) {
-      throw new OrgAccessConflictError('Remove this role from all members before deleting it.');
-    }
+    assertOrgRoleMutable(role, 'delete');
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.organizationRole.delete({ where: { id: roleId } });
+      const memberCount = await tx.organizationMembershipRole.count({
+        where: { roleId, membership: { organizationId } },
+      });
+      if (memberCount > 0) {
+        const inviteCount = await tx.organizationInvitationRole.count({
+          where: { roleId, invitation: { organizationId, status: 'PENDING' } },
+        });
+        const parts = [
+          memberCount === 1
+            ? 'assigned to 1 member'
+            : `assigned to ${memberCount} members`,
+        ];
+        if (inviteCount > 0) {
+          parts.push(
+            inviteCount === 1
+              ? 'referenced by 1 pending invitation'
+              : `referenced by ${inviteCount} pending invitations`,
+          );
+        }
+        throw new OrgAccessConflictError(
+          `This role cannot be deleted because it is ${parts.join(' and ')}.`,
+        );
+      }
+      const inviteCount = await tx.organizationInvitationRole.count({
+        where: { roleId, invitation: { organizationId, status: 'PENDING' } },
+      });
+      if (inviteCount > 0) {
+        throw new OrgAccessConflictError(
+          inviteCount === 1
+            ? 'This role cannot be deleted because it is referenced by 1 pending invitation.'
+            : `This role cannot be deleted because it is referenced by ${inviteCount} pending invitations.`,
+        );
+      }
+      await tx.organizationRole.delete({ where: { id: roleId, organizationId } });
       await writeAudit(tx, organizationId, {
         adminId: actorAdminId,
         type: 'ROLE_DELETED',

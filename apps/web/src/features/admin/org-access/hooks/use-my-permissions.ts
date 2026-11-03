@@ -3,9 +3,7 @@
 import type { PermissionKey } from '@techwin/contracts';
 import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
 
-export function invalidateMyPermissionsCache(): void {
-  // Permissions are owned by AdminAccessProvider; refresh via useAdminAccess().refresh().
-}
+export { invalidateMyPermissionsCache } from '../my-permissions-cache';
 
 export function useMyPermissions() {
   const access = useAdminAccess();

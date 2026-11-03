@@ -3,6 +3,8 @@
 import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
+import { getMyPermissions } from '@/features/admin/org-access/api/org-access';
+import { resolvePostAuthRedirect } from '@/features/auth/portal/portal-resolution';
 import { accessTokenStore, hasCsrfCookie } from '@/shared/api/api-client';
 import { getCurrentSession } from '../api/get-current-session';
 
@@ -23,9 +25,13 @@ export function VerifyTotpGate({ children }: { children: ReactNode }) {
         return;
       }
       try {
-        await getCurrentSession(controller.signal);
+        const session = await getCurrentSession(controller.signal);
+        if (controller.signal.aborted) return;
+        const { permissions } = await getMyPermissions(controller.signal);
         if (!controller.signal.aborted) {
-          router.replace('/admin/dashboard');
+          router.replace(
+            resolvePostAuthRedirect({ admin: session.admin, permissions }),
+          );
         }
       } catch {
         if (!controller.signal.aborted) setReady(true);

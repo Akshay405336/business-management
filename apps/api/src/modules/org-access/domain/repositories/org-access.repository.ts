@@ -55,6 +55,7 @@ export interface OrgRoleRecord {
   readonly isSystem: boolean;
   readonly status: OrganizationRoleStatus;
   readonly memberCount: number;
+  readonly pendingInvitationCount: number;
   readonly permissionKeys: readonly PermissionKey[];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -119,6 +120,17 @@ export interface OrgAccessRepository {
     actorAdminId: string,
   ): Promise<OrgRoleRecord>;
   deleteRole(organizationId: string, roleId: string, actorAdminId: string): Promise<void>;
+  getRoleDeletionImpact(
+    organizationId: string,
+    roleId: string,
+  ): Promise<{
+    readonly canDelete: boolean;
+    readonly canDeactivate: boolean;
+    readonly totalMemberAssignments: number;
+    readonly activeMemberAssignments: number;
+    readonly employeeLinkedAssignments: number;
+    readonly pendingInvitationAssignments: number;
+  }>;
   assignMemberRoles(
     organizationId: string,
     membershipId: string,

@@ -88,17 +88,23 @@ import { labelMembershipStatus } from '../utils/labels';
 const SEARCH_DEBOUNCE_MS = 400;
 
 const MEMBERS_TABLE_COLUMN_CLASS = {
-  name: 'w-[20%] min-w-[11rem] overflow-hidden pr-4 align-middle',
-  email: 'w-[26%] min-w-[13rem] overflow-hidden px-4 align-middle',
-  role: 'w-[16%] min-w-[8.5rem] overflow-hidden px-4 align-middle',
-  lastLogin: 'w-[16%] min-w-[9rem] overflow-hidden px-4 align-middle',
-  actions: 'w-[24%] min-w-[15.5rem] px-4 align-middle',
+  name: 'w-[14%] min-w-[9rem] overflow-hidden pr-3 align-middle',
+  email: 'w-[18%] min-w-[10rem] overflow-hidden px-3 align-middle',
+  employee: 'w-[12%] min-w-[8rem] overflow-hidden px-3 align-middle',
+  role: 'w-[14%] min-w-[8rem] overflow-hidden px-3 align-middle',
+  status: 'w-[10%] min-w-[7rem] overflow-hidden px-3 align-middle',
+  joined: 'w-[12%] min-w-[8rem] overflow-hidden px-3 align-middle',
+  lastLogin: 'w-[12%] min-w-[8rem] overflow-hidden px-3 align-middle',
+  actions: 'w-[8%] min-w-[10rem] px-3 align-middle',
 } as const;
 
 const MEMBERS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
   { variant: 'textWide', className: MEMBERS_TABLE_COLUMN_CLASS.name },
   { variant: 'textWide', className: MEMBERS_TABLE_COLUMN_CLASS.email },
+  { variant: 'text', className: MEMBERS_TABLE_COLUMN_CLASS.employee },
   { variant: 'badge', className: MEMBERS_TABLE_COLUMN_CLASS.role },
+  { variant: 'badge', className: MEMBERS_TABLE_COLUMN_CLASS.status },
+  { variant: 'text', className: MEMBERS_TABLE_COLUMN_CLASS.joined },
   { variant: 'text', className: MEMBERS_TABLE_COLUMN_CLASS.lastLogin },
   {
     variant: 'actions',
@@ -106,6 +112,14 @@ const MEMBERS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
     headClassName: `${MEMBERS_TABLE_COLUMN_CLASS.actions} text-right`,
   },
 ];
+
+function MembershipStatusBadge({ status }: { status: OrganizationMembershipStatus }) {
+  return (
+    <Badge variant={status === 'ACTIVE' ? 'default' : 'outline'} className="font-normal">
+      {labelMembershipStatus(status)}
+    </Badge>
+  );
+}
 
 const PHONE_PLACEHOLDER = 'Not provided';
 
@@ -332,6 +346,8 @@ export function UsersPage() {
       setRolesDialogOpen(false);
       setRolesTarget(null);
       await load();
+      const rolesResponse = await listOrgRoles();
+      setRoleOptions(rolesResponse.items);
     } catch (failure) {
       toast.error(describeOrgAccessError(failure));
     }
@@ -426,6 +442,11 @@ export function UsersPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {filtersActive ? (
+                  <Button type="button" variant="ghost" className="h-9 shrink-0" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : null}
                 {canProvision ? (
                   <Button
                     type="button"
@@ -447,17 +468,20 @@ export function UsersPage() {
 
           <DataTable
             className="min-w-0 max-w-full"
-            tableClassName="table-fixed min-w-[60rem]"
+            tableClassName="table-fixed min-w-[72rem]"
             phase={tablePhase}
-            colSpan={5}
+            colSpan={8}
             skeletonColumns={MEMBERS_TABLE_SKELETON}
             header={
               <TableRow className="hover:bg-transparent">
                 <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.name}>Name</TableHead>
                 <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.email}>Email</TableHead>
+                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.employee}>Employee</TableHead>
                 <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.role}>Role</TableHead>
+                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.status}>Status</TableHead>
+                <TableHead className={MEMBERS_TABLE_COLUMN_CLASS.joined}>Joined</TableHead>
                 <TableHead className={cn(MEMBERS_TABLE_COLUMN_CLASS.lastLogin, 'whitespace-nowrap')}>
-                  Last Login At
+                  Last login
                 </TableHead>
                 <TableHead className={cn(MEMBERS_TABLE_COLUMN_CLASS.actions, 'text-right')}>
                   Actions
@@ -524,8 +548,27 @@ export function UsersPage() {
                       />
                     </div>
                   </TableCell>
+                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.employee, 'min-w-0 text-sm')}>
+                    <TruncateWithTooltip
+                      value={member.employeeDisplayName?.trim() || '—'}
+                      className={
+                        member.employeeDisplayName ? 'text-foreground' : 'text-muted-foreground'
+                      }
+                    />
+                  </TableCell>
                   <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.role, 'min-w-0 whitespace-normal')}>
                     <MemberRoleBadges roles={member.roles} />
+                  </TableCell>
+                  <TableCell className={cn(MEMBERS_TABLE_COLUMN_CLASS.status, 'min-w-0')}>
+                    <MembershipStatusBadge status={member.status} />
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      MEMBERS_TABLE_COLUMN_CLASS.joined,
+                      'text-muted-foreground min-w-0 text-sm tabular-nums',
+                    )}
+                  >
+                    <TruncateWithTooltip value={formatDateTime(member.joinedAt)} />
                   </TableCell>
                   <TableCell
                     className={cn(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -17,7 +17,7 @@ import {
   isDefinitiveSessionEnd,
   shouldSuppressSessionEnded,
 } from '@/shared/api/session-ended';
-import { invalidateMyPermissionsCache } from '@/features/admin/org-access/hooks/use-my-permissions';
+import { invalidateMyPermissionsCache } from '@/features/admin/org-access/my-permissions-cache';
 import { getCurrentSession } from '../api/get-current-session';
 import { logout, logoutAllDevices } from '../api/logout';
 import { refreshSession } from '../api/refresh-session';
@@ -45,6 +45,7 @@ function createInitialSessionState(): AdminSessionState {
 
 export function AdminSessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [state, setState] = useState<AdminSessionState>(createInitialSessionState);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -75,7 +76,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
       try {
         if (!hasCsrfCookie() && !accessTokenStore.get()) {
           setState({ status: 'unauthenticated' });
-          router.replace(loginPath());
+          router.replace(loginPath(undefined, pathname));
           return;
         }
         const current = await getCurrentSession(controller.signal);
@@ -105,7 +106,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
             !hadBootstrap
           ) {
             setState({ status: 'unauthenticated' });
-            router.replace(loginPath());
+            router.replace(loginPath(undefined, pathname));
             return;
           }
           setState({
@@ -123,7 +124,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
     })();
 
     return () => controller.abort();
-  }, [reloadKey, router]);
+  }, [reloadKey, pathname, router]);
 
   const reload = useCallback(() => {
     setSignOutError(null);

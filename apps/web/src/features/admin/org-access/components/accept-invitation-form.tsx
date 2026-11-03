@@ -41,7 +41,7 @@ export function AcceptInvitationForm() {
     setPending(true);
     try {
       await acceptOrgInvitation(parsed.data);
-      router.replace('/admin/login?reason=invitation_accepted');
+      router.replace('/login?reason=invitation_accepted');
     } catch (failure) {
       setFormError(describeOrgAccessError(failure));
     } finally {

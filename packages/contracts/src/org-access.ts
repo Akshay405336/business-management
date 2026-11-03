@@ -15,6 +15,7 @@ export const ORG_ACCESS_ROUTES = {
   invitationAccept: `${API_PREFIX}/org-access/invitations/accept`,
   roles: `${API_PREFIX}/org-access/roles`,
   role: (id: string) => `${API_PREFIX}/org-access/roles/${id}`,
+  roleDeletionImpact: (id: string) => `${API_PREFIX}/org-access/roles/${id}/deletion-impact`,
   rolePermissions: (id: string) => `${API_PREFIX}/org-access/roles/${id}/permissions`,
   permissions: `${API_PREFIX}/org-access/permissions`,
   myPermissions: `${API_PREFIX}/org-access/me/permissions`,
@@ -80,7 +81,9 @@ export interface OrgRoleListItem {
   readonly description: string;
   readonly isSystem: boolean;
   readonly status: OrganizationRoleStatus;
+  /** Organization membership role links (all membership statuses). */
   readonly memberCount: number;
+  readonly pendingInvitationCount: number;
   readonly permissionKeys: readonly PermissionKey[];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -90,6 +93,15 @@ export type OrgRoleDetail = OrgRoleListItem;
 
 export interface OrgRoleListResponse {
   readonly items: readonly OrgRoleListItem[];
+}
+
+export interface OrgRoleDeletionImpactResponse {
+  readonly canDelete: boolean;
+  readonly canDeactivate: boolean;
+  readonly totalMemberAssignments: number;
+  readonly activeMemberAssignments: number;
+  readonly employeeLinkedAssignments: number;
+  readonly pendingInvitationAssignments: number;
 }
 
 export interface PermissionCatalogItem {

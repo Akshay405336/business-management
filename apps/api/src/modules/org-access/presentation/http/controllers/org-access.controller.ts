@@ -23,6 +23,7 @@ import {
   type OrgAccessSummaryResponse,
   type OrgMemberDetail,
   type OrgMemberListResponse,
+  type OrgRoleDeletionImpactResponse,
   type OrgRoleDetail,
   type OrgRoleListResponse,
   type PermissionCatalogResponse,
@@ -53,6 +54,7 @@ import { GetMyPermissionsHandler } from '../../../application/get-my-permissions
 import { GetOrgAccessSummaryHandler } from '../../../application/get-org-access-summary/get-org-access-summary.handler.js';
 import { GetOrgMemberHandler } from '../../../application/get-org-member/get-org-member.handler.js';
 import { GetOrgRoleHandler } from '../../../application/get-org-role/get-org-role.handler.js';
+import { GetOrgRoleDeletionImpactHandler } from '../../../application/get-org-role-deletion-impact/get-org-role-deletion-impact.handler.js';
 import { InviteMemberHandler } from '../../../application/invite-member/invite-member.handler.js';
 import { ListOrgMembersHandler } from '../../../application/list-org-members/list-org-members.handler.js';
 import { ListOrgRolesHandler } from '../../../application/list-org-roles/list-org-roles.handler.js';
@@ -95,6 +97,8 @@ export class OrgAccessController {
     @Inject(GetOrgAccessSummaryHandler) private readonly getOrgAccessSummary: GetOrgAccessSummaryHandler,
     @Inject(GetOrgMemberHandler) private readonly getOrgMember: GetOrgMemberHandler,
     @Inject(GetOrgRoleHandler) private readonly getOrgRole: GetOrgRoleHandler,
+    @Inject(GetOrgRoleDeletionImpactHandler)
+    private readonly getOrgRoleDeletionImpact: GetOrgRoleDeletionImpactHandler,
     @Inject(InviteMemberHandler) private readonly inviteMember: InviteMemberHandler,
     @Inject(ListOrgMembersHandler) private readonly listOrgMembers: ListOrgMembersHandler,
     @Inject(ListOrgRolesHandler) private readonly listOrgRoles: ListOrgRolesHandler,
@@ -352,6 +356,21 @@ export class OrgAccessController {
   async getRole(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<OrgRoleDetail> {
     const role = await this.getOrgRole.execute({ organizationId: ctx.organizationId, roleId: id });
     return toOrgRoleDetail(role);
+  }
+
+  @Get('roles/:id/deletion-impact')
+  @ApiBearerAuth()
+  @UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
+  @RequirePermissions('roles.delete')
+  @ApiOperation({ summary: 'Role deletion dependency check' })
+  async getRoleDeletionImpact(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('id') id: string,
+  ): Promise<OrgRoleDeletionImpactResponse> {
+    return this.getOrgRoleDeletionImpact.execute({
+      organizationId: ctx.organizationId,
+      roleId: id,
+    });
   }
 
   @Post('roles')

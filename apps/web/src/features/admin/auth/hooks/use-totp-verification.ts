@@ -2,10 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useRef, useState } from 'react';
+import { resolvePostAuthRedirect } from '@/features/auth/portal/portal-resolution';
 import { finalizePlatformSignIn } from '../api/finalize-platform-sign-in';
 import { verifyTotp } from '../api/verify-totp';
 import { TOTP_CODE_LENGTH, totpSchema } from '../schemas/totp.schema';
 import { describeAuthError, isChallengeExpired, loginPath } from '../utils/auth-errors';
+import { readPostAuthBootstrap } from '../utils/post-auth-bootstrap';
 
 export function useTotpVerification() {
   const router = useRouter();
@@ -31,7 +33,13 @@ export function useTotpVerification() {
         const session = await verifyTotp(parsed.data);
         await finalizePlatformSignIn(session);
         setIsComplete(true);
-        router.replace('/admin/dashboard');
+        const bootstrap = readPostAuthBootstrap();
+        router.replace(
+          resolvePostAuthRedirect({
+            admin: session.admin,
+            permissions: bootstrap?.permissions ?? [],
+          }),
+        );
       } catch (failure) {
         if (isChallengeExpired(failure)) {
           router.replace(loginPath('challenge_expired'));

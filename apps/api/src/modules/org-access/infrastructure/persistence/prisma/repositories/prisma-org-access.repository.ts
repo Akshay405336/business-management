@@ -115,6 +115,10 @@ export class PrismaOrgAccessRepository implements OrgAccessRepository {
     return this.roles.deleteRole(organizationId, roleId, actorAdminId);
   }
 
+  getRoleDeletionImpact(organizationId: string, roleId: string) {
+    return this.roles.getRoleDeletionImpact(organizationId, roleId);
+  }
+
   assignMemberRoles(
     organizationId: string,
     membershipId: string,

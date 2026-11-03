@@ -1,5 +1,6 @@
-import { SYSTEM_ROLE_KEYS, type PermissionKey } from '@techwin/contracts';
+import { SYSTEM_ROLE_KEYS } from '@techwin/contracts';
 import type { OrgRoleListItem } from '../types';
+import type { GrantableRoleActor } from './role-policy';
 
 /**
  * Roles the signed-in user may assign: active, not the owner role (platform super admins only),
@@ -7,7 +8,7 @@ import type { OrgRoleListItem } from '../types';
  */
 export function selectGrantableRoles(
   roles: readonly OrgRoleListItem[],
-  actor: { readonly isPlatformSuperAdmin: boolean; readonly permissions: ReadonlySet<PermissionKey> },
+  actor: GrantableRoleActor,
 ): readonly OrgRoleListItem[] {
   if (actor.isPlatformSuperAdmin) return roles.filter((role) => role.status === 'ACTIVE');
   return roles.filter(

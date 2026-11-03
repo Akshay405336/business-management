@@ -150,3 +150,34 @@ export const CRM_EMPLOYEES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = 
     headClassName: `${CRM_EMPLOYEES_TABLE_COLUMN_CLASS.actions} text-right`,
   },
 ];
+
+/** Width classes for org roles listing table (`table-fixed`). */
+export const ORG_ROLES_TABLE_COLUMN_CLASS = {
+  name: 'w-[18%] min-w-[8rem]',
+  key: 'w-[16%] min-w-[7rem]',
+  type: 'w-[10%] min-w-[5.5rem]',
+  permissions: 'w-[10%] min-w-[5rem]',
+  members: 'w-[9%] min-w-[4.5rem] pr-4',
+  status: 'w-[11%] min-w-[5.75rem]',
+  actions: 'w-[15%] min-w-[10rem]',
+} as const;
+
+export const ORG_ROLES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
+  { variant: 'textWide', className: ORG_ROLES_TABLE_COLUMN_CLASS.name },
+  { variant: 'text', className: ORG_ROLES_TABLE_COLUMN_CLASS.key },
+  { variant: 'badge', className: ORG_ROLES_TABLE_COLUMN_CLASS.type },
+  {
+    variant: 'number',
+    className: `${ORG_ROLES_TABLE_COLUMN_CLASS.permissions} text-right`,
+  },
+  {
+    variant: 'number',
+    className: `${ORG_ROLES_TABLE_COLUMN_CLASS.members} text-right`,
+  },
+  { variant: 'badge', className: ORG_ROLES_TABLE_COLUMN_CLASS.status },
+  {
+    variant: 'actions',
+    className: ORG_ROLES_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${ORG_ROLES_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
+];

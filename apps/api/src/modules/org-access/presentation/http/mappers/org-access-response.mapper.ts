@@ -51,6 +51,7 @@ export function toOrgRoleListItem(record: OrgRoleRecord): OrgRoleListItem {
     isSystem: record.isSystem,
     status: record.status,
     memberCount: record.memberCount,
+    pendingInvitationCount: record.pendingInvitationCount,
     permissionKeys: [...record.permissionKeys] as OrgRoleDetail['permissionKeys'],
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,

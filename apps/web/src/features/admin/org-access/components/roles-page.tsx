@@ -1,14 +1,17 @@
 'use client';
 
-import { PERMISSION_DEFINITIONS, type PermissionKey } from '@techwin/contracts';
 import {
-  createRoleRequestSchema,
-  setRolePermissionsRequestSchema,
-  updateRoleRequestSchema,
-} from '@techwin/validation';
-import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
-import { clearFormFieldError, zodErrorToFieldMap } from '@/shared/form/zod-field-error';
-import { Eye, Loader2, MoreHorizontal, Pencil, Plus, Search, Shield, Trash2 } from 'lucide-react';
+  CircleDot,
+  Loader2,
+  Plus,
+  Search,
+  Shield,
+  SquarePen,
+  Tags,
+  ToggleLeft,
+  ToggleRight,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertDialog,
@@ -23,95 +26,87 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { TableCell, TableHead, TableRow } from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import {
   DataTable,
   deriveDataTablePhase,
   isDataTableRefreshing,
 } from '@/features/admin/components/data-table';
-import type { DataTableSkeletonColumn } from '@/features/admin/components/data-table-skeleton';
+import {
+  ORG_ROLES_TABLE_COLUMN_CLASS,
+  ORG_ROLES_TABLE_SKELETON,
+} from '@/features/admin/components/data-table-presets';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
-import {
-  CrmErrorAlert,
-  CrmFormField,
-  formGridClass,
-  formGridFullWidthClass,
-} from '@/features/admin/crm/components/crm-feedback';
-import {
-  CRM_HEADER_SEARCH_FORM_CLASS,
-  CrmToolbarHeader,
-} from '@/features/admin/crm/components/crm-toolbar-header';
+import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
+import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
+import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
-import { formatDateTime } from '@/shared/lib/format';
 import { cn } from '@/shared/lib/utils';
 import {
-  createOrgRole,
   deleteOrgRole,
+  getOrgRoleDeletionImpact,
   listOrgRoles,
-  setOrgRolePermissions,
   updateOrgRole,
 } from '../api/org-access';
+import { invalidateMyPermissionsCache } from '../my-permissions-cache';
 import { DEFAULT_ORG_ROLE_PAGE_SIZE, ROLE_SEARCH_DEBOUNCE_MS } from '../constants';
 import { useAuthenticatedAdmin } from '@/features/admin/auth/hooks/use-admin-session';
 import { useMyPermissions } from '../hooks/use-my-permissions';
 import type { OrganizationRoleStatus, OrgRoleListItem } from '../types';
-import { applyOrgAccessFieldErrors, describeOrgAccessError } from '../utils/errors';
-import { labelRoleStatus } from '../utils/labels';
-import { slugifyRoleKey } from '../utils/role-key-slug';
-import { RolePermissionMatrix } from './role-permission-matrix';
+import { describeOrgAccessError } from '../utils/errors';
+import {
+  describeRoleDeletionBlock,
+  describeRoleDeactivateBlock,
+  immutableRoleReason,
+  isEditableOrgRole,
+  isOwnerOrgRole,
+  roleDeleteLabel,
+  roleShowsDeleteButton,
+  roleShowsStatusToggle,
+  roleStatusToggleLabel,
+} from '../utils/role-policy';
+import { RoleFormDialog } from './role-form-dialog';
 
-const ROLES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
-  { variant: 'textWide' },
-  { variant: 'text' },
-  { variant: 'badge' },
-  { variant: 'text' },
-  { variant: 'text' },
-  { variant: 'badge' },
-  { variant: 'text' },
-  { variant: 'actions', headClassName: 'w-[5rem] text-right' },
-];
-
-type RoleEditorMode = 'create' | 'edit' | 'view';
 type RoleTypeFilter = 'ALL' | 'SYSTEM' | 'CUSTOM';
 type RoleStatusFilter = 'ALL' | OrganizationRoleStatus;
 
 function RoleTypeBadge({ isSystem }: { isSystem: boolean }) {
   return (
-    <Badge variant={isSystem ? 'secondary' : 'outline'}>{isSystem ? 'System' : 'Custom'}</Badge>
+    <Badge
+      variant="outline"
+      className={cn(
+        'border-transparent font-normal',
+        isSystem
+          ? 'bg-neutral-500/10 text-neutral-700'
+          : 'bg-sky-600/10 text-sky-800',
+      )}
+    >
+      {isSystem ? 'System' : 'Custom'}
+    </Badge>
   );
 }
 
 function RoleStatusBadge({ status }: { status: OrganizationRoleStatus }) {
-  return (
-    <Badge variant={status === 'ACTIVE' ? 'default' : 'outline'} className="font-normal">
-      {labelRoleStatus(status)}
+  return status === 'ACTIVE' ? (
+    <Badge className="border-transparent bg-emerald-600/10 font-normal text-emerald-700 hover:bg-emerald-600/10">
+      Active
+    </Badge>
+  ) : (
+    <Badge className="border-transparent bg-red-600/10 font-normal text-red-700 hover:bg-red-600/10">
+      Inactive
     </Badge>
   );
 }
@@ -131,8 +126,6 @@ export function RolesPage() {
   const canUpdate = has('roles.update');
   const canDelete = has('roles.delete');
 
-  const permissionCatalog = PERMISSION_DEFINITIONS;
-
   const [roles, setRoles] = useState<readonly OrgRoleListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,24 +137,21 @@ export function RolesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_ORG_ROLE_PAGE_SIZE);
 
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editorMode, setEditorMode] = useState<RoleEditorMode>('create');
-  const [editingRole, setEditingRole] = useState<OrgRoleListItem | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formKey, setFormKey] = useState('');
-  const [keyManuallyEdited, setKeyManuallyEdited] = useState(false);
-  const [formDescription, setFormDescription] = useState('');
-  const [formStatus, setFormStatus] = useState<OrganizationRoleStatus>('ACTIVE');
-  const [selectedPermissions, setSelectedPermissions] = useState<ReadonlySet<PermissionKey>>(
-    () => new Set(),
-  );
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [formOpen, setFormOpen] = useState(false);
+  const [formRoleId, setFormRoleId] = useState<string | null>(null);
+  const [formReadOnly, setFormReadOnly] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<OrgRoleListItem | null>(null);
+  const [deleteImpact, setDeleteImpact] = useState<Awaited<
+    ReturnType<typeof getOrgRoleDeletionImpact>
+  > | null>(null);
+  const [deleteImpactLoading, setDeleteImpactLoading] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<OrgRoleListItem | null>(null);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (searchDraft === search) return;
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
       setSearch(searchDraft.trim());
@@ -170,22 +160,24 @@ export function RolesPage() {
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
-  }, [searchDraft]);
+  }, [searchDraft, search]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<readonly OrgRoleListItem[]> => {
     if (!canRead) {
       setRoles([]);
       setLoading(false);
       setError(null);
-      return;
+      return [];
     }
     setLoading(true);
     setError(null);
     try {
       const rolesResponse = await listOrgRoles();
       setRoles(rolesResponse.items);
+      return rolesResponse.items;
     } catch (failure) {
       setError(describeOrgAccessError(failure));
+      return [];
     } finally {
       setLoading(false);
     }
@@ -196,8 +188,10 @@ export function RolesPage() {
     void load();
   }, [load]);
 
+  const typeFilterActive = typeFilter !== 'ALL';
+  const statusFilterActive = statusFilter !== 'ALL';
   const filtersActive =
-    search.length > 0 || typeFilter !== 'ALL' || statusFilter !== 'ALL';
+    search.length > 0 || typeFilterActive || statusFilterActive;
 
   const filteredRoles = useMemo(() => {
     let list = roles;
@@ -217,6 +211,7 @@ export function RolesPage() {
   const totalFiltered = filteredRoles.length;
   const totalPages = totalFiltered === 0 ? 0 : Math.ceil(totalFiltered / pageSize);
   const safePage = totalPages === 0 ? 1 : Math.min(Math.max(1, page), totalPages);
+
   const paginatedRoles = useMemo(() => {
     const start = (safePage - 1) * pageSize;
     return filteredRoles.slice(start, start + pageSize);
@@ -233,539 +228,510 @@ export function RolesPage() {
     setPage(1);
   };
 
-  const resetEditor = () => {
-    setFormName('');
-    setFormKey('');
-    setKeyManuallyEdited(false);
-    setFormDescription('');
-    setFormStatus('ACTIVE');
-    setSelectedPermissions(new Set());
-    setFormErrors({});
-    setEditingRole(null);
-  };
-
   const openCreate = () => {
-    resetEditor();
-    setEditorMode('create');
-    setEditorOpen(true);
+    setFormRoleId(null);
+    setFormReadOnly(false);
+    setFormOpen(true);
   };
 
-  const populateEditor = (role: OrgRoleListItem) => {
-    setEditingRole(role);
-    setFormName(role.name);
-    setFormKey(role.key);
-    setKeyManuallyEdited(true);
-    setFormDescription(role.description);
-    setFormStatus(role.status);
-    setSelectedPermissions(new Set(role.permissionKeys));
-    setFormErrors({});
+  const openRoleForm = (role: OrgRoleListItem) => {
+    setFormRoleId(role.id);
+    setFormReadOnly(!canUpdate || !isEditableOrgRole(role));
+    setFormOpen(true);
   };
 
-  const openView = (role: OrgRoleListItem) => {
-    populateEditor(role);
-    setEditorMode('view');
-    setEditorOpen(true);
-  };
-
-  const openEdit = (role: OrgRoleListItem) => {
-    populateEditor(role);
-    setEditorMode(role.isSystem ? 'view' : 'edit');
-    setEditorOpen(true);
-  };
-
-  const permissionsReadOnly =
-    editorMode === 'view' || (editorMode === 'edit' && (editingRole?.isSystem ?? false));
-
-  const togglePermission = (key: PermissionKey, checked: boolean) => {
-    if (permissionsReadOnly) return;
-    setSelectedPermissions((previous) => {
-      const next = new Set(previous);
-      if (checked) next.add(key);
-      else next.delete(key);
-      return next;
-    });
-    clearFormFieldError(setFormErrors, 'permissionKeys');
-  };
-
-  const replacePermissions = (keys: readonly PermissionKey[]) => {
-    if (permissionsReadOnly) return;
-    setSelectedPermissions(new Set(keys));
-    clearFormFieldError(setFormErrors, 'permissionKeys');
-  };
-
-  const saveRole = async () => {
-    setFormErrors({});
-    const permissionKeys = [...selectedPermissions];
-
-    if (editorMode === 'create') {
-      const parsed = createRoleRequestSchema.safeParse({
-        name: formName.trim(),
-        key: formKey.trim(),
-        description: formDescription.trim() || undefined,
-        permissionKeys,
-      });
-      if (!parsed.success) {
-        setFormErrors(zodErrorToFieldMap(parsed.error));
-        focusFirstInvalidField();
-        return;
-      }
-      try {
-        await run(() => createOrgRole(parsed.data));
-        toast.success('Role created.');
-        setEditorOpen(false);
-        resetEditor();
-        await load();
-      } catch (failure) {
-        if (!applyOrgAccessFieldErrors(failure, setFormErrors)) {
-          toast.error(describeOrgAccessError(failure));
-        }
-      }
-      return;
-    }
-
-    if (editorMode !== 'edit' || !editingRole) return;
-
-    try {
-      const metadataParsed = updateRoleRequestSchema.safeParse({
-        name: formName.trim(),
-        description: formDescription.trim(),
-        status: formStatus,
-      });
-      if (!metadataParsed.success) {
-        setFormErrors(zodErrorToFieldMap(metadataParsed.error));
-        focusFirstInvalidField();
-        return;
-      }
-      await run(() => updateOrgRole(editingRole.id, metadataParsed.data));
-
-      const permissionsParsed = setRolePermissionsRequestSchema.safeParse({ permissionKeys });
-      if (!permissionsParsed.success) {
-        setFormErrors(zodErrorToFieldMap(permissionsParsed.error));
-        return;
-      }
-      if (permissionKeys.length === 0) {
-        setFormErrors({ permissionKeys: 'Select at least one permission.' });
-        return;
-      }
-      await run(() => setOrgRolePermissions(editingRole.id, permissionsParsed.data));
-
-      toast.success('Role saved.');
-      setEditorOpen(false);
-      resetEditor();
-      await load();
-    } catch (failure) {
-      if (!applyOrgAccessFieldErrors(failure, setFormErrors)) {
+  const openDeleteDialog = (role: OrgRoleListItem) => {
+    setDeleteTarget(role);
+    setDeleteImpact(null);
+    setDeleteImpactLoading(true);
+    void getOrgRoleDeletionImpact(role.id)
+      .then((impact) => setDeleteImpact(impact))
+      .catch((failure) => {
         toast.error(describeOrgAccessError(failure));
-      }
-    }
+        setDeleteImpact({
+          canDelete: false,
+          canDeactivate: false,
+          totalMemberAssignments: role.memberCount,
+          activeMemberAssignments: role.memberCount,
+          employeeLinkedAssignments: 0,
+          pendingInvitationAssignments: role.pendingInvitationCount,
+        });
+      })
+      .finally(() => setDeleteImpactLoading(false));
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleteImpact?.canDelete === false) return;
+    const deletedRoleId = deleteTarget.id;
     try {
-      await run(() => deleteOrgRole(deleteTarget.id));
-      toast.success('Role deleted.');
+      await run(() => deleteOrgRole(deletedRoleId));
+      const items = await load();
+      if (items.some((role) => role.id === deletedRoleId)) {
+        toast.error(
+          'The role was not removed. It may still be in use or was restored. Refresh and try again.',
+        );
+        return;
+      }
+      toast.success('Role permanently deleted.');
       setDeleteTarget(null);
+      setDeleteImpact(null);
+      invalidateMyPermissionsCache();
+    } catch (failure) {
+      toast.error(describeOrgAccessError(failure));
+    }
+  };
+
+  const statusChangeIsDeactivate = statusTarget?.status === 'ACTIVE';
+
+  const confirmStatusChange = async () => {
+    if (!statusTarget) return;
+    const nextStatus: OrganizationRoleStatus =
+      statusTarget.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    if (
+      nextStatus === 'INACTIVE' &&
+      statusTarget.memberCount > 0
+    ) {
+      toast.error(describeRoleDeactivateBlock(statusTarget));
+      setStatusTarget(null);
+      return;
+    }
+    try {
+      await run(() => updateOrgRole(statusTarget.id, { status: nextStatus }));
+      toast.success(nextStatus === 'ACTIVE' ? 'Role activated.' : 'Role deactivated.');
+      setStatusTarget(null);
+      invalidateMyPermissionsCache();
       await load();
     } catch (failure) {
       toast.error(describeOrgAccessError(failure));
     }
   };
 
-  const editorTitle =
-    editorMode === 'create'
-      ? 'Create role'
-      : editorMode === 'view'
-        ? `View role — ${editingRole?.name ?? ''}`
-        : `Edit role — ${editingRole?.name ?? ''}`;
+  const emptyTitle = filtersActive ? 'No roles match your filters' : 'No roles yet';
+  const emptyDescription = filtersActive
+    ? 'Try different search terms or clear filters.'
+    : canCreate
+      ? 'Create a custom role to tailor permissions for your team.'
+      : 'Roles will appear here when they are configured.';
+
+  const breadcrumbs = [
+    { label: 'Home', href: '/admin/dashboard' },
+    { label: 'Administration', href: '/admin/users' },
+    { label: 'Roles & Permissions' },
+  ] as const;
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4 pb-8">
-      <AdminBreadcrumb
-        breadcrumbs={[
-          { label: 'Home', href: '/admin/dashboard' },
-          { label: 'Administration', href: '/admin/users' },
-          { label: 'Roles & Permissions' },
-        ]}
-      />
+    <div className="grid w-full min-w-0 max-w-full gap-3 pt-1 pb-8">
+      <AdminBreadcrumb breadcrumbs={breadcrumbs} className="mb-0.5" />
 
       {!canRead ? (
         <CrmErrorAlert message="You do not have permission to view roles." />
       ) : (
-        <section aria-label="Roles and permissions" className="flex min-w-0 flex-col gap-4">
-          <CrmToolbarHeader
-            className="shadow-xs min-w-0"
-            layout="stacked"
-            title="Roles & Permissions"
-            description="Manage roles and control access across Techwin."
-            toolbar={
-              <>
-                <form
-                  className={CRM_HEADER_SEARCH_FORM_CLASS}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    setSearch(searchDraft.trim());
-                    setPage(1);
-                  }}
-                >
-                  <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 w-full">
-                    <Input
-                      className={cn('h-9', inputGroupPaddingClass({ leading: true }))}
-                      value={searchDraft}
-                      onChange={(event) => setSearchDraft(event.target.value)}
-                      placeholder="Search by name or key"
-                      aria-label="Search roles"
-                    />
-                  </InputGroup>
-                </form>
-                <Select
-                  value={typeFilter}
-                  onValueChange={(value) => {
-                    setTypeFilter(value as RoleTypeFilter);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[9rem]" aria-label="Filter by type">
-                    <SelectValue placeholder="Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All types</SelectItem>
-                    <SelectItem value="SYSTEM">System</SelectItem>
-                    <SelectItem value="CUSTOM">Custom</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={statusFilter}
-                  onValueChange={(value) => {
-                    setStatusFilter(value as RoleStatusFilter);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger className="h-9 w-full min-w-[9rem] sm:w-[9rem]" aria-label="Filter by status">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All statuses</SelectItem>
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="INACTIVE">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-                {filtersActive ? (
-                  <Button type="button" variant="ghost" className="h-9 shrink-0" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                ) : null}
-                {canCreate ? (
-                  <Button type="button" className="h-9 shrink-0" onClick={openCreate}>
-                    <Plus aria-hidden="true" />
-                    Create Role
-                  </Button>
-                ) : null}
-              </>
-            }
-          />
-
-          <p className="text-muted-foreground px-0.5 text-sm tabular-nums" aria-live="polite">
-            {loading && roles.length === 0
-              ? 'Loading roles…'
-              : `${totalFiltered} role${totalFiltered === 1 ? '' : 's'}${filtersActive ? ' matching filters' : ''}`}
-          </p>
-
-          {error && roles.length > 0 ? <CrmErrorAlert message={error} /> : null}
-
-          <DataTable
-            className="min-w-0 max-w-full"
-            tableClassName="table-fixed"
-            phase={tablePhase}
-            colSpan={8}
-            skeletonColumns={ROLES_TABLE_SKELETON}
-            header={
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[16%]">Role Name</TableHead>
-                <TableHead className="w-[14%]">Role Key</TableHead>
-                <TableHead className="w-[10%]">Type</TableHead>
-                <TableHead className="w-[10%]">Permissions</TableHead>
-                <TableHead className="w-[10%] text-right">Members</TableHead>
-                <TableHead className="w-[10%]">Status</TableHead>
-                <TableHead className="w-[14%]">Created At</TableHead>
-                <TableHead className="w-[16%] text-right">Actions</TableHead>
-              </TableRow>
-            }
-            empty={{
-              icon: Shield,
-              title: filtersActive ? 'No roles match your filters' : 'No roles yet',
-              description: filtersActive
-                ? 'Try different search terms or clear filters.'
-                : canCreate
-                  ? 'Create a custom role to tailor permissions for your team.'
-                  : 'Roles will appear here when they are configured.',
-              secondaryAction: filtersActive ? { label: 'Clear filters', onClick: clearFilters } : undefined,
-            }}
-            errorMessage={error}
-            onRetry={() => void load()}
-            refreshing={tableRefreshing}
-          >
-            {paginatedRoles.map((role) => (
-              <TableRow key={role.id}>
-                <TableCell className="font-medium">
-                  <span className="block truncate" title={role.name}>
-                    {role.name}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <code className="text-muted-foreground block truncate text-xs" title={role.key}>
-                    {role.key}
-                  </code>
-                </TableCell>
-                <TableCell>
-                  <RoleTypeBadge isSystem={role.isSystem} />
-                </TableCell>
-                <TableCell className="tabular-nums">{role.permissionKeys.length}</TableCell>
-                <TableCell className="text-right tabular-nums">{role.memberCount}</TableCell>
-                <TableCell>
-                  <RoleStatusBadge status={role.status} />
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {formatDateTime(role.createdAt)}
-                </TableCell>
-                <TableCell className="text-right">
+        <section aria-label="Roles and permissions" className="workspace-surface min-w-0">
+          <div className="rounded-lg">
+            <CrmToolbarHeader
+              title="Roles & Permissions"
+              description="Manage roles and control access across Techwin."
+              className="rounded-none border-0 bg-card shadow-none"
+              titleSectionClassName="xl:max-w-none xl:min-w-0 xl:flex-[1_1_auto]"
+              toolbar={
+                <>
+                  <form
+                    className={CRM_HEADER_SEARCH_FORM_CLASS}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                      setSearch(searchDraft.trim());
+                      setPage(1);
+                    }}
+                  >
+                    <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 max-w-full">
+                      <Input
+                        className={cn(
+                          CRM_PIPELINE_SEARCH_INPUT_CLASS,
+                          inputGroupPaddingClass({ leading: true }),
+                        )}
+                        value={searchDraft}
+                        onChange={(event) => setSearchDraft(event.target.value)}
+                        placeholder="Search by role name or key"
+                        aria-label="Search roles"
+                      />
+                    </InputGroup>
+                  </form>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <TableIconButton label={`Actions for ${role.name}`} disabled={pending}>
-                        <MoreHorizontal className="size-4" aria-hidden="true" />
-                      </TableIconButton>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[10rem]">
-                      <DropdownMenuItem onSelect={() => openView(role)}>
-                        <Eye className="size-4" aria-hidden="true" />
-                        View
-                      </DropdownMenuItem>
-                      {!role.isSystem && canUpdate ? (
-                        <DropdownMenuItem onSelect={() => openEdit(role)}>
-                          <Pencil className="size-4" aria-hidden="true" />
-                          Edit
-                        </DropdownMenuItem>
-                      ) : role.isSystem ? (
-                        <DropdownMenuItem disabled title="System roles are read-only.">
-                          <Pencil className="size-4 opacity-50" aria-hidden="true" />
-                          Edit (system)
-                        </DropdownMenuItem>
-                      ) : null}
-                      {!role.isSystem && canDelete ? (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            disabled={role.memberCount > 0}
-                            title={
-                              role.memberCount > 0
-                                ? 'Remove this role from all members before deleting.'
-                                : undefined
-                            }
-                            onSelect={() => setDeleteTarget(role)}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className={cn('shrink-0', typeFilterActive && 'border-primary/40 bg-primary/5')}
+                            aria-label="Filter by role type"
                           >
-                            <Trash2 className="size-4" aria-hidden="true" />
-                            Delete
-                          </DropdownMenuItem>
-                        </>
-                      ) : null}
+                            <Tags aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Role type</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuLabel>Type</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={typeFilter}
+                        onValueChange={(value) => {
+                          setTypeFilter(value as RoleTypeFilter);
+                          setPage(1);
+                        }}
+                      >
+                        <DropdownMenuRadioItem value="ALL">All types</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="SYSTEM">System</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="CUSTOM">Custom</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </DataTable>
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className={cn(
+                              'shrink-0',
+                              statusFilterActive && 'border-primary/40 bg-primary/5',
+                            )}
+                            aria-label="Filter by status"
+                          >
+                            <CircleDot aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">Status</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuLabel>Status</DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={statusFilter}
+                        onValueChange={(value) => {
+                          setStatusFilter(value as RoleStatusFilter);
+                          setPage(1);
+                        }}
+                      >
+                        <DropdownMenuRadioItem value="ALL">All statuses</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="ACTIVE">Active</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="INACTIVE">Inactive</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  {filtersActive ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 shrink-0"
+                      onClick={clearFilters}
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
+                  {canCreate ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+                      onClick={openCreate}
+                    >
+                      <Plus aria-hidden="true" />
+                      Create Role
+                    </Button>
+                  ) : null}
+                </>
+              }
+            />
 
-          <TablePagination
-            page={safePage}
-            pageSize={pageSize}
-            total={totalFiltered}
-            loading={loading && roles.length === 0}
-            onPageChange={setPage}
-            onPageSizeChange={(next) => {
-              setPageSize(next);
-              setPage(1);
-            }}
-          />
+            {error && roles.length > 0 ? (
+              <div className="border-border border-b px-4 sm:px-5">
+                <CrmErrorAlert message={error} />
+              </div>
+            ) : null}
+
+            <div aria-hidden className="table-header-edge" />
+
+            <DataTable
+              frame="flush"
+              headerVariant="plain"
+              className="min-w-0 max-w-full gap-0"
+              tableClassName="table-fixed [&_[data-slot=table-head]]:h-auto [&_[data-slot=table-head]]:py-3 [&_[data-slot=table-cell]]:py-3"
+              tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
+              phase={tablePhase}
+              colSpan={7}
+              skeletonColumns={ORG_ROLES_TABLE_SKELETON}
+              header={
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className={ORG_ROLES_TABLE_COLUMN_CLASS.name}>Role Name</TableHead>
+                  <TableHead className={ORG_ROLES_TABLE_COLUMN_CLASS.key}>Role Key</TableHead>
+                  <TableHead className={ORG_ROLES_TABLE_COLUMN_CLASS.type}>Type</TableHead>
+                  <TableHead
+                    className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.permissions, 'text-right whitespace-nowrap')}
+                  >
+                    Permissions
+                  </TableHead>
+                  <TableHead
+                    className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.members, 'text-right whitespace-nowrap')}
+                  >
+                    Members
+                  </TableHead>
+                  <TableHead className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.status, 'whitespace-nowrap')}>
+                    Status
+                  </TableHead>
+                  <TableHead
+                    className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.actions, 'text-right')}
+                  >
+                    Actions
+                  </TableHead>
+                </TableRow>
+              }
+              empty={{
+                icon: Shield,
+                title: emptyTitle,
+                description: emptyDescription,
+                secondaryAction: filtersActive
+                  ? { label: 'Clear filters', onClick: clearFilters }
+                  : undefined,
+              }}
+              errorMessage={error}
+              onRetry={() => void load()}
+              refreshing={tableRefreshing}
+              footer={
+                <TablePagination
+                  className="border-border border-t px-4 py-3 sm:px-5"
+                  page={safePage}
+                  pageSize={pageSize}
+                  total={totalFiltered}
+                  loading={tablePhase === 'initial-loading'}
+                  hideWhenEmpty={false}
+                  onPageChange={setPage}
+                  onPageSizeChange={(next) => {
+                    setPageSize(next);
+                    setPage(1);
+                  }}
+                />
+              }
+            >
+              {paginatedRoles.map((role) => (
+                <TableRow key={role.id} className="border-0">
+                  <TableCell className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.name, 'min-w-0')}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-foreground flex min-w-0 items-center gap-1.5 truncate text-[13px] font-semibold">
+                          <span className="truncate">{role.name}</span>
+                          {isOwnerOrgRole(role) ? (
+                            <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+                              Protected
+                            </Badge>
+                          ) : null}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">{role.name}</TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.key, 'min-w-0')}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <code className="text-muted-foreground block truncate text-xs">{role.key}</code>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">{role.key}</TooltipContent>
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell className={ORG_ROLES_TABLE_COLUMN_CLASS.type}>
+                    <RoleTypeBadge isSystem={role.isSystem} />
+                  </TableCell>
+                  <TableCell
+                    className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.permissions, 'text-right tabular-nums')}
+                  >
+                    {role.permissionKeys.length}
+                  </TableCell>
+                  <TableCell
+                    className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.members, 'text-right tabular-nums')}
+                  >
+                    {role.memberCount}
+                  </TableCell>
+                  <TableCell className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.status, 'text-left')}>
+                    <RoleStatusBadge status={role.status} />
+                  </TableCell>
+                  <TableCell className={cn(ORG_ROLES_TABLE_COLUMN_CLASS.actions, 'min-w-0 pl-4')}>
+                    <div className="flex w-full shrink-0 items-center justify-end gap-1">
+                      {roleShowsStatusToggle(role, canUpdate) ? (
+                        <TableIconButton
+                          label={roleStatusToggleLabel(role)}
+                          tone="default"
+                          className={
+                            role.status === 'ACTIVE'
+                              ? 'text-red-800 hover:bg-red-800/10 hover:text-red-900'
+                              : 'text-emerald-800 hover:bg-emerald-800/10 hover:text-emerald-900'
+                          }
+                          disabled={pending}
+                          onClick={() => setStatusTarget(role)}
+                        >
+                          {role.status === 'ACTIVE' ? (
+                            <ToggleRight className="size-4 stroke-[2]" aria-hidden="true" />
+                          ) : (
+                            <ToggleLeft className="size-4 stroke-[2]" aria-hidden="true" />
+                          )}
+                        </TableIconButton>
+                      ) : null}
+                      <TableIconButton
+                        label={
+                          !isEditableOrgRole(role)
+                            ? immutableRoleReason(role)
+                            : canUpdate
+                              ? `Edit ${role.name}`
+                              : `View ${role.name}`
+                        }
+                        tone="default"
+                        className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                        disabled={pending}
+                        onClick={() => openRoleForm(role)}
+                      >
+                        <SquarePen className="size-4" aria-hidden="true" />
+                      </TableIconButton>
+                      {roleShowsDeleteButton(role, canDelete) ? (
+                        <TableIconButton
+                          label={roleDeleteLabel(role)}
+                          tone="default"
+                          className="text-neutral-900 hover:bg-neutral-900/10 hover:text-black"
+                          disabled={pending}
+                          onClick={() => openDeleteDialog(role)}
+                        >
+                          <Trash2 className="size-4" aria-hidden="true" />
+                        </TableIconButton>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </DataTable>
+          </div>
         </section>
       )}
 
-      <Dialog
-        open={editorOpen}
+      <RoleFormDialog
+        open={formOpen}
+        roleId={formRoleId}
+        readOnly={formReadOnly}
+        grantablePermissions={grantablePermissions}
+        onOpenChange={setFormOpen}
+        onSaved={() => void load()}
+      />
+
+      <AlertDialog
+        open={deleteTarget !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setEditorOpen(false);
-            resetEditor();
+            setDeleteTarget(null);
+            setDeleteImpact(null);
           }
         }}
       >
-        <DialogContent className="flex max-h-[92vh] max-w-none w-[calc(100vw-24px)] flex-col gap-0 overflow-hidden p-0 sm:w-[min(720px,calc(100vw-64px))] sm:max-w-none">
-          <DialogHeader className="shrink-0 border-b px-5 py-3">
-            <DialogTitle>{editorTitle}</DialogTitle>
-            <DialogDescription>
-              {permissionsReadOnly
-                ? 'System roles and their permissions are managed by the platform and cannot be changed here.'
-                : 'Set role details and choose permissions by module.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto px-5 py-4">
-            {editorMode === 'view' && editingRole ? (
-              <dl className="mb-4 grid gap-2 rounded-lg border px-4 py-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-muted-foreground text-xs uppercase tracking-wide">Type</dt>
-                  <dd className="mt-0.5">
-                    <RoleTypeBadge isSystem={editingRole.isSystem} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground text-xs uppercase tracking-wide">Status</dt>
-                  <dd className="mt-0.5">
-                    <RoleStatusBadge status={editingRole.status} />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground text-xs uppercase tracking-wide">Members</dt>
-                  <dd className="mt-0.5 tabular-nums">{editingRole.memberCount}</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground text-xs uppercase tracking-wide">Permissions</dt>
-                  <dd className="mt-0.5 tabular-nums">{editingRole.permissionKeys.length}</dd>
-                </div>
-                <div className="sm:col-span-2">
-                  <dt className="text-muted-foreground text-xs uppercase tracking-wide">Created</dt>
-                  <dd className="mt-0.5">{formatDateTime(editingRole.createdAt)}</dd>
-                </div>
-                <div className="sm:col-span-2">
-                  <dt className="text-muted-foreground text-xs uppercase tracking-wide">Last updated</dt>
-                  <dd className="mt-0.5">{formatDateTime(editingRole.updatedAt)}</dd>
-                </div>
-              </dl>
-            ) : null}
-            <div className={formGridClass}>
-              <CrmFormField id="role-name" label="Role Name" required error={formErrors.name}>
-                <Input
-                  id="role-name"
-                  value={formName}
-                  readOnly={permissionsReadOnly}
-                  className={formControlStateClass(formErrors.name ? 'invalid' : 'neutral')}
-                  onChange={(event) => {
-                    clearFormFieldError(setFormErrors, 'name');
-                    const next = event.target.value;
-                    setFormName(next);
-                    if (editorMode === 'create' && !keyManuallyEdited) {
-                      setFormKey(slugifyRoleKey(next));
-                    }
-                  }}
-                />
-              </CrmFormField>
-              <CrmFormField id="role-key" label="Role Key" required error={formErrors.key}>
-                <Input
-                  id="role-key"
-                  value={formKey}
-                  readOnly={editorMode !== 'create'}
-                  disabled={editorMode !== 'create'}
-                  className={formControlStateClass(formErrors.key ? 'invalid' : 'neutral')}
-                  onChange={(event) => {
-                    clearFormFieldError(setFormErrors, 'key');
-                    setKeyManuallyEdited(true);
-                    setFormKey(event.target.value);
-                  }}
-                  placeholder="e.g. sales_manager"
-                />
-              </CrmFormField>
-              {editorMode === 'edit' && !editingRole?.isSystem ? (
-                <CrmFormField id="role-status" label="Status">
-                  <Select
-                    value={formStatus}
-                    onValueChange={(value) => setFormStatus(value as OrganizationRoleStatus)}
-                  >
-                    <SelectTrigger id="role-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ACTIVE">Active</SelectItem>
-                      <SelectItem value="INACTIVE">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </CrmFormField>
-              ) : null}
-              <div className={formGridFullWidthClass}>
-                <CrmFormField id="role-description" label="Description" optional error={formErrors.description}>
-                  <Textarea
-                    id="role-description"
-                    rows={2}
-                    readOnly={permissionsReadOnly}
-                    value={formDescription}
-                    onChange={(event) => {
-                      clearFormFieldError(setFormErrors, 'description');
-                      setFormDescription(event.target.value);
-                    }}
-                  />
-                </CrmFormField>
-              </div>
-              <div className={formGridFullWidthClass}>
-                <CrmFormField label="Permissions" error={formErrors.permissionKeys}>
-                  <RolePermissionMatrix
-                    catalog={permissionCatalog}
-                    selected={selectedPermissions}
-                    readOnly={permissionsReadOnly || (editorMode === 'edit' && !canUpdate)}
-                    grantable={grantablePermissions}
-                    onToggle={togglePermission}
-                    onReplaceSelection={replacePermissions}
-                  />
-                </CrmFormField>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="shrink-0 border-t px-5 py-3">
-            <Button type="button" variant="outline" onClick={() => setEditorOpen(false)} disabled={pending}>
-              {editorMode === 'view' || permissionsReadOnly ? 'Close' : 'Cancel'}
-            </Button>
-            {editorMode === 'edit' && canUpdate && !editingRole?.isSystem ? (
-              <Button type="button" onClick={() => void saveRole()} disabled={pending}>
-                {pending ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                    Saving…
-                  </>
-                ) : (
-                  'Save changes'
-                )}
-              </Button>
-            ) : null}
-            {editorMode === 'create' && canCreate ? (
-              <Button type="button" onClick={() => void saveRole()} disabled={pending}>
-                {pending ? (
-                  <>
-                    <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />
-                    Creating…
-                  </>
-                ) : (
-                  'Create role'
-                )}
-              </Button>
-            ) : null}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete role?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {deleteImpact?.canDelete === false
+                ? 'Cannot delete this role'
+                : 'Permanently delete this role?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-muted-foreground text-sm">
+                {deleteImpactLoading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                    Checking assignments…
+                  </span>
+                ) : deleteImpact && deleteTarget && !deleteImpact.canDelete ? (
+                  <>
+                    <p>{describeRoleDeletionBlock(deleteImpact, deleteTarget.name)}</p>
+                    <ul className="mt-3 list-disc space-y-1 pl-5">
+                      <li>Total member assignments: {deleteImpact.totalMemberAssignments}</li>
+                      <li>Active members: {deleteImpact.activeMemberAssignments}</li>
+                      <li>Employee-linked assignments: {deleteImpact.employeeLinkedAssignments}</li>
+                      <li>Pending invitations: {deleteImpact.pendingInvitationAssignments}</li>
+                    </ul>
+                  </>
+                ) : (
+                  <>
+                    This permanently removes {deleteTarget?.name ?? 'this role'} and its permission
+                    mappings. This action cannot be undone.
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            {deleteImpact?.canDelete !== false ? (
+              <AlertDialogAction
+                disabled={pending || deleteImpactLoading}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(event) => {
+                  event.preventDefault();
+                  void confirmDelete();
+                }}
+              >
+                {pending ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                    Deleting…
+                  </>
+                ) : (
+                  'Delete permanently'
+                )}
+              </AlertDialogAction>
+            ) : null}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={statusTarget !== null} onOpenChange={(open) => !open && setStatusTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {statusChangeIsDeactivate ? 'Deactivate role?' : 'Activate role?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget && deleteTarget.memberCount > 0
-                ? `${deleteTarget.name} is assigned to ${deleteTarget.memberCount} member(s). Remove the role from all members before deleting it.`
-                : `This permanently removes ${deleteTarget?.name ?? 'this role'}. This action cannot be undone.`}
+              {statusTarget
+                ? statusChangeIsDeactivate
+                  ? `“${statusTarget.name}” will no longer be available for new assignments. Existing assignments are kept; inactive roles do not grant permissions until activated again.${
+                      statusTarget.memberCount > 0
+                        ? ` ${statusTarget.memberCount} member(s) currently have this role.`
+                        : ''
+                    }`
+                  : `“${statusTarget.name}” will be available for new assignments again with its configured permissions.`
+                : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={pending || (deleteTarget?.memberCount ?? 0) > 0}
-              onClick={() => void confirmDelete()}
+              disabled={!statusTarget || pending}
+              className={
+                statusChangeIsDeactivate ? 'bg-neutral-900 text-white hover:bg-neutral-800' : undefined
+              }
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmStatusChange();
+              }}
             >
-              Delete
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  {statusChangeIsDeactivate ? 'Deactivating…' : 'Activating…'}
+                </>
+              ) : statusChangeIsDeactivate ? (
+                'Deactivate'
+              ) : (
+                'Activate'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -15,6 +15,7 @@ import { GetMyPermissionsHandler } from './application/get-my-permissions/get-my
 import { GetOrgAccessSummaryHandler } from './application/get-org-access-summary/get-org-access-summary.handler.js';
 import { GetOrgMemberHandler } from './application/get-org-member/get-org-member.handler.js';
 import { GetOrgRoleHandler } from './application/get-org-role/get-org-role.handler.js';
+import { GetOrgRoleDeletionImpactHandler } from './application/get-org-role-deletion-impact/get-org-role-deletion-impact.handler.js';
 import { InviteMemberHandler } from './application/invite-member/invite-member.handler.js';
 import { ListOrgMembersHandler } from './application/list-org-members/list-org-members.handler.js';
 import { ListOrgRolesHandler } from './application/list-org-roles/list-org-roles.handler.js';
@@ -52,6 +53,7 @@ const orgAccessUseCaseHandlers = [
   GetOrgAccessSummaryHandler,
   GetOrgMemberHandler,
   GetOrgRoleHandler,
+  GetOrgRoleDeletionImpactHandler,
   InviteMemberHandler,
   ListOrgMembersHandler,
   ListOrgRolesHandler,
