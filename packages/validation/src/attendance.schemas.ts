@@ -142,9 +142,12 @@ export const attendanceListQuerySchema = z.object({
 export type AttendanceListQuery = z.infer<typeof attendanceListQuerySchema>;
 
 export const attendanceHistoryQuerySchema = z.object({
-  from: dateString,
-  to: dateString,
+  from: dateString.optional(),
+  to: dateString.optional(),
+  date: dateString.optional(),
   status: attendanceStatusFilter.optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(10),
 });
 
 export type AttendanceHistoryQuery = z.infer<typeof attendanceHistoryQuerySchema>;

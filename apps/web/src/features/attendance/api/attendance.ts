@@ -30,8 +30,8 @@ export function fetchMyTodayAttendance(signal?: AbortSignal): Promise<Attendance
 export function fetchMyAttendanceHistory(
   query: AttendanceHistoryQuery,
   signal?: AbortSignal,
-): Promise<readonly AttendanceRecordItem[]> {
-  return apiRequest<readonly AttendanceRecordItem[]>(
+): Promise<AttendanceListResponse> {
+  return apiRequest<AttendanceListResponse>(
     `${ATTENDANCE_ROUTES.myHistory}${buildQueryString(query)}`,
     { auth: true, signal },
   );

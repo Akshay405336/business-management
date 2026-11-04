@@ -14,6 +14,35 @@ export function formatDurationMinutes(total: number | null | undefined): string 
   return `${h}h ${m}m`;
 }
 
+/** Table and summary working hours (e.g. 08h 48m). */
+export function formatWorkingHoursClock(totalMinutes: number | null | undefined): string {
+  if (totalMinutes == null) return '--';
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`;
+}
+
+/** Elapsed working time display (e.g. 00h 25m) from punch-in to now. */
+export function formatElapsedWorking(isoStart: string, nowMs: number): string {
+  const start = Date.parse(isoStart);
+  if (!Number.isFinite(start)) return '—';
+  const totalMinutes = Math.max(0, Math.floor((nowMs - start) / 60_000));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`;
+}
+
+export function weekdayLabel(dateKey: string, timeZone?: string): string {
+  const parsed = new Date(`${dateKey}T12:00:00.000Z`);
+  return parsed.toLocaleDateString(undefined, { weekday: 'long', timeZone });
+}
+
+export function addDaysToDateKey(dateKey: string, deltaDays: number): string {
+  const parsed = new Date(`${dateKey}T12:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + deltaDays);
+  return parsed.toISOString().slice(0, 10);
+}
+
 export function formatIsoTime(iso: string | null, timeZone?: string): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleTimeString(undefined, {

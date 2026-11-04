@@ -10,6 +10,8 @@ import {
 import {
   PERMISSION_CACHE_TTL_SECONDS,
   ensureOrganizationRoleBootstrap,
+  ensureLinkedEmployeeMembershipRole,
+  ensureOwnerMembershipRole,
   findRoleIdByKey,
   mergeSystemRoleDefaultPermissions,
   permissionCacheKey,
@@ -123,6 +125,8 @@ export class OrgAccessPermissionsPersistence {
           SYSTEM_ROLE_KEYS.employee,
           SYSTEM_ROLE_KEYS.member,
         ]);
+        await ensureOwnerMembershipRole(tx, organizationId, adminId);
+        await ensureLinkedEmployeeMembershipRole(tx, organizationId, adminId);
         return;
       }
 

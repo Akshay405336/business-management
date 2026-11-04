@@ -15,7 +15,15 @@ export class GetAttendanceSettingsHandler {
   ) {}
 
   async execute(actor: OrgAccessActor): Promise<AttendanceSettingsResponse> {
-    await this.authz.assertPermission(actor, 'attendance.manage_settings');
+    const effective = await this.authz.resolveEffective(actor);
+    const canRead =
+      actor.isPlatformSuperAdmin ||
+      effective.has('attendance.manage_settings') ||
+      effective.has('calendar.view') ||
+      effective.has('attendance.view_own');
+    if (!canRead) {
+      await this.authz.requireEmployeeId(actor);
+    }
     return this.repository.getSettings(actor.organizationId);
   }
 }

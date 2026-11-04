@@ -1,4 +1,5 @@
 import {
+  EMPLOYEE_PORTAL_PERMISSIONS,
   PERMISSION_KEYS,
   SYSTEM_ROLE_KEYS,
   USER_ADMINISTRATION_PERMISSIONS,
@@ -81,19 +82,7 @@ export const MEMBER_PERMISSIONS: readonly PermissionKey[] = [
   'settings.read',
 ];
 
-export const EMPLOYEE_PERMISSIONS: readonly PermissionKey[] = [
-  'projects.read',
-  'tasks.read',
-  'daily_tasks.update_status',
-  'daily_tasks.notes.create',
-  'daily_tasks.notes.view_own',
-  'daily_tasks.comment',
-  'attendance.view_own',
-  'attendance.punch_in',
-  'attendance.punch_out',
-  'attendance.view_summary',
-  'attendance.manage_devices',
-];
+export const EMPLOYEE_PERMISSIONS: readonly PermissionKey[] = EMPLOYEE_PORTAL_PERMISSIONS;
 
 export const DEFAULT_SYSTEM_ROLES: readonly {
   key: string;

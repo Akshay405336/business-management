@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AttendanceRecordItem } from '@techwin/contracts';
+import type { AttendanceListResponse } from '@techwin/contracts';
 import type { AttendanceHistoryQuery } from '@techwin/validation';
 import type { OrgAccessActor } from '../../../org-access/index.js';
 import {
@@ -18,7 +18,7 @@ export class GetMyAttendanceHistoryHandler {
   async execute(
     actor: OrgAccessActor,
     query: AttendanceHistoryQuery,
-  ): Promise<readonly AttendanceRecordItem[]> {
+  ): Promise<AttendanceListResponse> {
     await this.authz.assertPermission(actor, 'attendance.view_own');
     const employeeId = await this.authz.requireEmployeeId(actor);
     return this.repository.listMyHistory(actor.organizationId, employeeId, query);

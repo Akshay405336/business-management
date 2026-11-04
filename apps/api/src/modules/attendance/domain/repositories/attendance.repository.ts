@@ -68,7 +68,7 @@ export type AttendanceRepository = {
     organizationId: string,
     employeeId: string,
     query: AttendanceHistoryQuery,
-  ): Promise<readonly AttendanceRecordItem[]>;
+  ): Promise<AttendanceListResponse>;
   getMySummary(
     organizationId: string,
     employeeId: string,

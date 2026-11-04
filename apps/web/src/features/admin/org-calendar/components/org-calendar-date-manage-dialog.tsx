@@ -98,6 +98,21 @@ function formatMinutesLabel(minutes: number): string {
   return `${t.hour12}:${mm} ${t.period}`;
 }
 
+function readOnlyScheduleFallback(
+  dateKey: string | null,
+  day: OrgCalendarMonthDay | undefined,
+): string {
+  if (!dateKey) return 'Office schedule not available.';
+  const kind = day?.dayKind;
+  if (kind === 'WEEKLY_OFF') return 'Weekly off per organisation office schedule.';
+  if (kind === 'HOLIDAY' || kind === 'NON_WORKING') {
+    return 'Non-working day per organisation calendar.';
+  }
+  const weekday = new Date(`${dateKey}T12:00:00`).getDay();
+  const label = WEEKDAY_UI_ROWS.find((r) => r.day === weekday)?.label ?? 'This day';
+  return `${label} follows the organisation office schedule.`;
+}
+
 function isHolidayMarkAs(markAs: OrgCalendarMarkAs): boolean {
   return markAs === 'PUBLIC_HOLIDAY' || markAs === 'COMPANY_HOLIDAY';
 }
@@ -175,36 +190,43 @@ export function OrgCalendarDateManageDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void fetchAttendanceSettings().then((res) => {
-      if (cancelled) return;
-      if (!dateKey || !res.current) {
-        setScheduleLine(null);
+    setScheduleLine(null);
+    void fetchAttendanceSettings()
+      .then((res) => {
+        if (cancelled) return;
+        if (!dateKey || !res.current) {
+          setScheduleLine(readOnlyScheduleFallback(dateKey, day));
+          setMinHalfDayMinutes(null);
+          return;
+        }
+        setMinHalfDayMinutes(res.current.minHalfDayMinutes);
+        const weekday = new Date(`${dateKey}T12:00:00`).getDay();
+        const label = WEEKDAY_UI_ROWS.find((r) => r.day === weekday)?.label ?? 'Day';
+        const row = res.current.daySchedules.find((d) => d.day === weekday);
+        const off =
+          res.current.weeklyOffDays.includes(weekday) ||
+          !res.current.workingDays.includes(weekday);
+        const start = row?.startMinutes ?? res.current.officeStartMinutes;
+        const end = row?.endMinutes ?? res.current.officeEndMinutes;
+        setOfficeStartMinutes(start);
+        setOfficeEndMinutes(end);
+        if (off) {
+          setScheduleLine(`${label}: weekly off in office schedule (effective ${res.current.effectiveFrom}).`);
+          return;
+        }
+        setScheduleLine(
+          `${label}: ${formatMinutesLabel(start)} – ${formatMinutesLabel(end)} (effective ${res.current.effectiveFrom}).`,
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setScheduleLine(readOnlyScheduleFallback(dateKey, day));
         setMinHalfDayMinutes(null);
-        return;
-      }
-      setMinHalfDayMinutes(res.current.minHalfDayMinutes);
-      const weekday = new Date(`${dateKey}T12:00:00`).getDay();
-      const label = WEEKDAY_UI_ROWS.find((r) => r.day === weekday)?.label ?? 'Day';
-      const row = res.current.daySchedules.find((d) => d.day === weekday);
-      const off =
-        res.current.weeklyOffDays.includes(weekday) ||
-        !res.current.workingDays.includes(weekday);
-      const start = row?.startMinutes ?? res.current.officeStartMinutes;
-      const end = row?.endMinutes ?? res.current.officeEndMinutes;
-      setOfficeStartMinutes(start);
-      setOfficeEndMinutes(end);
-      if (off) {
-        setScheduleLine(`${label}: weekly off in office schedule (effective ${res.current.effectiveFrom}).`);
-        return;
-      }
-      setScheduleLine(
-        `${label}: ${formatMinutesLabel(start)} – ${formatMinutesLabel(end)} (effective ${res.current.effectiveFrom}).`,
-      );
-    });
+      });
     return () => {
       cancelled = true;
     };
-  }, [open, dateKey]);
+  }, [open, dateKey, day]);
 
   useEffect(() => {
     if (!open || classificationEvents.length > 0) return;

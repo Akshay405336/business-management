@@ -12,9 +12,12 @@ import { OrgCalendarMonthNav } from '@/features/admin/org-calendar/components/or
 import { OrgCalendarDateManageDialog } from '@/features/admin/org-calendar/components/org-calendar-date-manage-dialog';
 import { fetchEmployeeOrgCalendarMonth } from '@/features/admin/org-calendar/api/org-calendar-api';
 import { useEffect, useRef } from 'react';
+import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { isAbortError } from '@/shared/lib/abort-error';
+import { isApiError } from '@/shared/api/api-error';
 
 function useEmployeeOrgCalendarMonth(params: { year: number; month: number }) {
+  const { refresh: refreshPermissions } = usePermissions();
   const [data, setData] = useState<OrgCalendarMonthResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,20 +28,38 @@ function useEmployeeOrgCalendarMonth(params: { year: number; month: number }) {
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
-    void fetchEmployeeOrgCalendarMonth(
-      { year: params.year, month: params.month },
-      controller.signal,
-    )
-      .then(setData)
-      .catch((err) => {
-        if (isAbortError(err)) return;
+    setError(null);
+
+    const load = async () => {
+      const query = { year: params.year, month: params.month };
+      try {
+        const month = await fetchEmployeeOrgCalendarMonth(query, controller.signal);
+        if (!controller.signal.aborted) setData(month);
+      } catch (err) {
+        if (isAbortError(err) || controller.signal.aborted) return;
+        if (isApiError(err) && err.status === 403) {
+          await refreshPermissions();
+          try {
+            const month = await fetchEmployeeOrgCalendarMonth(query, controller.signal);
+            if (!controller.signal.aborted) {
+              setData(month);
+              return;
+            }
+          } catch (retryErr) {
+            if (isAbortError(retryErr) || controller.signal.aborted) return;
+            setError(retryErr instanceof Error ? retryErr.message : 'Failed to load calendar.');
+            return;
+          }
+        }
         setError(err instanceof Error ? err.message : 'Failed to load calendar.');
-      })
-      .finally(() => {
+      } finally {
         if (!controller.signal.aborted) setLoading(false);
-      });
+      }
+    };
+
+    void load();
     return () => controller.abort();
-  }, [params.year, params.month]);
+  }, [params.year, params.month, refreshPermissions]);
 
   return { data, loading, error };
 }

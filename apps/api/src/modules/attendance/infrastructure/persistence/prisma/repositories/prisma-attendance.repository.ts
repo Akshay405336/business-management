@@ -158,8 +158,23 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
   }
 
   async resolveEmployeeId(organizationId: string, adminId: string): Promise<string | null> {
+    const admin = await this.prisma.platformAdmin.findUnique({
+      where: { id: adminId },
+      select: { email: true },
+    });
+    const adminEmail = admin?.email.trim() ?? '';
     const row = await this.prisma.employee.findFirst({
-      where: { organizationId, platformAdminId: adminId, employmentStatus: 'ACTIVE', deactivatedAt: null },
+      where: {
+        organizationId,
+        employmentStatus: 'ACTIVE',
+        deactivatedAt: null,
+        OR: [
+          { platformAdminId: adminId },
+          ...(adminEmail.length > 0
+            ? [{ workEmail: { equals: adminEmail, mode: 'insensitive' as const } }]
+            : []),
+        ],
+      },
       select: { id: true },
     });
     return row?.id ?? null;
@@ -651,18 +666,43 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     organizationId: string,
     employeeId: string,
     query: AttendanceHistoryQuery,
-  ): Promise<readonly AttendanceRecordItem[]> {
-    const rows = await this.prisma.attendanceRecord.findMany({
-      where: {
-        organizationId,
-        employeeId,
-        attendanceDate: { gte: parseDateOnly(query.from), lte: parseDateOnly(query.to) },
-        ...(query.status ? { status: query.status } : {}),
-      },
-      include: { employee: true },
-      orderBy: { attendanceDate: 'desc' },
-    });
-    return rows.map(toRecordItem);
+  ): Promise<AttendanceListResponse> {
+    const rangeFrom = query.date ?? query.from;
+    const rangeTo = query.date ?? query.to;
+    const dateFilter =
+      rangeFrom && rangeTo
+        ? {
+            attendanceDate: {
+              gte: parseDateOnly(rangeFrom),
+              lte: parseDateOnly(rangeTo),
+            },
+          }
+        : {};
+    const where: Prisma.AttendanceRecordWhereInput = {
+      organizationId,
+      employeeId,
+      punchOutAt: { not: null },
+      ...dateFilter,
+      ...(query.status ? { status: query.status } : {}),
+    };
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 10;
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.attendanceRecord.count({ where }),
+      this.prisma.attendanceRecord.findMany({
+        where,
+        include: { employee: true },
+        orderBy: [{ attendanceDate: 'desc' }, { punchOutAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+    return {
+      items: rows.map(toRecordItem),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   async getMySummary(

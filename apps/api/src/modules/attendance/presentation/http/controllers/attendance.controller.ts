@@ -42,11 +42,8 @@ import {
   CrmOrganizationGuard,
   type CrmRequestContext,
 } from '../../../../../platform/tenant-context/index.js';
-import {
-  RequirePermissions,
-  RequirePermissionsGuard,
-  toOrgAccessActor,
-} from '../../../../org-access/index.js';
+import { RequirePermissions, toOrgAccessActor } from '../../../../org-access/index.js';
+import { AttendanceSelfServiceGuard } from '../guards/attendance-self-service.guard.js';
 import { CreateAttendanceRecordHandler } from '../../../application/create-record/create-record.handler.js';
 import { CorrectAttendanceRecordHandler } from '../../../application/correct-record/correct-record.handler.js';
 import { GetAttendanceCalendarHandler } from '../../../application/get-calendar/get-calendar.handler.js';
@@ -70,7 +67,7 @@ import { isDesktopSession, resolveClientIp } from '../attendance-request.util.js
 @ApiTags('Attendance')
 @ApiBearerAuth()
 @UseFilters(AttendanceExceptionFilter)
-@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, RequirePermissionsGuard)
+@UseGuards(PlatformAdminGuard, CrmOrganizationGuard, AttendanceSelfServiceGuard)
 @Controller('attendance')
 export class AttendanceController {
   private accessActor(ctx: CrmRequestContext, request: PlatformAuthenticatedRequest) {
@@ -96,7 +93,7 @@ export class AttendanceController {
   ) {}
 
   @Get('settings')
-  @RequirePermissions('attendance.manage_settings')
+  @RequirePermissions('attendance.manage_settings', 'calendar.view', 'attendance.view_own')
   @ApiOperation({ summary: 'Get attendance settings' })
   getAttendanceSettings(
     @CrmContext() ctx: CrmRequestContext,
@@ -178,7 +175,7 @@ export class AttendanceController {
     @CrmContext() ctx: CrmRequestContext,
     @Req() request: PlatformAuthenticatedRequest,
     @Query() query: unknown,
-  ): Promise<readonly AttendanceRecordItem[]> {
+  ): Promise<AttendanceListResponse> {
     return this.getMyHistory.execute(
       this.accessActor(ctx, request),
       parseAttendanceHistoryQuery(query),

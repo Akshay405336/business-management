@@ -1,6 +1,8 @@
 import {
+  EMPLOYEE_PORTAL_PERMISSIONS,
   IMMUTABLE_ORG_ROLE_KEYS,
   isPermissionKey,
+  PERMISSION_KEYS,
   PROTECTED_SYSTEM_ROLE_KEYS,
   SYSTEM_ROLE_KEYS,
   type PermissionKey,
@@ -281,11 +283,91 @@ export async function ensureOrganizationRoleBootstrap(
     return map;
   }
   const map = await ensureProtectedSystemRoles(tx, organizationId);
+  await ensureSystemRoleByKey(tx, organizationId, SYSTEM_ROLE_KEYS.employee);
   await mergeSystemRoleDefaultPermissions(tx, organizationId, [
     SYSTEM_ROLE_KEYS.employee,
     SYSTEM_ROLE_KEYS.member,
   ]);
   return map;
+}
+
+/**
+ * Employee portal accounts must hold the Employee system role. Restores the link when the role
+ * was removed or the system role was recreated after deletion.
+ */
+/** Restores Owner system role on memberships flagged as organization owner. */
+export async function ensureOwnerMembershipRole(
+  tx: Pick<
+    PrismaService,
+    'organizationMembership' | 'organizationMembershipRole' | 'organizationRole' | 'organizationRolePermission'
+  >,
+  organizationId: string,
+  adminId: string,
+): Promise<boolean> {
+  const membership = await tx.organizationMembership.findUnique({
+    where: { organizationId_adminId: { organizationId, adminId } },
+    select: { id: true, isOwner: true, roleLinks: { select: { roleId: true } } },
+  });
+  if (!membership?.isOwner) return false;
+
+  const ownerRoleId = await ensureSystemRoleByKey(tx, organizationId, SYSTEM_ROLE_KEYS.owner);
+  const hasOwnerRole = membership.roleLinks.some((link) => link.roleId === ownerRoleId);
+  if (hasOwnerRole) return false;
+
+  await tx.organizationMembershipRole.create({
+    data: { membershipId: membership.id, roleId: ownerRoleId },
+  });
+  return true;
+}
+
+export async function ensureLinkedEmployeeMembershipRole(
+  tx: Pick<
+    PrismaService,
+    | 'employee'
+    | 'platformAdmin'
+    | 'organizationMembership'
+    | 'organizationMembershipRole'
+    | 'organizationRole'
+    | 'organizationRolePermission'
+  >,
+  organizationId: string,
+  adminId: string,
+): Promise<boolean> {
+  const admin = await tx.platformAdmin.findUnique({
+    where: { id: adminId },
+    select: { email: true },
+  });
+  const adminEmail = admin?.email.trim() ?? '';
+  const employee = await tx.employee.findFirst({
+    where: {
+      organizationId,
+      employmentStatus: 'ACTIVE',
+      deactivatedAt: null,
+      OR: [
+        { platformAdminId: adminId },
+        ...(adminEmail.length > 0
+          ? [{ workEmail: { equals: adminEmail, mode: 'insensitive' as const } }]
+          : []),
+      ],
+    },
+    select: { id: true },
+  });
+  if (!employee) return false;
+
+  const employeeRoleId = await ensureSystemRoleByKey(tx, organizationId, SYSTEM_ROLE_KEYS.employee);
+  const membership = await tx.organizationMembership.findUnique({
+    where: { organizationId_adminId: { organizationId, adminId } },
+    select: { id: true, roleLinks: { select: { roleId: true } } },
+  });
+  if (!membership) return false;
+
+  const hasEmployeeRole = membership.roleLinks.some((link) => link.roleId === employeeRoleId);
+  if (hasEmployeeRole) return false;
+
+  await tx.organizationMembershipRole.create({
+    data: { membershipId: membership.id, roleId: employeeRoleId },
+  });
+  return true;
 }
 
 /** Adds missing template permissions to system roles without removing administrator changes. */
@@ -461,13 +543,14 @@ export async function resolveActiveMembershipRolesFromDb(
 }
 
 export async function resolvePermissionsFromDb(
-  prisma: Pick<PrismaService, 'organizationMembership'>,
+  prisma: Pick<PrismaService, 'organizationMembership' | 'employee'>,
   organizationId: string,
   adminId: string,
 ): Promise<PermissionKey[]> {
   const membership = await prisma.organizationMembership.findFirst({
     where: { organizationId, adminId, status: 'ACTIVE' },
     include: {
+      admin: { select: { email: true } },
       roleLinks: {
         include: {
           role: { include: { permissions: true } },
@@ -477,13 +560,42 @@ export async function resolvePermissionsFromDb(
   });
   if (!membership) return [];
 
+  if (membership.isOwner) {
+    return uniquePermissionKeys([...PERMISSION_KEYS]);
+  }
+
   const keys: string[] = [];
+  let hasEmployeeSystemRole = false;
   for (const link of membership.roleLinks) {
     if (link.role.status !== 'ACTIVE') continue;
+    if (link.role.key === SYSTEM_ROLE_KEYS.employee) {
+      hasEmployeeSystemRole = true;
+    }
     for (const permission of link.role.permissions) {
       keys.push(permission.permissionKey);
     }
   }
+
+  const adminEmail = membership.admin.email.trim();
+  const linkedEmployee = await prisma.employee.findFirst({
+    where: {
+      organizationId,
+      employmentStatus: 'ACTIVE',
+      deactivatedAt: null,
+      OR: [
+        { platformAdminId: adminId },
+        ...(adminEmail.length > 0
+          ? [{ workEmail: { equals: adminEmail, mode: 'insensitive' as const } }]
+          : []),
+      ],
+    },
+    select: { id: true },
+  });
+
+  if (hasEmployeeSystemRole || linkedEmployee) {
+    keys.push(...EMPLOYEE_PORTAL_PERMISSIONS);
+  }
+
   return uniquePermissionKeys(keys);
 }
 

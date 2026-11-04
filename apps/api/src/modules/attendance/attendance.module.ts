@@ -28,6 +28,7 @@ import { AttendanceJobRunner } from './infrastructure/jobs/attendance-job-runner
 import { PrismaAttendanceRepository } from './infrastructure/persistence/prisma/repositories/prisma-attendance.repository.js';
 import { AttendanceController } from './presentation/http/controllers/attendance.controller.js';
 import { AttendanceExceptionFilter } from './presentation/http/filters/attendance-exception.filter.js';
+import { AttendanceSelfServiceGuard } from './presentation/http/guards/attendance-self-service.guard.js';
 
 export const attendancePersistenceProviders: Provider[] = [
   { provide: ATTENDANCE_REPOSITORY, useClass: PrismaAttendanceRepository },
@@ -60,6 +61,7 @@ const attendanceHandlers = [
     ...attendancePersistenceProviders,
     ...attendanceHandlers,
     AttendanceExceptionFilter,
+    AttendanceSelfServiceGuard,
   ],
   exports: [ATTENDANCE_REPOSITORY, AttendanceExceptionFilter],
 })

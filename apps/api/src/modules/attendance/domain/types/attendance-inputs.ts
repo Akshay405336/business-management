@@ -33,9 +33,12 @@ export type AttendanceListQuery = {
 };
 
 export type AttendanceHistoryQuery = {
-  readonly from: string;
-  readonly to: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly date?: string;
   readonly status?: AttendanceStatus;
+  readonly page: number;
+  readonly pageSize: number;
 };
 
 export type AttendanceSummaryQuery = {

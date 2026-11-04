@@ -18,16 +18,34 @@ export class OrgCalendarAuthorizationService {
     if (actor.isPlatformSuperAdmin) return;
     const effective = new Set(await this.permissions.resolveEffectivePermissions(actor));
     if (keys.some((k) => effective.has(k))) return;
+    if (keys.includes('calendar.view')) {
+      try {
+        await this.requireEmployeeId(actor);
+        return;
+      } catch {
+        // fall through
+      }
+    }
     throw new OrgCalendarValidationError('You do not have permission to perform this action.');
   }
 
   async requireEmployeeId(actor: OrgAccessActor): Promise<string> {
+    const admin = await this.prisma.platformAdmin.findUnique({
+      where: { id: actor.adminId },
+      select: { email: true },
+    });
+    const adminEmail = admin?.email.trim() ?? '';
     const row = await this.prisma.employee.findFirst({
       where: {
         organizationId: actor.organizationId,
-        platformAdminId: actor.adminId,
         employmentStatus: 'ACTIVE',
         deactivatedAt: null,
+        OR: [
+          { platformAdminId: actor.adminId },
+          ...(adminEmail.length > 0
+            ? [{ workEmail: { equals: adminEmail, mode: 'insensitive' as const } }]
+            : []),
+        ],
       },
       select: { id: true },
     });
