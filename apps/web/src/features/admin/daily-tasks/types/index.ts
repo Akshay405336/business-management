@@ -1,7 +1,9 @@
 export type {
+  DailyTaskActivityItem,
   DailyTaskBoardColumn,
   DailyTaskBoardResponse,
   DailyTaskDetail,
+  DailyTaskLatestNotePreview,
   DailyTaskListItem,
   DailyTaskListResponse,
   DailyTaskPriority,
@@ -12,6 +14,8 @@ export type {
 } from '@techwin/contracts';
 
 export type {
+  AddDailyTaskCommentRequest,
+  CreateDailyTaskNoteRequest,
   CreateDailyTaskRequest,
   DailyTaskBoardQuery,
   DailyTaskListQuery,

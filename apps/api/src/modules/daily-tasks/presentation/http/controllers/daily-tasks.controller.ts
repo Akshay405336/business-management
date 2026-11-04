@@ -19,6 +19,8 @@ import type {
   DailyTaskBoardResponse,
   DailyTaskDetail,
   DailyTaskListResponse,
+  DailyTaskNotesResponse,
+  DailyTaskNoteItem,
   DailyTaskWorkflowStagesResponse,
 } from '@techwin/contracts';
 import {
@@ -27,14 +29,18 @@ import {
   parseDailyTaskBoardQuery,
   parseDailyTaskListQuery,
   parseMyDailyTasksQuery,
+  addDailyTaskCommentRequestSchema,
+  createDailyTaskNoteRequestSchema,
   rescheduleDailyTaskRequestSchema,
   updateDailyTaskRequestSchema,
   updateDailyTaskWorkflowStagesRequestSchema,
+  type AddDailyTaskCommentRequest,
   type CreateDailyTaskRequest,
   type MoveDailyTaskStageRequest,
   type RescheduleDailyTaskRequest,
   type UpdateDailyTaskRequest,
 } from '@techwin/validation';
+import type { DailyTaskActivitiesResponse } from '@techwin/contracts';
 import { PlatformAdminGuard, type PlatformAuthenticatedRequest } from '../../../../auth/index.js';
 import {
   CrmContext,
@@ -57,6 +63,12 @@ import { MoveDailyTaskStageHandler } from '../../../application/move-daily-task-
 import { RescheduleDailyTaskHandler } from '../../../application/reschedule-daily-task/reschedule-daily-task.handler.js';
 import { UpdateDailyTaskHandler } from '../../../application/update-daily-task/update-daily-task.handler.js';
 import { UpdateWorkflowStagesHandler } from '../../../application/update-workflow-stages/update-workflow-stages.handler.js';
+import { AddDailyTaskCommentHandler } from '../../../application/add-daily-task-comment/add-daily-task-comment.handler.js';
+import { AcknowledgeDailyTaskNoteHandler } from '../../../application/acknowledge-daily-task-note/acknowledge-daily-task-note.handler.js';
+import { CreateDailyTaskNoteHandler } from '../../../application/create-daily-task-note/create-daily-task-note.handler.js';
+import { ListDailyTaskActivitiesHandler } from '../../../application/list-daily-task-activities/list-daily-task-activities.handler.js';
+import { ListDailyTaskNotesHandler } from '../../../application/list-daily-task-notes/list-daily-task-notes.handler.js';
+import { DailyTaskAuthorizationService } from '../../../application/services/daily-task-authorization.service.js';
 import { toDailyTaskListQuery } from '../../../application/shared/daily-task-list-query.js';
 import { DailyTaskExceptionFilter } from '../filters/daily-task-exception.filter.js';
 import { toDailyTaskActor } from '../mappers/daily-task-actor.mapper.js';
@@ -88,7 +100,22 @@ export class DailyTasksController {
     @Inject(MoveDailyTaskStageHandler) private readonly moveTaskStage: MoveDailyTaskStageHandler,
     @Inject(RescheduleDailyTaskHandler) private readonly rescheduleTask: RescheduleDailyTaskHandler,
     @Inject(DeleteDailyTaskHandler) private readonly deleteTask: DeleteDailyTaskHandler,
+    @Inject(ListDailyTaskActivitiesHandler)
+    private readonly listActivities: ListDailyTaskActivitiesHandler,
+    @Inject(AddDailyTaskCommentHandler) private readonly addComment: AddDailyTaskCommentHandler,
+    @Inject(CreateDailyTaskNoteHandler) private readonly createTaskNote: CreateDailyTaskNoteHandler,
+    @Inject(ListDailyTaskNotesHandler) private readonly listTaskNotes: ListDailyTaskNotesHandler,
+    @Inject(AcknowledgeDailyTaskNoteHandler)
+    private readonly acknowledgeTaskNote: AcknowledgeDailyTaskNoteHandler,
+    @Inject(DailyTaskAuthorizationService) private readonly dailyTaskAuthz: DailyTaskAuthorizationService,
   ) {}
+
+  private accessActor(
+    ctx: CrmRequestContext,
+    request: PlatformAuthenticatedRequest,
+  ) {
+    return toOrgAccessActor(ctx, request.platformAuth?.admin.role === 'SUPER_ADMIN');
+  }
 
   @Get('workflow-stages')
   @RequirePermissions('tasks.read')
@@ -99,7 +126,7 @@ export class DailyTasksController {
   }
 
   @Patch('workflow-stages')
-  @RequirePermissions('tasks.update')
+  @RequirePermissions('tasks.update', 'daily_tasks.manage_workflow')
   @ApiOperation({ summary: 'Update daily task workflow stages' })
   async updateStages(
     @CrmContext() ctx: CrmRequestContext,
@@ -118,11 +145,12 @@ export class DailyTasksController {
   @ApiOperation({ summary: 'Daily task board for a date' })
   async board(
     @CrmContext() ctx: CrmRequestContext,
-    @Req() request: Request,
+    @Req() request: PlatformAuthenticatedRequest & Request,
   ): Promise<DailyTaskBoardResponse> {
     const query = parseDailyTaskBoardQuery(request.query);
     return this.getBoard.execute({
       actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
       query,
     });
   }
@@ -132,11 +160,12 @@ export class DailyTasksController {
   @ApiOperation({ summary: 'Tasks assigned to the signed-in employee profile' })
   async myTasks(
     @CrmContext() ctx: CrmRequestContext,
-    @Req() request: Request,
+    @Req() request: PlatformAuthenticatedRequest & Request,
   ): Promise<DailyTaskListResponse> {
     const query = parseMyDailyTasksQuery(request.query);
     return this.listMyTasks.execute({
       actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
       query,
       clientToday: resolveClientToday(request),
     });
@@ -147,20 +176,127 @@ export class DailyTasksController {
   @ApiOperation({ summary: 'List daily tasks' })
   async list(
     @CrmContext() ctx: CrmRequestContext,
-    @Req() request: Request,
+    @Req() request: PlatformAuthenticatedRequest & Request,
   ): Promise<DailyTaskListResponse> {
     const listQuery = parseDailyTaskListQuery(request.query);
     return this.listTasks.execute({
       actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
       query: toDailyTaskListQuery(listQuery),
       clientToday: resolveClientToday(request),
     });
   }
 
+  @Get(':id/notes')
+  @RequirePermissions('tasks.read')
+  async notes(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<DailyTaskNotesResponse> {
+    const items = await this.listTaskNotes.execute({
+      actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
+      taskId: id,
+    });
+    return { items };
+  }
+
+  @Post(':id/notes')
+  @RequirePermissions(
+    'tasks.read',
+    'daily_tasks.notes.create',
+    'daily_tasks.comment',
+    'tasks.comment',
+  )
+  async createNote(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() raw: unknown,
+  ): Promise<DailyTaskNoteItem> {
+    const body = createDailyTaskNoteRequestSchema.parse(raw);
+    return this.createTaskNote.execute({
+      actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
+      taskId: id,
+      input: body,
+    });
+  }
+
+  @Patch(':id/notes/:noteId/acknowledge')
+  @RequirePermissions('tasks.read', 'daily_tasks.notes.acknowledge', 'tasks.update')
+  async acknowledgeNote(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('noteId') noteId: string,
+  ): Promise<DailyTaskNoteItem> {
+    return this.acknowledgeTaskNote.execute({
+      actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
+      taskId: id,
+      noteId,
+    });
+  }
+
+  @Get(':id/activities')
+  @RequirePermissions('tasks.read')
+  async activities(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<DailyTaskActivitiesResponse> {
+    const items = await this.listActivities.execute({
+      actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
+      taskId: id,
+    });
+    return { items };
+  }
+
+  @Post(':id/comments')
+  @RequirePermissions(
+    'tasks.read',
+    'daily_tasks.comment',
+    'tasks.comment',
+    'tasks.update',
+  )
+  async comment(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() raw: unknown,
+  ): Promise<DailyTaskDetail> {
+    const body: AddDailyTaskCommentRequest = addDailyTaskCommentRequestSchema.parse(raw);
+    const accessActor = this.accessActor(ctx, request);
+    const effective = await this.dailyTaskAuthz.resolveEffective(accessActor);
+    const scope =
+      body.scope ??
+      (this.dailyTaskAuthz.canManageOrganizationTasks(accessActor, effective) ||
+      effective.has('tasks.update')
+        ? 'admin'
+        : 'employee');
+    return this.addComment.execute({
+      actor: toDailyTaskActor(ctx),
+      accessActor,
+      taskId: id,
+      input: { text: body.text, scope },
+    });
+  }
+
   @Get(':id')
   @RequirePermissions('tasks.read')
-  async get(@CrmContext() ctx: CrmRequestContext, @Param('id') id: string): Promise<DailyTaskDetail> {
-    return this.getTask.execute({ actor: toDailyTaskActor(ctx), taskId: id });
+  async get(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<DailyTaskDetail> {
+    return this.getTask.execute({
+      actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
+      taskId: id,
+    });
   }
 
   @Post()
@@ -196,15 +332,17 @@ export class DailyTasksController {
   }
 
   @Patch(':id/stage')
-  @RequirePermissions('tasks.update')
+  @RequirePermissions('tasks.update', 'daily_tasks.update_status', 'tasks.progress')
   async moveStage(
     @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
     @Param('id') id: string,
     @Body() raw: unknown,
   ): Promise<DailyTaskDetail> {
     const body: MoveDailyTaskStageRequest = moveDailyTaskStageRequestSchema.parse(raw);
     return this.moveTaskStage.execute({
       actor: toDailyTaskActor(ctx),
+      accessActor: this.accessActor(ctx, request),
       taskId: id,
       input: body,
     });

@@ -121,6 +121,7 @@ export const updateDailyTaskRequestSchema = z
 export const moveDailyTaskStageRequestSchema = z
   .object({
     workflowStageId: uuid,
+    beforeTaskId: uuid.nullable().optional(),
   })
   .strict();
 
@@ -173,6 +174,30 @@ export const myDailyTasksQuerySchema = z
   .object({
     scope: z.enum(['today', 'upcoming', 'all', 'completed', 'overdue']).optional(),
     assignDate: dateOnly.optional(),
+    assignDateFrom: dateOnly.optional(),
+    assignDateTo: dateOnly.optional(),
+    search: z.string().max(200).optional(),
+    type: dailyTaskTypeSchema.optional(),
+    priority: dailyTaskPrioritySchema.optional(),
+    workflowStageId: uuid.optional(),
+    projectId: uuid.optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(100).optional(),
+    sortBy: z.enum(['assignDate', 'dueDate', 'priority', 'title', 'updatedAt']).optional(),
+    sortDir: z.enum(['asc', 'desc']).optional(),
+  })
+  .strict();
+
+export const addDailyTaskCommentRequestSchema = z
+  .object({
+    text: z.string().trim().min(1).max(2000),
+    scope: z.enum(['admin', 'employee']).optional(),
+  })
+  .strict();
+
+export const createDailyTaskNoteRequestSchema = z
+  .object({
+    text: z.string().trim().min(1).max(2000),
   })
   .strict();
 
@@ -231,7 +256,21 @@ export function parseDailyTaskListQuery(input: unknown): z.infer<typeof dailyTas
 export function parseMyDailyTasksQuery(input: unknown): z.infer<typeof myDailyTasksQuerySchema> {
   const record =
     input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
-  const keys = ['scope', 'assignDate'] as const;
+  const keys = [
+    'scope',
+    'assignDate',
+    'assignDateFrom',
+    'assignDateTo',
+    'search',
+    'type',
+    'priority',
+    'workflowStageId',
+    'projectId',
+    'page',
+    'pageSize',
+    'sortBy',
+    'sortDir',
+  ] as const;
   const picked: Record<string, unknown> = {};
   for (const key of keys) {
     if (key in record) picked[key] = record[key];
@@ -249,3 +288,5 @@ export type RescheduleDailyTaskRequest = z.infer<typeof rescheduleDailyTaskReque
 export type DailyTaskBoardQuery = z.infer<typeof dailyTaskBoardQuerySchema>;
 export type DailyTaskListQuery = z.infer<typeof dailyTaskListQuerySchema>;
 export type MyDailyTasksQuery = z.infer<typeof myDailyTasksQuerySchema>;
+export type AddDailyTaskCommentRequest = z.infer<typeof addDailyTaskCommentRequestSchema>;
+export type CreateDailyTaskNoteRequest = z.infer<typeof createDailyTaskNoteRequestSchema>;

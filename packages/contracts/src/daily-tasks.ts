@@ -9,7 +9,71 @@ export const DAILY_TASK_ROUTES = {
   moveStage: (id: string) => `${API_PREFIX}/daily-tasks/${id}/stage`,
   reschedule: (id: string) => `${API_PREFIX}/daily-tasks/${id}/reschedule`,
   myTasks: `${API_PREFIX}/daily-tasks/my`,
+  activities: (id: string) => `${API_PREFIX}/daily-tasks/${id}/activities`,
+  comments: (id: string) => `${API_PREFIX}/daily-tasks/${id}/comments`,
+  notes: (id: string) => `${API_PREFIX}/daily-tasks/${id}/notes`,
+  noteAcknowledge: (taskId: string, noteId: string) =>
+    `${API_PREFIX}/daily-tasks/${taskId}/notes/${noteId}/acknowledge`,
 } as const;
+
+export type DailyTaskNoteAcknowledgementStatus = 'UNREAD' | 'ACKNOWLEDGED';
+
+export interface DailyTaskNoteItem {
+  readonly id: string;
+  readonly dailyTaskId: string;
+  readonly employeeId: string;
+  readonly employeeDisplayName: string;
+  readonly employeeProfileImageUrl: string | null;
+  readonly authorAdminId: string;
+  readonly text: string;
+  readonly acknowledgementStatus: DailyTaskNoteAcknowledgementStatus;
+  readonly acknowledgedByAdminId: string | null;
+  readonly acknowledgedByDisplayName: string | null;
+  readonly acknowledgedAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface DailyTaskNotesResponse {
+  readonly items: readonly DailyTaskNoteItem[];
+}
+
+export interface DailyTaskNotesCardSummary {
+  readonly unreadCount: number;
+  readonly totalCount: number;
+  readonly latest: DailyTaskNoteItem | null;
+}
+
+/** @deprecated Use DailyTaskNotesCardSummary */
+export type DailyTaskMyNotesSummary = DailyTaskNotesCardSummary;
+
+export type DailyTaskActivityEventType =
+  | 'CREATED'
+  | 'UPDATED'
+  | 'STAGE_CHANGED'
+  | 'PRIORITY_CHANGED'
+  | 'ASSIGNEES_CHANGED'
+  | 'RESCHEDULED'
+  | 'COMPLETED'
+  | 'REOPENED'
+  | 'COMMENT_ADDED';
+
+export interface DailyTaskLatestNotePreview {
+  readonly text: string;
+  readonly authorName: string;
+  readonly authorEmployeeId: string | null;
+  readonly occurredAt: string;
+  readonly scope: 'employee' | 'admin';
+}
+
+export interface DailyTaskActivityItem {
+  readonly id: string;
+  readonly eventType: DailyTaskActivityEventType;
+  readonly occurredAt: string;
+  readonly actorAdminId: string;
+  readonly actorDisplayName: string;
+  readonly actorEmployeeId: string | null;
+  readonly metadata: Record<string, unknown> | null;
+}
 
 export type DailyTaskType = 'GENERAL' | 'PROJECT';
 export type DailyTaskBoardMode = 'daily' | 'project';
@@ -85,6 +149,10 @@ export interface DailyTaskListItem {
   readonly completedAt: string | null;
   readonly isOverdue: boolean;
   readonly assignees: readonly DailyTaskAssigneeSummary[];
+  readonly latestEmployeeNote: DailyTaskLatestNotePreview | null;
+  readonly unreadEmployeeNoteCount: number;
+  readonly orgTaskNotes: DailyTaskNotesCardSummary | null;
+  readonly myTaskNotes: DailyTaskNotesCardSummary | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -131,4 +199,8 @@ export interface DailyTaskListResponse {
 
 export interface DailyTaskWorkflowStagesResponse {
   readonly stages: readonly DailyTaskWorkflowStage[];
+}
+
+export interface DailyTaskActivitiesResponse {
+  readonly items: readonly DailyTaskActivityItem[];
 }

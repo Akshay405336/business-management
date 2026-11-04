@@ -15,6 +15,7 @@ const HTTP_MAPPING: Record<DailyTaskErrorCode, { status: number; code: ApiErrorC
     code: API_ERROR_CODES.VALIDATION_FAILED,
   },
   CONFLICT: { status: HttpStatus.CONFLICT, code: API_ERROR_CODES.BAD_REQUEST },
+  FORBIDDEN: { status: HttpStatus.FORBIDDEN, code: API_ERROR_CODES.FORBIDDEN },
 };
 
 @Catch(DailyTaskError)

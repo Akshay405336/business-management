@@ -4,17 +4,25 @@ import {
   DAILY_TASK_REPOSITORY,
   type DailyTaskRepository,
 } from '../../domain/repositories/daily-task.repository.js';
+import { DailyTaskAuthorizationService } from '../services/daily-task-authorization.service.js';
 import type { ListDailyTasksQuery } from './list-daily-tasks.query.js';
 
 @Injectable()
 export class ListDailyTasksHandler {
-  constructor(@Inject(DAILY_TASK_REPOSITORY) private readonly repository: DailyTaskRepository) {}
+  constructor(
+    @Inject(DAILY_TASK_REPOSITORY) private readonly repository: DailyTaskRepository,
+    @Inject(DailyTaskAuthorizationService) private readonly authz: DailyTaskAuthorizationService,
+  ) {}
 
-  execute(query: ListDailyTasksQuery): Promise<DailyTaskListResponse> {
+  async execute(query: ListDailyTasksQuery): Promise<DailyTaskListResponse> {
+    await this.authz.assertOrganizationTaskAccess(query.accessActor);
+    const noteAttach = await this.authz.resolveNoteAttach(query.accessActor);
     return this.repository.listTasks(
       query.actor.organizationId,
       query.query,
       query.clientToday,
+      undefined,
+      noteAttach,
     );
   }
 }

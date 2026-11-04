@@ -55,6 +55,7 @@ export type UpdateDailyTaskInput = {
 
 export type MoveDailyTaskStageInput = {
   readonly workflowStageId: string;
+  readonly beforeTaskId?: string | null;
 };
 
 export type RescheduleDailyTaskInput = {
@@ -98,4 +99,30 @@ export type DailyTaskListQuery = {
 export type MyDailyTasksQuery = {
   readonly scope?: 'today' | 'upcoming' | 'all' | 'completed' | 'overdue';
   readonly assignDate?: string;
+  readonly assignDateFrom?: string;
+  readonly assignDateTo?: string;
+  readonly search?: string;
+  readonly type?: DailyTaskType;
+  readonly priority?: DailyTaskPriority;
+  readonly workflowStageId?: string;
+  readonly projectId?: string;
+  readonly page?: number;
+  readonly pageSize?: number;
+  readonly sortBy?: 'assignDate' | 'dueDate' | 'priority' | 'title' | 'updatedAt';
+  readonly sortDir?: 'asc' | 'desc';
+};
+
+export type AddDailyTaskCommentInput = {
+  readonly text: string;
+  readonly scope: 'admin' | 'employee';
+};
+
+export type CreateDailyTaskNoteInput = {
+  readonly text: string;
+};
+
+export type TaskNoteAttachOptions = {
+  readonly adminId: string;
+  readonly includeOrgUnread: boolean;
+  readonly includeOwnSummary: boolean;
 };

@@ -3,7 +3,13 @@ import { DatabaseModule } from '../../infrastructure/database/database.module.js
 import { AuthModule } from '../auth/index.js';
 import { CrmModule } from '../crm/index.js';
 import { OrgAccessModule } from '../org-access/index.js';
+import { AddDailyTaskCommentHandler } from './application/add-daily-task-comment/add-daily-task-comment.handler.js';
+import { AcknowledgeDailyTaskNoteHandler } from './application/acknowledge-daily-task-note/acknowledge-daily-task-note.handler.js';
+import { CreateDailyTaskNoteHandler } from './application/create-daily-task-note/create-daily-task-note.handler.js';
+import { ListDailyTaskNotesHandler } from './application/list-daily-task-notes/list-daily-task-notes.handler.js';
 import { CreateDailyTaskHandler } from './application/create-daily-task/create-daily-task.handler.js';
+import { ListDailyTaskActivitiesHandler } from './application/list-daily-task-activities/list-daily-task-activities.handler.js';
+import { DailyTaskAuthorizationService } from './application/services/daily-task-authorization.service.js';
 import { DeleteDailyTaskHandler } from './application/delete-daily-task/delete-daily-task.handler.js';
 import { GetDailyTaskBoardHandler } from './application/get-daily-task-board/get-daily-task-board.handler.js';
 import { GetDailyTaskHandler } from './application/get-daily-task/get-daily-task.handler.js';
@@ -24,6 +30,12 @@ export const dailyTaskPersistenceProviders: Provider[] = [
 ];
 
 const dailyTaskUseCaseHandlers = [
+  DailyTaskAuthorizationService,
+  AddDailyTaskCommentHandler,
+  CreateDailyTaskNoteHandler,
+  ListDailyTaskNotesHandler,
+  AcknowledgeDailyTaskNoteHandler,
+  ListDailyTaskActivitiesHandler,
   CreateDailyTaskHandler,
   DeleteDailyTaskHandler,
   GetDailyTaskBoardHandler,

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { DailyTaskAssigneeAvatarGroup } from './daily-task-assignee-avatar-group';
 import { cn } from '@/shared/lib/utils';
 import type { DailyTaskListItem } from '../types';
 import {
@@ -69,6 +69,7 @@ function TaskRow({
   onDelete,
   canEdit,
   canDelete,
+  employeeMode = false,
 }: {
   task: DailyTaskListItem;
   onView: () => void;
@@ -77,6 +78,7 @@ function TaskRow({
   onDelete?: () => void;
   canEdit: boolean;
   canDelete: boolean;
+  employeeMode?: boolean;
 }) {
   const bucket = taskStatusBucket(task);
   const time =
@@ -112,17 +114,14 @@ function TaskRow({
         {task.dueDate ? <span>Due {task.dueDate}</span> : null}
         {task.completedAt ? <span className="text-emerald-700">Completed</span> : null}
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1">
-        {task.assignees.length === 0 ? (
-          <span className="text-muted-foreground text-[11px] italic">Unassigned</span>
-        ) : (
-          task.assignees.map((a) => (
-            <span key={a.id} className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5">
-              <EmployeeAvatar displayName={a.displayName} profileImageUrl={a.profileImageUrl} size="sm" />
-              <span className="max-w-[6rem] truncate text-[10px] font-medium">{a.displayName}</span>
-            </span>
-          ))
-        )}
+      <div className="mt-2 flex items-center">
+        <DailyTaskAssigneeAvatarGroup
+          assignees={task.assignees}
+          employeeSelfView={employeeMode}
+          emptyFallback={
+            <span className="text-muted-foreground text-[11px] italic">Unassigned</span>
+          }
+        />
       </div>
       <div className="mt-3 flex flex-wrap gap-1.5">
         <Button type="button" variant="outline" size="sm" className="h-8" onClick={onView}>
@@ -164,6 +163,7 @@ export function DailyTaskCalendarDayPanel({
   onCreateTask,
   canAssign,
   canDelete,
+  employeeMode = false,
 }: {
   open: boolean;
   date: string | null;
@@ -176,6 +176,7 @@ export function DailyTaskCalendarDayPanel({
   onCreateTask?: (date: string) => void;
   canAssign: boolean;
   canDelete: boolean;
+  employeeMode?: boolean;
 }) {
   const dayTasks = date ? tasks.filter((t) => t.assignDate === date) : [];
   const summary = computeDayTaskSummary(dayTasks);
@@ -253,6 +254,7 @@ export function DailyTaskCalendarDayPanel({
                             onDelete={onDeleteTask ? () => onDeleteTask(task) : undefined}
                             canEdit={canAssign}
                             canDelete={canDelete}
+                            employeeMode={employeeMode}
                           />
                         ))}
                       </div>
@@ -272,6 +274,7 @@ export function DailyTaskCalendarDayPanel({
                             onDelete={onDeleteTask ? () => onDeleteTask(task) : undefined}
                             canEdit={canAssign}
                             canDelete={canDelete}
+                            employeeMode={employeeMode}
                           />
                         ))}
                       </div>
@@ -295,6 +298,7 @@ export function DailyTaskCalendarDayPanel({
                             onDelete={onDeleteTask ? () => onDeleteTask(task) : undefined}
                             canEdit={canAssign}
                             canDelete={canDelete}
+                            employeeMode={employeeMode}
                           />
                         ))}
                       </div>
@@ -320,6 +324,7 @@ export function DailyTaskCalendarDayPanel({
                               onDelete={onDeleteTask ? () => onDeleteTask(task) : undefined}
                               canEdit={canAssign}
                               canDelete={canDelete}
+                              employeeMode={employeeMode}
                             />
                           ))}
                         </div>

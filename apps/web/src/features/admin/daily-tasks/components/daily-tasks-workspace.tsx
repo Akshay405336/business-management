@@ -31,6 +31,7 @@ import type {
   DailyTaskListItem,
   DailyTaskWorkflowStage,
 } from '../types';
+import { useDailyTasksPolling } from '../hooks/use-daily-tasks-polling';
 import { addDaysToDateInput, localDateInputValue } from '../utils/local-date';
 import {
   filterTasksByAssignment,
@@ -44,9 +45,12 @@ import { DailyTaskKanbanBoard } from './daily-task-kanban-board';
 import { DailyTaskListView } from './daily-task-list-view';
 import { DailyTaskWorkflowDialog } from './daily-task-workflow-dialog';
 import { MyDailyTasksPage } from './my-daily-tasks-page';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DailyTasksViewTabs,
+  type DailyTasksWorkspaceView,
+} from './daily-tasks-view-tabs';
 
-type WorkspaceView = 'kanban' | 'list' | 'calendar';
+type WorkspaceView = DailyTasksWorkspaceView;
 
 const FILTER_SELECT_TRIGGER_CLASS =
   'h-9 min-w-0 shrink-0 gap-1.5 rounded-lg py-0 pl-2.5 sm:w-[9.375rem] sm:max-w-[10.5rem] [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:flex-1 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left';
@@ -55,8 +59,8 @@ const TOOLBAR_ROW_SCROLL_CLASS =
   'overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 export function DailyTasksWorkspace({
-  title = 'Daily Tasks',
-  description = 'Organization-wide daily task management and monitoring.',
+  title = 'Daily Task Management',
+  description = 'Create, assign and monitor daily work across your organization.',
   defaultView = 'kanban',
 }: {
   title?: string;
@@ -68,7 +72,7 @@ export function DailyTasksWorkspace({
   const pathname = usePathname();
   const { has } = useAdminAccess();
   const canAssignTasks = has('tasks.create') && has('tasks.assign');
-  const canManageWorkflow = has('tasks.update');
+  const canManageWorkflow = has('tasks.update') || has('daily_tasks.manage_workflow');
   const workspaceMode = searchParams.get('workspace') === 'my' ? 'my' : 'team';
   const clientToday = useMemo(() => localDateInputValue(), []);
   const [assignDate, setAssignDate] = useState(() => {
@@ -270,6 +274,8 @@ export function DailyTasksWorkspace({
     ]);
   };
 
+  useDailyTasksPolling(refreshAll, workspaceMode === 'team');
+
   const openAssign = (options?: { date?: string; workflowStageId?: string }) => {
     if (!canAssignTasks) return;
     setEditTask(null);
@@ -319,28 +325,7 @@ export function DailyTasksWorkspace({
             )}
             toolbar={
               <div className="flex w-max max-w-full flex-nowrap items-center justify-end gap-2 pl-1">
-                <Tabs value={view} onValueChange={(v) => setView(v as WorkspaceView)} className="shrink-0">
-                  <TabsList className="h-9 shrink-0 border border-[#E8E8EF] bg-[#F8F9FC] p-0.5">
-                    <TabsTrigger
-                      value="kanban"
-                      className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
-                    >
-                      Kanban
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="list"
-                      className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
-                    >
-                      List
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="calendar"
-                      className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
-                    >
-                      Calendar
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <DailyTasksViewTabs value={view} onValueChange={setView} />
                 {canAssignTasks ? (
                   <Button
                     type="button"

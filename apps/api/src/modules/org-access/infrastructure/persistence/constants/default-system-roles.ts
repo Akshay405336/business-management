@@ -81,7 +81,14 @@ export const MEMBER_PERMISSIONS: readonly PermissionKey[] = [
   'settings.read',
 ];
 
-export const EMPLOYEE_PERMISSIONS: readonly PermissionKey[] = ['projects.read', 'tasks.read'];
+export const EMPLOYEE_PERMISSIONS: readonly PermissionKey[] = [
+  'projects.read',
+  'tasks.read',
+  'daily_tasks.update_status',
+  'daily_tasks.notes.create',
+  'daily_tasks.notes.view_own',
+  'daily_tasks.comment',
+];
 
 export const DEFAULT_SYSTEM_ROLES: readonly {
   key: string;

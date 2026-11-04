@@ -1,6 +1,6 @@
 'use client';
 
-import type { MyOrganizationRole, PermissionKey } from '@techwin/contracts';
+import type { MyOrganizationRole, MySessionEmployeeSummary, PermissionKey } from '@techwin/contracts';
 import { Loader2 } from 'lucide-react';
 import {
   createContext,
@@ -40,6 +40,7 @@ export type PermissionsContextValue = {
   readonly permissions: readonly PermissionKey[];
   readonly permissionSet: ReadonlySet<PermissionKey>;
   readonly roles: readonly MyOrganizationRole[];
+  readonly sessionEmployee: MySessionEmployeeSummary | null;
   readonly membershipRoleLabel: string;
   readonly navAccess: MembershipAccessContext;
   readonly loading: false;
@@ -55,12 +56,17 @@ const PermissionsContext = createContext<PermissionsContextValue | null>(null);
 type AccessSnapshot = {
   readonly permissions: readonly PermissionKey[];
   readonly roles: readonly MyOrganizationRole[];
+  readonly sessionEmployee: MySessionEmployeeSummary | null;
 };
 
 function readBootstrapSnapshot(): AccessSnapshot | null {
   const bootstrap = readPostAuthBootstrap();
   if (!bootstrap) return null;
-  return { permissions: bootstrap.permissions, roles: bootstrap.roles };
+  return {
+    permissions: bootstrap.permissions,
+    roles: bootstrap.roles,
+    sessionEmployee: bootstrap.sessionEmployee ?? null,
+  };
 }
 
 function createInitialSnapshot(): AccessSnapshot | null {
@@ -92,9 +98,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const response = await getMyPermissions(signal);
-      setSnapshot({ permissions: response.permissions, roles: response.roles ?? [] });
+      setSnapshot({
+        permissions: response.permissions,
+        roles: response.roles ?? [],
+        sessionEmployee: response.sessionEmployee ?? null,
+      });
     } catch (failure) {
-      setSnapshot({ permissions: [], roles: [] });
+      setSnapshot({ permissions: [], roles: [], sessionEmployee: null });
       setError(describeOrgAccessError(failure));
     } finally {
       setLoading(false);
@@ -110,7 +120,11 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       lastSilentRefreshAt.current = now;
       getMyPermissions()
         .then((response) =>
-          setSnapshot({ permissions: response.permissions, roles: response.roles ?? [] }),
+          setSnapshot({
+            permissions: response.permissions,
+            roles: response.roles ?? [],
+            sessionEmployee: response.sessionEmployee ?? null,
+          }),
         )
         .catch(() => undefined);
     });
@@ -128,7 +142,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo((): PermissionsContextValue | null => {
     if (!snapshot) return null;
-    const { permissions, roles } = snapshot;
+    const { permissions, roles, sessionEmployee } = snapshot;
     const permissionSet = new Set(permissions);
     const has = (key: PermissionKey) => permissionSet.has(key);
     const hasAny = (...keys: PermissionKey[]) => keys.some((key) => permissionSet.has(key));
@@ -140,6 +154,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       permissions,
       permissionSet,
       roles,
+      sessionEmployee,
       membershipRoleLabel: formatMembershipRoleLabel(admin, roles),
       navAccess,
       loading: false,

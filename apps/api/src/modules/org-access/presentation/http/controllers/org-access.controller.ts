@@ -141,6 +141,7 @@ export class OrgAccessController {
     return {
       permissions: [...snapshot.permissions] as PermissionKey[],
       roles: [...snapshot.roles],
+      sessionEmployee: snapshot.sessionEmployee,
     };
   }
 

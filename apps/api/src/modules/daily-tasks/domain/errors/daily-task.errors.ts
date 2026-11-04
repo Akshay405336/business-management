@@ -1,4 +1,4 @@
-export type DailyTaskErrorCode = 'NOT_FOUND' | 'VALIDATION_FAILED' | 'CONFLICT';
+export type DailyTaskErrorCode = 'NOT_FOUND' | 'VALIDATION_FAILED' | 'CONFLICT' | 'FORBIDDEN';
 
 export class DailyTaskError extends Error {
   constructor(
@@ -28,5 +28,11 @@ export class DailyTaskValidationError extends DailyTaskError {
 export class DailyTaskConflictError extends DailyTaskError {
   constructor(message: string) {
     super(message, 'CONFLICT');
+  }
+}
+
+export class DailyTaskForbiddenError extends DailyTaskError {
+  constructor(message = 'You do not have access to this daily task.') {
+    super(message, 'FORBIDDEN');
   }
 }

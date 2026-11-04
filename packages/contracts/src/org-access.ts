@@ -121,9 +121,18 @@ export interface MyOrganizationRole {
   readonly name: string;
 }
 
+export interface MySessionEmployeeSummary {
+  readonly id: string;
+  readonly displayName: string;
+  readonly jobTitle: string;
+  readonly profileImageUrl: string | null;
+}
+
 export interface MyPermissionsResponse {
   readonly permissions: readonly PermissionKey[];
   readonly roles: readonly MyOrganizationRole[];
+  /** Employee profile linked to the signed-in platform account, if any. */
+  readonly sessionEmployee: MySessionEmployeeSummary | null;
 }
 
 export interface CreateInvitationResponse {

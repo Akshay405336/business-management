@@ -77,8 +77,67 @@ export interface DailyTaskListItem {
   readonly completedAt: string | null;
   readonly isOverdue: boolean;
   readonly assignees: readonly DailyTaskAssigneeSummary[];
+  readonly latestEmployeeNote: DailyTaskLatestNotePreview | null;
+  readonly unreadEmployeeNoteCount: number;
+  readonly orgTaskNotes: DailyTaskNotesCardSummary | null;
+  readonly myTaskNotes: DailyTaskNotesCardSummary | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+export type DailyTaskNoteAcknowledgementStatus = 'UNREAD' | 'ACKNOWLEDGED';
+
+export interface DailyTaskNoteItem {
+  readonly id: string;
+  readonly dailyTaskId: string;
+  readonly employeeId: string;
+  readonly employeeDisplayName: string;
+  readonly employeeProfileImageUrl: string | null;
+  readonly authorAdminId: string;
+  readonly text: string;
+  readonly acknowledgementStatus: DailyTaskNoteAcknowledgementStatus;
+  readonly acknowledgedByAdminId: string | null;
+  readonly acknowledgedByDisplayName: string | null;
+  readonly acknowledgedAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface DailyTaskNotesCardSummary {
+  readonly unreadCount: number;
+  readonly totalCount: number;
+  readonly latest: DailyTaskNoteItem | null;
+}
+
+/** @deprecated Use DailyTaskNotesCardSummary */
+export type DailyTaskMyNotesSummary = DailyTaskNotesCardSummary;
+
+export interface DailyTaskLatestNotePreview {
+  readonly text: string;
+  readonly authorName: string;
+  readonly authorEmployeeId: string | null;
+  readonly occurredAt: string;
+  readonly scope: 'employee' | 'admin';
+}
+
+export type DailyTaskActivityEventType =
+  | 'CREATED'
+  | 'UPDATED'
+  | 'STAGE_CHANGED'
+  | 'PRIORITY_CHANGED'
+  | 'ASSIGNEES_CHANGED'
+  | 'RESCHEDULED'
+  | 'COMPLETED'
+  | 'REOPENED'
+  | 'COMMENT_ADDED';
+
+export interface DailyTaskActivityItem {
+  readonly id: string;
+  readonly eventType: DailyTaskActivityEventType;
+  readonly occurredAt: string;
+  readonly actorAdminId: string;
+  readonly actorDisplayName: string;
+  readonly actorEmployeeId: string | null;
+  readonly metadata: Record<string, unknown> | null;
 }
 
 export type DailyTaskDetail = DailyTaskListItem;

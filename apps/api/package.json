@@ -23,6 +23,7 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:status": "prisma migrate status",
+    "db:migrate:repair-checksums": "node prisma/scripts/repair-migration-checksums.mjs 20261104120000_daily_task_notes 20261104120500_daily_task_notes_index_align 20261104140000_daily_task_kanban_sort_order",
     "db:migrate:unlock": "node prisma/scripts/release-migrate-lock.mjs",
     "db:orphans": "node prisma/scripts/orphaned-member-accounts.mjs",
     "db:seed": "prisma db seed",

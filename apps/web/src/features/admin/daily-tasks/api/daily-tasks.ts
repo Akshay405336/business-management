@@ -11,12 +11,16 @@ import type {
   UpdateDailyTaskRequest,
   UpdateDailyTaskWorkflowStagesRequest,
 } from '@techwin/validation';
+import type { AddDailyTaskCommentRequest } from '@techwin/validation';
 import type {
+  CreateDailyTaskNoteRequest,
   DailyTaskBoardResponse,
   DailyTaskDetail,
   DailyTaskListResponse,
   DailyTaskWorkflowStagesResponse,
 } from '../types';
+import type { DailyTaskNoteItem, DailyTaskNotesResponse } from '@techwin/contracts';
+import type { DailyTaskActivitiesResponse } from '@techwin/contracts';
 
 export function fetchDailyTaskBoard(
   query: DailyTaskBoardQuery & { clientToday?: string },
@@ -102,5 +106,48 @@ export function updateDailyTaskWorkflowStages(
     method: 'PATCH',
     auth: true,
     body,
+  });
+}
+
+export function fetchDailyTaskActivities(
+  id: string,
+  signal?: AbortSignal,
+): Promise<DailyTaskActivitiesResponse> {
+  return apiRequest<DailyTaskActivitiesResponse>(DAILY_TASK_ROUTES.activities(id), {
+    auth: true,
+    signal,
+  });
+}
+
+export function addDailyTaskComment(
+  id: string,
+  body: AddDailyTaskCommentRequest,
+): Promise<DailyTaskDetail> {
+  return apiRequest<DailyTaskDetail>(DAILY_TASK_ROUTES.comments(id), {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function listDailyTaskNotes(id: string, signal?: AbortSignal): Promise<DailyTaskNotesResponse> {
+  return apiRequest<DailyTaskNotesResponse>(DAILY_TASK_ROUTES.notes(id), { auth: true, signal });
+}
+
+export function createDailyTaskNote(
+  id: string,
+  body: CreateDailyTaskNoteRequest,
+): Promise<DailyTaskNoteItem> {
+  return apiRequest<DailyTaskNoteItem>(DAILY_TASK_ROUTES.notes(id), {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function acknowledgeDailyTaskNote(taskId: string, noteId: string): Promise<DailyTaskNoteItem> {
+  return apiRequest<DailyTaskNoteItem>(DAILY_TASK_ROUTES.noteAcknowledge(taskId, noteId), {
+    method: 'PATCH',
+    auth: true,
   });
 }

@@ -89,6 +89,8 @@ model PlatformAdmin {
   completedDailyTasks  DailyTask[]              @relation("DailyTaskCompletedBy")
   dailyTaskActivities  DailyTaskActivity[]      @relation("DailyTaskActivityActor")
   dailyTaskReschedules DailyTaskReschedule[]    @relation("DailyTaskRescheduledBy")
+  authoredDailyTaskNotes      DailyTaskNote[] @relation("DailyTaskNoteAuthor")
+  acknowledgedDailyTaskNotes  DailyTaskNote[] @relation("DailyTaskNoteAcknowledgedBy")
 
   @@index([organizationId])
   @@map("platform_admins")
@@ -194,6 +196,7 @@ model Organization {
   dailyTaskAssignees      DailyTaskAssignee[]
   dailyTaskActivities     DailyTaskActivity[]
   dailyTaskReschedules    DailyTaskReschedule[]
+  dailyTaskNotes          DailyTaskNote[]
   whatsappChannels             WhatsAppChannel[]
   whatsappWebhookEvents        WhatsAppWebhookEvent[]
   whatsappContacts             WhatsAppContact[]
@@ -979,6 +982,7 @@ model Employee {
   salaryStructure  EmployeeSalaryStructure?
   profileImageStoredObject StoredObject? @relation("EmployeeProfileImage", fields: [profileImageStoredObjectId], references: [id], onDelete: SetNull)
   dailyTaskAssignments     DailyTaskAssignee[]
+  dailyTaskNotes           DailyTaskNote[]
   whatsappConversations    WhatsAppConversation[]
 
   @@unique([organizationId, employeeCode])
@@ -1211,6 +1215,7 @@ model DailyTask {
   referenceUrl        String?           @map("reference_url") @db.VarChar(512)
   completedAt         DateTime?         @map("completed_at") @db.Timestamptz(3)
   completedByAdminId  String?           @map("completed_by_admin_id") @db.Uuid
+  kanbanSortOrder     Int               @default(0) @map("kanban_sort_order")
   createdByAdminId    String            @map("created_by_admin_id") @db.Uuid
   createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1225,12 +1230,43 @@ model DailyTask {
   assignees      DailyTaskAssignee[]
   activities     DailyTaskActivity[]
   reschedules    DailyTaskReschedule[]
+  notes          DailyTaskNote[]
 
   @@index([organizationId, assignDate])
   @@index([organizationId, workflowStageId, assignDate])
+  @@index([organizationId, workflowStageId, assignDate, kanbanSortOrder], map: "daily_tasks_organization_id_workflow_stage_id_assign_date_k_idx")
   @@index([organizationId, projectPhaseId, assignDate])
   @@index([organizationId, projectId])
   @@map("daily_tasks")
+}
+
+enum DailyTaskNoteAckStatus {
+  UNREAD
+  ACKNOWLEDGED
+}
+
+model DailyTaskNote {
+  id                    String                 @id @db.Uuid
+  organizationId        String                 @map("organization_id") @db.Uuid
+  dailyTaskId           String                 @map("daily_task_id") @db.Uuid
+  employeeId            String                 @map("employee_id") @db.Uuid
+  authorAdminId         String                 @map("author_admin_id") @db.Uuid
+  text                  String                 @db.VarChar(2000)
+  acknowledgementStatus DailyTaskNoteAckStatus @default(UNREAD) @map("acknowledgement_status")
+  acknowledgedByAdminId String?                @map("acknowledged_by_admin_id") @db.Uuid
+  acknowledgedAt        DateTime?              @map("acknowledged_at") @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dailyTask      DailyTask     @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+  employee       Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  authorAdmin    PlatformAdmin @relation("DailyTaskNoteAuthor", fields: [authorAdminId], references: [id], onDelete: Restrict)
+  acknowledgedBy PlatformAdmin? @relation("DailyTaskNoteAcknowledgedBy", fields: [acknowledgedByAdminId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, dailyTaskId, createdAt])
+  @@index([organizationId, dailyTaskId, acknowledgementStatus], map: "daily_task_notes_organization_id_daily_task_id_acknowledgem_idx")
+  @@index([organizationId, employeeId, createdAt])
+  @@map("daily_task_notes")
 }
 
 model DailyTaskAssignee {

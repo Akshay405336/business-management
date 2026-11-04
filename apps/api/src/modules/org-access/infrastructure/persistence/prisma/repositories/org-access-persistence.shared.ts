@@ -277,9 +277,43 @@ export async function ensureOrganizationRoleBootstrap(
 ): Promise<Map<string, string>> {
   const roleCount = await tx.organizationRole.count({ where: { organizationId } });
   if (roleCount === 0) {
-    return ensureSystemRoles(tx, organizationId);
+    const map = await ensureSystemRoles(tx, organizationId);
+    return map;
   }
-  return ensureProtectedSystemRoles(tx, organizationId);
+  const map = await ensureProtectedSystemRoles(tx, organizationId);
+  await mergeSystemRoleDefaultPermissions(tx, organizationId, [
+    SYSTEM_ROLE_KEYS.employee,
+    SYSTEM_ROLE_KEYS.member,
+  ]);
+  return map;
+}
+
+/** Adds missing template permissions to system roles without removing administrator changes. */
+export async function mergeSystemRoleDefaultPermissions(
+  tx: Pick<PrismaService, 'organizationRole' | 'organizationRolePermission'>,
+  organizationId: string,
+  roleKeys: readonly string[],
+): Promise<void> {
+  for (const roleKey of roleKeys) {
+    const template = DEFAULT_SYSTEM_ROLES.find((row) => row.key === roleKey);
+    if (!template) continue;
+    const role = await tx.organizationRole.findFirst({
+      where: { organizationId, key: roleKey, isSystem: true },
+      select: { id: true },
+    });
+    if (!role) continue;
+    const existing = await tx.organizationRolePermission.findMany({
+      where: { roleId: role.id },
+      select: { permissionKey: true },
+    });
+    const granted = new Set(existing.map((row) => row.permissionKey));
+    const missing = template.permissions.filter((key) => !granted.has(key));
+    if (missing.length === 0) continue;
+    await tx.organizationRolePermission.createMany({
+      data: missing.map((permissionKey) => ({ roleId: role.id, permissionKey })),
+      skipDuplicates: true,
+    });
+  }
 }
 
 export async function findRoleIdByKey(

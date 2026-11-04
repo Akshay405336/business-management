@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DailyTasksWorkspace } from '@/features/admin/daily-tasks/components/daily-tasks-workspace';
+import { EmployeeDailyTasksWorkspace } from '@/features/employee/components/employee-daily-tasks-workspace';
 
 export default function EmployeeDailyTasksPage() {
   return (
@@ -12,7 +12,7 @@ export default function EmployeeDailyTasksPage() {
         </div>
       }
     >
-      <DailyTasksWorkspace />
+      <EmployeeDailyTasksWorkspace />
     </Suspense>
   );
 }

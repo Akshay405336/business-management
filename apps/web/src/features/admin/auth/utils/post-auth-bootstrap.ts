@@ -1,5 +1,6 @@
 import type {
   MyOrganizationRole,
+  MySessionEmployeeSummary,
   PermissionKey,
   PlatformAdminProfile,
   PlatformSessionSummary,
@@ -14,6 +15,7 @@ export type PostAuthBootstrap = {
   readonly session: PlatformSessionSummary;
   readonly permissions: readonly PermissionKey[];
   readonly roles: readonly MyOrganizationRole[];
+  readonly sessionEmployee?: MySessionEmployeeSummary | null;
 };
 
 let armed: PostAuthBootstrap | null = null;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { PointerEvent } from 'react';
 import {
@@ -28,12 +28,13 @@ import {
   KanbanLeadPriorityHeader,
   KanbanLeadPriorityTab,
 } from '@/features/admin/crm/components/kanban-lead-priority-badge';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { DailyTaskAssigneeAvatarGroup } from './daily-task-assignee-avatar-group';
 import { useAdminToast } from '@/features/admin/components/toast';
-import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { cn } from '@/shared/lib/utils';
 import { deleteDailyTask } from '../api/daily-tasks';
 import type { DailyTaskListItem } from '../types';
+import { DailyTaskCardNotes } from './daily-task-card-notes';
 
 const taskDateFormatter = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -77,6 +78,7 @@ function TaskKanbanCardActions({
   onReassign,
   onReschedule,
   onDelete,
+  employeeMode = false,
 }: {
   taskTitle: string;
   onView: () => void;
@@ -84,8 +86,10 @@ function TaskKanbanCardActions({
   onReassign: () => void;
   onReschedule: () => void;
   onDelete: () => void;
+  employeeMode?: boolean;
 }) {
-  const { has } = useAdminAccess();
+  const { has } = usePermissions();
+  if (employeeMode) return null;
   const canUpdate = has('tasks.update');
   const canReassign = canUpdate && has('tasks.assign');
   const canDelete = has('tasks.delete');
@@ -150,6 +154,8 @@ export function DailyTaskKanbanCardSurface({
   onEdit,
   onReschedule,
   onDelete,
+  employeeMode = false,
+  onNotesChanged,
 }: {
   task: DailyTaskListItem;
   columnStageName?: string;
@@ -158,19 +164,15 @@ export function DailyTaskKanbanCardSurface({
   onEdit: () => void;
   onReschedule: () => void;
   onDelete: () => void;
+  employeeMode?: boolean;
+  onNotesChanged?: () => void | Promise<void>;
 }) {
-  const primaryAssignee = task.assignees[0];
-  const assigneeLabel = primaryAssignee
-    ? `${primaryAssignee.displayName}${task.assignees.length > 1 ? ` +${task.assignees.length - 1}` : ''}`
-    : 'Unassigned';
-
   const dateKind = task.dueDate ? 'due' : 'assigned';
   const dateValue = task.dueDate ?? task.assignDate;
   const dateTitle = dateKind === 'due' ? 'Due date' : 'Assigned date';
 
   const categoryLabel = task.type === 'GENERAL' ? formatCategory(task.category) : null;
   const workflowStatusLabel = task.workflowStageName ?? columnStageName ?? null;
-
   return (
     <article
       className={cn(
@@ -193,6 +195,7 @@ export function DailyTaskKanbanCardSurface({
                 onReassign={onEdit}
                 onReschedule={onReschedule}
                 onDelete={onDelete}
+                employeeMode={employeeMode}
               />
             </div>
           </div>
@@ -232,29 +235,19 @@ export function DailyTaskKanbanCardSurface({
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            {primaryAssignee ? (
-              <EmployeeAvatar
-                displayName={primaryAssignee.displayName}
-                profileImageUrl={primaryAssignee.profileImageUrl}
-                className="size-7 shrink-0"
-              />
-            ) : (
-              <span
-                className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
-                aria-hidden="true"
-              >
-                —
-              </span>
-            )}
-            <span
-              className={cn(
-                'truncate text-xs font-medium',
-                primaryAssignee ? 'text-muted-foreground' : 'text-muted-foreground/80 italic',
-              )}
-            >
-              {assigneeLabel}
-            </span>
+          <div className="flex min-w-0 flex-1 items-center">
+            <DailyTaskAssigneeAvatarGroup
+              assignees={task.assignees}
+              employeeSelfView={employeeMode}
+              emptyFallback={
+                <span
+                  className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  aria-hidden="true"
+                >
+                  —
+                </span>
+              }
+            />
           </div>
           <div
             className="text-muted-foreground flex shrink-0 items-center gap-1.5 text-xs"
@@ -270,6 +263,13 @@ export function DailyTaskKanbanCardSurface({
 
         <div className="border-border/60 border-t pt-2.5">
           <div className="flex flex-wrap items-center gap-2">
+            {onNotesChanged ? (
+              <DailyTaskCardNotes
+                task={task}
+                employeeMode={employeeMode}
+                onChanged={onNotesChanged}
+              />
+            ) : null}
             {workflowStatusLabel ? (
               <span className="border-border bg-muted/40 text-foreground inline-flex max-w-full items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold tracking-tight">
                 <span className="truncate">{workflowStatusLabel}</span>
@@ -295,6 +295,8 @@ export function DailyTaskKanbanCard({
   onReschedule,
   onChanged,
   dragging = false,
+  employeeMode = false,
+  dragDisabled = false,
 }: {
   task: DailyTaskListItem;
   columnStageName?: string;
@@ -303,16 +305,20 @@ export function DailyTaskKanbanCard({
   onReschedule?: (task: DailyTaskListItem) => void;
   onChanged?: () => void | Promise<void>;
   dragging?: boolean;
+  employeeMode?: boolean;
+  dragDisabled?: boolean;
 }) {
   const toast = useAdminToast();
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: task.id,
     data: { task, stageId: task.workflowStageId },
+    disabled: dragDisabled,
   });
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
 
   const onDelete = async () => {
+    if (employeeMode) return;
     if (!window.confirm('Delete this task? This cannot be undone.')) return;
     try {
       await deleteDailyTask(task.id);
@@ -334,6 +340,7 @@ export function DailyTaskKanbanCard({
       <DailyTaskKanbanCardSurface
         task={task}
         columnStageName={columnStageName}
+        employeeMode={employeeMode}
         className={cn(
           'cursor-grab active:cursor-grabbing',
           (isDragging || dragging) && 'opacity-40 shadow-none',
@@ -342,6 +349,7 @@ export function DailyTaskKanbanCard({
         onEdit={() => (onEdit ?? onOpen)(task)}
         onReschedule={() => (onReschedule ?? onOpen)(task)}
         onDelete={() => void onDelete()}
+        onNotesChanged={onChanged ? () => void onChanged() : undefined}
       />
     </div>
   );

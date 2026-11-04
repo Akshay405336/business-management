@@ -11,6 +11,7 @@ import {
   PERMISSION_CACHE_TTL_SECONDS,
   ensureOrganizationRoleBootstrap,
   findRoleIdByKey,
+  mergeSystemRoleDefaultPermissions,
   permissionCacheKey,
   resolveActiveMembershipRolesFromDb,
   resolvePermissionsFromDb,
@@ -118,6 +119,10 @@ export class OrgAccessPermissionsPersistence {
             update: {},
           });
         }
+        await mergeSystemRoleDefaultPermissions(tx, organizationId, [
+          SYSTEM_ROLE_KEYS.employee,
+          SYSTEM_ROLE_KEYS.member,
+        ]);
         return;
       }
 
@@ -142,6 +147,7 @@ export class OrgAccessPermissionsPersistence {
         },
       });
     });
+    await this.invalidatePermissionCache(organizationId);
   }
 
   async assertActiveMembership(organizationId: string, adminId: string): Promise<void> {
