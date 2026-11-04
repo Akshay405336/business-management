@@ -66,6 +66,15 @@ export const PERMISSION_KEYS = [
   'whatsapp.channels.manage',
   'whatsapp.templates.manage',
   'whatsapp.broadcasts.manage',
+  'attendance.view_own',
+  'attendance.view_all',
+  'attendance.punch_in',
+  'attendance.punch_out',
+  'attendance.view_summary',
+  'attendance.manage_settings',
+  'attendance.correct_records',
+  'attendance.manage_devices',
+  'attendance.view_audit',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -257,6 +266,60 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
     action: 'Manage broadcasts',
     description: 'Create, schedule and cancel WhatsApp template broadcasts.',
   },
+  {
+    key: 'attendance.view_own',
+    module: 'Attendance',
+    action: 'View own',
+    description: 'View personal attendance records and history.',
+  },
+  {
+    key: 'attendance.view_all',
+    module: 'Attendance',
+    action: 'View all',
+    description: 'View organization-wide attendance records.',
+  },
+  {
+    key: 'attendance.punch_in',
+    module: 'Attendance',
+    action: 'Punch in',
+    description: 'Record attendance punch-in from an approved desktop session.',
+  },
+  {
+    key: 'attendance.punch_out',
+    module: 'Attendance',
+    action: 'Punch out',
+    description: 'Record attendance punch-out from an approved desktop session.',
+  },
+  {
+    key: 'attendance.view_summary',
+    module: 'Attendance',
+    action: 'View summary',
+    description: 'View attendance summaries and monthly statistics.',
+  },
+  {
+    key: 'attendance.manage_settings',
+    module: 'Attendance',
+    action: 'Manage settings',
+    description: 'Configure office schedules and attendance rules.',
+  },
+  {
+    key: 'attendance.correct_records',
+    module: 'Attendance',
+    action: 'Correct records',
+    description: 'Apply audited corrections to attendance records.',
+  },
+  {
+    key: 'attendance.manage_devices',
+    module: 'Attendance',
+    action: 'Manage devices',
+    description: 'Register and revoke trusted attendance devices.',
+  },
+  {
+    key: 'attendance.view_audit',
+    module: 'Attendance',
+    action: 'View audit',
+    description: 'View attendance corrections and security events.',
+  },
 ] as const;
 
 export const PERMISSION_KEY_SET: ReadonlySet<string> = new Set(PERMISSION_KEYS);
@@ -284,6 +347,11 @@ export const EMPLOYEE_PORTAL_PERMISSIONS: readonly PermissionKey[] = [
   'daily_tasks.notes.create',
   'daily_tasks.notes.view_own',
   'daily_tasks.comment',
+  'attendance.view_own',
+  'attendance.punch_in',
+  'attendance.punch_out',
+  'attendance.view_summary',
+  'attendance.manage_devices',
 ];
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE_KEYS)[keyof typeof SYSTEM_ROLE_KEYS];

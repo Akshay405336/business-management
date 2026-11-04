@@ -241,7 +241,7 @@ export function DailyTaskKanbanCardSurface({
               employeeSelfView={employeeMode}
               emptyFallback={
                 <span
-                  className="bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                  className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold"
                   aria-hidden="true"
                 >
                   —

@@ -191,19 +191,20 @@ export function DailyTaskAssigneeAvatarGroup({
       {visible.map((assignee, index) => (
         <span
           key={assignee.employeeId || assignee.id}
-          className={cn('relative inline-flex shrink-0', index > 0 && '-ml-2.5')}
+          className={cn('relative inline-flex shrink-0', index > 0 && '-ml-2')}
           style={{ zIndex: visible.length - index + (extra > 0 ? 1 : 0) }}
         >
           <EmployeeAvatar
             displayName={assignee.displayName}
             profileImageUrl={assignee.profileImageUrl}
-            className="size-9 ring-2 ring-card"
+            size="sm"
+            className="size-7 text-[9px] ring-1 ring-card"
           />
         </span>
       ))}
       {extra > 0 ? (
         <span
-          className="bg-muted text-muted-foreground ring-card relative -ml-2.5 flex size-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ring-2"
+          className="bg-muted text-muted-foreground ring-card relative -ml-2 flex size-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums ring-1"
           style={{ zIndex: 0 }}
           aria-hidden
         >

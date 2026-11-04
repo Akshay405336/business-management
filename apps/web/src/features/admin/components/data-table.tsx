@@ -59,6 +59,7 @@ export function DataTable({
   children,
   className,
   tableClassName,
+  tableContainerClassName,
   tableBodyClassName,
   frame = 'surface',
   frameClassName,
@@ -78,6 +79,7 @@ export function DataTable({
   children?: ReactNode;
   className?: string;
   tableClassName?: string;
+  tableContainerClassName?: string;
   tableBodyClassName?: string;
   /** Applied to the inner wrapper when `frame="flush"`. */
   frameClassName?: string;
@@ -93,7 +95,10 @@ export function DataTable({
       frameClassName={frameClassName}
     >
       <DataTableBodyRefreshOverlay active={refreshing && phase === 'success'}>
-        <Table className={cn('bg-card', tableClassName)}>
+        <Table
+          className={cn('bg-card', tableClassName)}
+          containerClassName={tableContainerClassName}
+        >
           <TableHeader variant={headerVariant}>{header}</TableHeader>
           <TableBody className={cn('bg-card', tableBodyClassName)}>
             {phase === 'initial-loading' ? (

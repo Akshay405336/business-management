@@ -197,6 +197,11 @@ model Organization {
   dailyTaskActivities     DailyTaskActivity[]
   dailyTaskReschedules    DailyTaskReschedule[]
   dailyTaskNotes          DailyTaskNote[]
+  attendanceSchedules          AttendanceSchedule[]
+  attendanceRecords            AttendanceRecord[]
+  attendanceDevices            AttendanceDevice[]
+  attendanceCorrections        AttendanceCorrection[]
+  attendanceSecurityEvents     AttendanceSecurityEvent[]
   whatsappChannels             WhatsAppChannel[]
   whatsappWebhookEvents        WhatsAppWebhookEvent[]
   whatsappContacts             WhatsAppContact[]
@@ -984,6 +989,8 @@ model Employee {
   dailyTaskAssignments     DailyTaskAssignee[]
   dailyTaskNotes           DailyTaskNote[]
   whatsappConversations    WhatsAppConversation[]
+  attendanceRecords        AttendanceRecord[]
+  attendanceDevices        AttendanceDevice[]
 
   @@unique([organizationId, employeeCode])
   @@unique([organizationId, workEmail])
@@ -1706,4 +1713,154 @@ model WhatsAppBroadcastRecipient {
   @@index([broadcastId, status])
   @@index([status, nextAttemptAt])
   @@map("whatsapp_broadcast_recipients")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  HALF_DAY
+  ON_LEAVE
+  HOLIDAY
+  WEEKLY_OFF
+  PENDING
+}
+
+enum AttendanceDeviceStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum AttendanceSecurityEventType {
+  PUNCH_REJECTED_DEVICE
+  PUNCH_REJECTED_MOBILE
+  PUNCH_REJECTED_UNREGISTERED
+  PUNCH_REJECTED_IP
+  PUNCH_REJECTED_DUPLICATE
+  PUNCH_REJECTED_POLICY
+}
+
+model AttendanceSchedule {
+  id                          String   @id @db.Uuid
+  organizationId              String   @map("organization_id") @db.Uuid
+  effectiveFrom               DateTime @map("effective_from") @db.Date
+  timeZone                    String   @map("time_zone") @db.VarChar(64)
+  officeStartMinutes          Int      @map("office_start_minutes")
+  officeEndMinutes            Int      @map("office_end_minutes")
+  lateGraceMinutes            Int      @default(0) @map("late_grace_minutes")
+  attendanceCutoffMinutes     Int      @map("attendance_cutoff_minutes")
+  minFullDayMinutes           Int      @map("min_full_day_minutes")
+  minHalfDayMinutes           Int      @map("min_half_day_minutes")
+  weeklyOffDays               Json     @default("[]") @map("weekly_off_days")
+  workingDays                 Json     @default("[1,2,3,4,5]") @map("working_days")
+  daySchedules                Json?    @map("day_schedules")
+  earlyPunchInAllowanceMinutes Int     @default(0) @map("early_punch_in_allowance_minutes")
+  requireRegisteredDevice     Boolean  @default(false) @map("require_registered_device")
+  ipAllowlist                 Json?    @map("ip_allowlist")
+  allowPunchOutAfterOfficeEnd Boolean  @default(true) @map("allow_punch_out_after_office_end")
+  createdByAdminId            String   @map("created_by_admin_id") @db.Uuid
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  records      AttendanceRecord[]
+
+  @@index([organizationId, effectiveFrom(sort: Desc)], map: "att_sched_org_eff_from_idx")
+  @@map("attendance_schedules")
+}
+
+model AttendanceRecord {
+  id                 String           @id @db.Uuid
+  organizationId     String           @map("organization_id") @db.Uuid
+  employeeId         String           @map("employee_id") @db.Uuid
+  attendanceDate     DateTime         @map("attendance_date") @db.Date
+  scheduleId         String           @map("schedule_id") @db.Uuid
+  scheduleSnapshot   Json             @map("schedule_snapshot")
+  status             AttendanceStatus @default(PENDING)
+  punchInAt          DateTime?        @map("punch_in_at") @db.Timestamptz(3)
+  punchOutAt         DateTime?        @map("punch_out_at") @db.Timestamptz(3)
+  lateMinutes        Int              @default(0) @map("late_minutes")
+  workingMinutes     Int?             @map("working_minutes")
+  finalizedAt        DateTime?        @map("finalized_at") @db.Timestamptz(3)
+  finalizationNote   String?          @map("finalization_note") @db.VarChar(500)
+  punchInDeviceId    String?          @map("punch_in_device_id") @db.Uuid
+  punchOutDeviceId   String?          @map("punch_out_device_id") @db.Uuid
+  punchInUserAgent   String?          @map("punch_in_user_agent") @db.VarChar(512)
+  punchInIp          String?          @map("punch_in_ip") @db.VarChar(64)
+  punchOutUserAgent  String?          @map("punch_out_user_agent") @db.VarChar(512)
+  punchOutIp         String?          @map("punch_out_ip") @db.VarChar(64)
+  punchInIdempotencyKey  String?      @map("punch_in_idempotency_key") @db.VarChar(64)
+  punchOutIdempotencyKey String?      @map("punch_out_idempotency_key") @db.VarChar(64)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  schedule     AttendanceSchedule   @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  punchInDevice  AttendanceDevice?  @relation("AttendancePunchInDevice", fields: [punchInDeviceId], references: [id], onDelete: SetNull)
+  punchOutDevice AttendanceDevice?  @relation("AttendancePunchOutDevice", fields: [punchOutDeviceId], references: [id], onDelete: SetNull)
+  corrections  AttendanceCorrection[]
+
+  @@unique([organizationId, employeeId, attendanceDate], map: "att_rec_org_emp_date_key")
+  @@index([organizationId, punchInIdempotencyKey], map: "att_rec_org_punch_in_idem_idx")
+  @@index([organizationId, attendanceDate], map: "att_rec_org_date_idx")
+  @@index([organizationId, status, attendanceDate], map: "att_rec_org_status_date_idx")
+  @@map("attendance_records")
+}
+
+model AttendanceDevice {
+  id               String                 @id @db.Uuid
+  organizationId   String                 @map("organization_id") @db.Uuid
+  employeeId       String                 @map("employee_id") @db.Uuid
+  platformAdminId  String                 @map("platform_admin_id") @db.Uuid
+  deviceKeyHash    String                 @map("device_key_hash") @db.VarChar(128)
+  label            String                 @default("") @db.VarChar(120)
+  userAgentHint    String                 @default("") @map("user_agent_hint") @db.VarChar(512)
+  status           AttendanceDeviceStatus @default(ACTIVE)
+  registeredAt     DateTime               @default(now()) @map("registered_at") @db.Timestamptz(3)
+  revokedAt        DateTime?              @map("revoked_at") @db.Timestamptz(3)
+  lastUsedAt       DateTime?              @map("last_used_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  punchInRecords  AttendanceRecord[] @relation("AttendancePunchInDevice")
+  punchOutRecords AttendanceRecord[] @relation("AttendancePunchOutDevice")
+
+  @@unique([organizationId, employeeId, deviceKeyHash], map: "att_dev_org_emp_hash_key")
+  @@index([organizationId, employeeId, status], map: "att_dev_org_emp_status_idx")
+  @@map("attendance_devices")
+}
+
+model AttendanceCorrection {
+  id                 String   @id @db.Uuid
+  organizationId     String   @map("organization_id") @db.Uuid
+  attendanceRecordId String   @map("attendance_record_id") @db.Uuid
+  adminId            String   @map("admin_id") @db.Uuid
+  reason             String   @db.VarChar(2000)
+  previousValues     Json     @map("previous_values")
+  newValues          Json     @map("new_values")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  attendanceRecord AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, attendanceRecordId], map: "att_corr_org_record_idx")
+  @@map("attendance_corrections")
+}
+
+model AttendanceSecurityEvent {
+  id             String                      @id @db.Uuid
+  organizationId String                      @map("organization_id") @db.Uuid
+  employeeId     String?                     @map("employee_id") @db.Uuid
+  adminId        String?                     @map("admin_id") @db.Uuid
+  eventType      AttendanceSecurityEventType @map("event_type")
+  message        String                      @db.VarChar(500)
+  userAgent      String?                     @map("user_agent") @db.VarChar(512)
+  ipAddress      String?                     @map("ip_address") @db.VarChar(64)
+  metadata       Json?
+  createdAt      DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt(sort: Desc)], map: "att_sec_org_created_idx")
+  @@map("attendance_security_events")
 }

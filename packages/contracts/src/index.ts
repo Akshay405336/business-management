@@ -14,3 +14,4 @@ export * from './daily-tasks.js';
 export * from './daily-task-permissions.js';
 export * from './daily-task-note-permissions.js';
 export * from './whatsapp.js';
+export * from './attendance.js';

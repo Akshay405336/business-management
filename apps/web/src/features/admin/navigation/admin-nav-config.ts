@@ -198,7 +198,12 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         icon: Users,
       },
       { kind: 'soon', label: 'Departments', icon: Building2, requiredPermissions: ['employees.read'] },
-      { kind: 'soon', label: 'Attendance', icon: CalendarDays, requiredPermissions: ['employees.read'] },
+      {
+        kind: 'link',
+        href: '/admin/attendance',
+        label: 'Attendance',
+        icon: CalendarDays,
+      },
       { kind: 'soon', label: 'Leave Management', icon: CalendarDays, requiredPermissions: ['employees.read'] },
       { kind: 'soon', label: 'Payroll', icon: Wallet, requiredPermissions: ['employees.read'] },
       { kind: 'soon', label: 'Performance', icon: BarChart3, requiredPermissions: ['employees.read'] },

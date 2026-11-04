@@ -88,6 +88,11 @@ export const EMPLOYEE_PERMISSIONS: readonly PermissionKey[] = [
   'daily_tasks.notes.create',
   'daily_tasks.notes.view_own',
   'daily_tasks.comment',
+  'attendance.view_own',
+  'attendance.punch_in',
+  'attendance.punch_out',
+  'attendance.view_summary',
+  'attendance.manage_devices',
 ];
 
 export const DEFAULT_SYSTEM_ROLES: readonly {
