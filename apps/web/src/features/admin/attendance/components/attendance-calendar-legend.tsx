@@ -1,16 +1,20 @@
 'use client';
 
-import { ATTENDANCE_CALENDAR_LEGEND, ATTENDANCE_STATUS_VISUAL } from '../constants/attendance-calendar-theme';
+import { OrgCalendarDayCardLegend } from '@/features/admin/shared/calendar/org-calendar-day-card-legend';
+import {
+  ATTENDANCE_CALENDAR_LEGEND,
+  ATTENDANCE_STATUS_VISUAL,
+} from '../constants/attendance-calendar-theme';
 
 const POPUP_LEGEND = ['PRESENT', 'LATE', 'ABSENT', 'HALF_DAY'] as const;
 const BOARD_LEGEND = [...POPUP_LEGEND, 'WEEKLY_OFF'] as const;
 
 const BOARD_TEXT_CLASS: Record<(typeof BOARD_LEGEND)[number], string> = {
   PRESENT: 'text-[#16A34A]',
-  LATE: 'text-[#CA8A04]',
+  LATE: 'text-[#EA580C]',
   ABSENT: 'text-[#DC2626]',
   HALF_DAY: 'text-[#9333EA]',
-  WEEKLY_OFF: 'text-[#64748B]',
+  WEEKLY_OFF: 'text-[#6D28D9]',
 };
 
 export function AttendanceCalendarLegend({
@@ -27,15 +31,19 @@ export function AttendanceCalendarLegend({
   if (boardStyle) {
     return (
       <div
-        className="flex flex-wrap items-center gap-2 border-b px-4 py-2.5 sm:px-5"
+        className="flex flex-col gap-2 border-b px-4 py-2.5 sm:px-5"
         style={{ borderColor: '#E8E8EF', backgroundColor: '#FFFFFF' }}
-        aria-label="Attendance status legend"
+        aria-label="Calendar legend"
       >
-        {BOARD_LEGEND.map((key) => (
-          <span key={key} className={`text-[11px] font-semibold ${BOARD_TEXT_CLASS[key]}`}>
-            {ATTENDANCE_STATUS_VISUAL[key].label}
-          </span>
-        ))}
+        <OrgCalendarDayCardLegend />
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-[10px] font-semibold tracking-wide text-[#64748B] uppercase">Counts</span>
+          {BOARD_LEGEND.map((key) => (
+            <span key={key} className={`text-[11px] font-semibold ${BOARD_TEXT_CLASS[key]}`}>
+              {ATTENDANCE_STATUS_VISUAL[key].label}
+            </span>
+          ))}
+        </div>
       </div>
     );
   }

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { APP_CONFIG, type AppConfig } from '../../../config/app-config.js';
 import { RedisRateLimiter } from '../../../infrastructure/cache/redis-rate-limiter.js';
 import { isRedisInfrastructureError } from '../../../infrastructure/cache/redis.errors.js';
 import type {
@@ -10,15 +11,18 @@ import type {
 
 /**
  * Rate limiter for platform authentication. Keys (emails, IP addresses) are
- * hashed so Redis never holds identifying data, and the limiter fails closed:
- * if Redis is unreachable, authentication attempts are refused rather than
- * left unthrottled.
+ * hashed so Redis never holds identifying data. In production the limiter fails
+ * closed when Redis is unreachable; in local development it fails open so auth
+ * still works without a Redis process.
  */
 @Injectable()
 export class PlatformRateLimiterAdapter implements RateLimiter {
   private readonly logger = new Logger(PlatformRateLimiterAdapter.name);
 
-  constructor(@Inject(RedisRateLimiter) private readonly limiter: RedisRateLimiter) {}
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(RedisRateLimiter) private readonly limiter: RedisRateLimiter,
+  ) {}
 
   async consume(policy: RateLimitPolicy, key: string): Promise<RateLimitDecision> {
     try {
@@ -31,6 +35,12 @@ export class PlatformRateLimiterAdapter implements RateLimiter {
       return decision;
     } catch (error) {
       if (isRedisInfrastructureError(error)) {
+        if (!this.config.isProduction) {
+          this.logger.warn(
+            `Rate limiter unavailable (allowing request in ${this.config.nodeEnv}) policy=${policy.name}${error.code ? ` redisCode=${error.code}` : ''}: ${error.message}`,
+          );
+          return { allowed: true, remaining: policy.limit, retryAfterSeconds: 0 };
+        }
         this.logger.error(
           `Rate limiter backend unavailable policy=${policy.name}${error.code ? ` redisCode=${error.code}` : ''}: ${error.message}`,
         );

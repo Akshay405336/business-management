@@ -70,7 +70,7 @@ export function AttendancePageToolbar({
           >
             <Input
               type="date"
-              value={records.date}
+              value={records.datePickerValue}
               onChange={(event) => records.setDateFilter(event.target.value)}
               className={cn(
                 CRM_PIPELINE_SEARCH_INPUT_CLASS,

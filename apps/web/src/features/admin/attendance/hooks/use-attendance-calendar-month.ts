@@ -6,6 +6,7 @@ import { fetchAttendanceCalendar } from '@/features/attendance/api/attendance';
 import { isAbortError } from '@/shared/lib/abort-error';
 import type { AttendanceStatusFilter } from '../constants/attendance-status-filter-options';
 import { monthBoardVisibleRange, monthBounds } from '../utils/calendar-month';
+import { subscribeOrgCalendarSync } from '@/features/admin/org-calendar/lib/org-calendar-sync';
 
 const monthCache = new Map<string, readonly AttendanceCalendarDaySummary[]>();
 
@@ -51,6 +52,13 @@ export function useAttendanceCalendarMonth(input: {
     monthCache.delete(key);
     setRetryNonce((value) => value + 1);
   }, [key]);
+
+  useEffect(() => {
+    return subscribeOrgCalendarSync(() => {
+      monthCache.clear();
+      setRetryNonce((value) => value + 1);
+    });
+  }, []);
 
   useEffect(() => {
     if (!enabled) {

@@ -10,7 +10,8 @@ import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants'
 import { cn } from '@/shared/lib/utils';
 import { ATTENDANCE_CALENDAR_SURFACE } from '../constants/attendance-calendar-theme';
 import { useAttendanceCalendarMonth } from '../hooks/use-attendance-calendar-month';
-import { localTodayKey, monthGridBoardWeeks, monthGridWeeks } from '../utils/calendar-month';
+import { todayKeyInTimeZone, monthGridBoardWeeks, monthGridWeeks } from '../utils/calendar-month';
+import { useAttendanceOrgTimeZone } from '../hooks/use-attendance-org-timezone';
 import { useAttendanceRecordsContext } from './attendance-records-context';
 import { AttendanceCalendarDayCell } from './attendance-calendar-day-cell';
 import { AttendanceCalendarGridSkeleton } from './attendance-calendar-grid-skeleton';
@@ -50,7 +51,8 @@ export function AttendanceCalendarMonthGrid({
   const boardStyle = isPopup;
   const ctx = useAttendanceRecordsContext();
   const gridRef = useRef<HTMLDivElement>(null);
-  const today = localTodayKey();
+  const orgTimeZone = useAttendanceOrgTimeZone();
+  const orgTodayKey = useMemo(() => todayKeyInTimeZone(orgTimeZone), [orgTimeZone]);
 
   const { days, loading, error, retry, range } = useAttendanceCalendarMonth({
     visibleMonth: ctx.visibleMonth,
@@ -80,14 +82,14 @@ export function AttendanceCalendarMonthGrid({
     year: 'numeric',
   });
 
-  const [previewDate, setPreviewDate] = useState(selectedDate || ctx.date || today);
+  const [previewDate, setPreviewDate] = useState(selectedDate || ctx.date || orgTodayKey);
 
   useEffect(() => {
     if (!enabled) return;
-    const initial = selectedDate || ctx.date || today;
+    const initial = selectedDate || ctx.date || orgTodayKey;
     setPreviewDate(initial);
     ctx.setVisibleMonth(initial.slice(0, 7));
-  }, [enabled, selectedDate, ctx.date, today, ctx.setVisibleMonth]);
+  }, [enabled, selectedDate, ctx.date, orgTodayKey, ctx.setVisibleMonth]);
 
   const pickDate = useCallback(
     (dateKey: string) => {
@@ -109,9 +111,9 @@ export function AttendanceCalendarMonthGrid({
   );
 
   const goToday = useCallback(() => {
-    ctx.setVisibleMonth(today.slice(0, 7));
-    setPreviewDate(today);
-  }, [ctx, today]);
+    ctx.setVisibleMonth(orgTodayKey.slice(0, 7));
+    setPreviewDate(orgTodayKey);
+  }, [ctx, orgTodayKey]);
 
   const onGridKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -202,6 +204,7 @@ export function AttendanceCalendarMonthGrid({
                         summary={summaryForDate(days, cell.dateKey)}
                         isSelected={cell.dateKey === highlightDate}
                         isCurrentMonth={cell.inMonth}
+                        orgTodayKey={orgTodayKey}
                         boardStyle
                         tabIndex={cell.dateKey === highlightDate ? 0 : -1}
                         onSelect={pickDate}
@@ -248,6 +251,7 @@ export function AttendanceCalendarMonthGrid({
                           summary={summaryForDate(days, dateKey)}
                           isSelected={dateKey === highlightDate}
                           isCurrentMonth
+                          orgTodayKey={orgTodayKey}
                           compact={cellCompact}
                           equalGrid={equalGrid}
                           tabIndex={dateKey === highlightDate ? 0 : -1}

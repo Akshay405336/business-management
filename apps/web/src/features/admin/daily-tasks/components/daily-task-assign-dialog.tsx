@@ -41,6 +41,7 @@ import {
   rescheduleDailyTask,
   updateDailyTask,
 } from '../api/daily-tasks';
+import { classifyOrgCalendarDate } from '@/features/admin/org-calendar/api/org-calendar-api';
 import type { DailyTaskListItem, DailyTaskType, DailyTaskWorkflowStage } from '../types';
 
 const BTN_SECONDARY =
@@ -101,6 +102,7 @@ export function DailyTaskAssignDialog({
   const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const [formAssignDate, setFormAssignDate] = useState(assignDate);
   const [dueDate, setDueDate] = useState('');
+  const [nonWorkingAssignWarning, setNonWorkingAssignWarning] = useState<string | null>(null);
 
   const defaultDailyStageId = useMemo(
     () => dailyStages.find((s) => s.stageKey === 'todo')?.id ?? dailyStages[0]?.id ?? '',
@@ -162,6 +164,31 @@ export function DailyTaskAssignDialog({
       setProjects([...active, ...current]);
     });
   }, [open, assignDate, prefillWorkflowStageId, editTask]);
+
+  useEffect(() => {
+    if (!open || !formAssignDate) {
+      setNonWorkingAssignWarning(null);
+      return;
+    }
+    let cancelled = false;
+    void classifyOrgCalendarDate(formAssignDate)
+      .then((result) => {
+        if (cancelled) return;
+        if (result.dayKind === 'HOLIDAY') {
+          setNonWorkingAssignWarning('This date is a holiday on the organisation calendar. You can still assign the task if needed.');
+        } else if (result.dayKind === 'WEEKLY_OFF') {
+          setNonWorkingAssignWarning('This date is a weekly off on the organisation calendar. You can still assign the task if needed.');
+        } else {
+          setNonWorkingAssignWarning(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setNonWorkingAssignWarning(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, formAssignDate]);
 
   useEffect(() => {
     if (type !== 'PROJECT' || !projectId) {
@@ -399,6 +426,9 @@ export function DailyTaskAssignDialog({
                 className={CRM_PIPELINE_FORM_FIELD_CLASS}
                 onChange={(e) => setFormAssignDate(e.target.value)}
               />
+              {nonWorkingAssignWarning ? (
+                <p className="mt-1.5 text-xs font-medium text-amber-700">{nonWorkingAssignWarning}</p>
+              ) : null}
             </CrmFormField>
             <CrmFormField label="Due date" optional error={errors.dueDate}>
               <Input

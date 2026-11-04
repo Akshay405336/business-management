@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type {
   AttendanceCalendarDaySummary,
   AttendanceCalendarResponse,
@@ -38,6 +38,12 @@ import type {
   PunchContext,
 } from '../../../../domain/repositories/attendance.repository.js';
 import {
+  ORG_CALENDAR_REPOSITORY,
+  type OrgCalendarRepository,
+} from '../../../../../organization-calendar/domain/repositories/org-calendar.repository.js';
+import { resolveScheduleDayFlags } from '../../../../../organization-calendar/domain/services/org-calendar-classification.service.js';
+import { calendarDateAnchor } from '../../../../../organization-calendar/infrastructure/persistence/prisma/mappers/org-calendar.mapper.js';
+import {
   formatDateOnly,
   getZonedParts,
   normalizeDaySchedules,
@@ -75,7 +81,28 @@ function emptyCalendarDay(date: string): AttendanceCalendarDaySummary {
     onLeave: 0,
     pending: 0,
     total: 0,
+    organizationDayKind: 'WORKING',
+    organizationDayLabel: 'Working day',
   };
+}
+
+function organizationDayLabel(kind: AttendanceCalendarDaySummary['organizationDayKind'], eventTitle?: string): string {
+  if (eventTitle?.trim()) return eventTitle.trim();
+  switch (kind) {
+    case 'WEEKLY_OFF':
+      return 'Weekly off';
+    case 'HOLIDAY':
+    case 'OFFICE_CLOSURE':
+      return 'Holiday';
+    case 'HALF_DAY':
+      return 'Half working day';
+    case 'SPECIAL_WORKING':
+      return 'Special working day';
+    case 'NON_WORKING':
+      return 'Non-working day';
+    default:
+      return 'Working day';
+  }
 }
 
 function incrementCalendarDay(
@@ -105,7 +132,30 @@ function incrementCalendarDay(
 
 @Injectable()
 export class PrismaAttendanceRepository implements AttendanceRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(ORG_CALENDAR_REPOSITORY) private readonly orgCalendar: OrgCalendarRepository,
+  ) {}
+
+  private async resolveAttendanceDayKind(
+    organizationId: string,
+    attendanceDate: string,
+    schedule: NonNullable<Awaited<ReturnType<PrismaAttendanceRepository['resolveScheduleForDate']>>>,
+    employeeId?: string,
+  ): Promise<'WORKING' | 'WEEKLY_OFF' | 'HOLIDAY'> {
+    const weekday = getZonedParts(calendarDateAnchor(attendanceDate), schedule.timeZone).weekday;
+    const scheduleFlags = resolveScheduleDayFlags(
+      schedule.weeklyOffDays,
+      schedule.workingDays,
+      weekday,
+    );
+    return this.orgCalendar.resolveAttendanceDayKind(
+      organizationId,
+      attendanceDate,
+      scheduleFlags,
+      employeeId,
+    );
+  }
 
   async resolveEmployeeId(organizationId: string, adminId: string): Promise<string | null> {
     const row = await this.prisma.employee.findFirst({
@@ -194,7 +244,12 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     const schedule = scheduleRow ? toScheduleConfig(scheduleRow) : null;
     const parts = schedule ? getZonedParts(now, schedule.timeZone) : getZonedParts(now, 'UTC');
     const attendanceDate = formatDateOnly(parts);
-    const dayKind = schedule ? resolveDayKind(schedule, parts) : 'WORKING';
+    const scheduleDayKind = schedule ? resolveDayKind(schedule, parts) : 'WORKING';
+    const dayKind = schedule
+      ? await this.resolveAttendanceDayKind(organizationId, attendanceDate, schedule, employeeId)
+      : scheduleDayKind === 'WEEKLY_OFF'
+        ? 'WEEKLY_OFF'
+        : 'WORKING';
     const recordRow = await this.prisma.attendanceRecord.findUnique({
       where: {
         organizationId_employeeId_attendanceDate: {
@@ -218,6 +273,8 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       punchBlockedReason = 'Attendance settings have not been configured for your organization.';
     } else if (dayKind === 'WEEKLY_OFF') {
       punchBlockedReason = 'Today is marked as a weekly off day.';
+    } else if (dayKind === 'HOLIDAY') {
+      punchBlockedReason = 'Today is marked as a holiday or non-working day on the organisation calendar.';
     } else if (record?.punchInAt && !record.punchOutAt) {
       canPunchOut = true;
     } else if (record?.punchOutAt) {
@@ -238,7 +295,7 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       attendanceDate,
       serverTime: now.toISOString(),
       schedule: schedule ? toScheduleSnapshot(schedule) : null,
-      dayKind: dayKind === 'WEEKLY_OFF' ? 'WEEKLY_OFF' : 'WORKING',
+      dayKind,
       record,
       canPunchIn,
       canPunchOut,
@@ -265,8 +322,17 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     const schedule = await this.requireSchedule(ctx.organizationId, ctx.now);
     const parts = getZonedParts(ctx.now, schedule.timeZone);
     const attendanceDate = formatDateOnly(parts);
-    if (resolveDayKind(schedule, parts) === 'WEEKLY_OFF') {
+    const attendanceDayKind = await this.resolveAttendanceDayKind(
+      ctx.organizationId,
+      attendanceDate,
+      schedule,
+      ctx.employeeId,
+    );
+    if (attendanceDayKind === 'WEEKLY_OFF') {
       throw new AttendancePolicyError('Cannot punch in on a weekly off day.');
+    }
+    if (attendanceDayKind === 'HOLIDAY') {
+      throw new AttendancePolicyError('Cannot punch in on a holiday or non-working day.');
     }
     if (parts.minutesFromMidnight > schedule.attendanceCutoffMinutes) {
       throw new AttendancePolicyError('Punch-in is not allowed after the attendance cutoff time.');
@@ -456,6 +522,22 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       const date = row.attendanceDate.toISOString().slice(0, 10);
       const current = byDate.get(date) ?? emptyCalendarDay(date);
       byDate.set(date, incrementCalendarDay(current, row.status));
+    }
+    const orgDays = await this.orgCalendar.getDaysInRange(organizationId, query.from, query.to);
+    for (const orgDay of orgDays) {
+      const current = byDate.get(orgDay.date) ?? emptyCalendarDay(orgDay.date);
+      const eventTitle = orgDay.events[0]?.title;
+      byDate.set(orgDay.date, {
+        ...current,
+        organizationDayKind: orgDay.dayKind,
+        organizationDayLabel: organizationDayLabel(orgDay.dayKind, eventTitle),
+      });
+    }
+    for (let d = parseDateOnly(query.from); d <= parseDateOnly(query.to); d.setUTCDate(d.getUTCDate() + 1)) {
+      const dateKey = d.toISOString().slice(0, 10);
+      if (!byDate.has(dateKey)) {
+        byDate.set(dateKey, emptyCalendarDay(dateKey));
+      }
     }
     const days = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
     return { from: query.from, to: query.to, days };
@@ -750,7 +832,12 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     const parts = getZonedParts(now, schedule.timeZone);
     if (parts.minutesFromMidnight < schedule.attendanceCutoffMinutes) return 0;
     const attendanceDate = parseDateOnly(formatDateOnly(parts));
-    if (resolveDayKind(schedule, parts) === 'WEEKLY_OFF') return 0;
+    const attendanceDateKey = formatDateOnly(parts);
+    if (
+      (await this.resolveAttendanceDayKind(organizationId, attendanceDateKey, schedule)) !== 'WORKING'
+    ) {
+      return 0;
+    }
     const employees = await this.prisma.employee.findMany({
       where: { organizationId, employmentStatus: 'ACTIVE', deactivatedAt: null },
       select: { id: true },
@@ -807,7 +894,12 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     const schedule = toScheduleConfig(scheduleRow);
     const parts = getZonedParts(now, schedule.timeZone);
     const officeHours = resolveOfficeHoursForWeekday(schedule, parts.weekday);
-    if (resolveDayKind(schedule, parts) === 'WEEKLY_OFF') return 0;
+    const attendanceDateKey = formatDateOnly(parts);
+    if (
+      (await this.resolveAttendanceDayKind(organizationId, attendanceDateKey, schedule)) !== 'WORKING'
+    ) {
+      return 0;
+    }
     if (parts.minutesFromMidnight < officeHours.endMinutes) return 0;
     const attendanceDate = parseDateOnly(formatDateOnly(parts));
     const rows = await this.prisma.attendanceRecord.findMany({

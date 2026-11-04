@@ -7,11 +7,12 @@ import { cn } from '@/shared/lib/utils';
 import {
   ATTENDANCE_CALENDAR_SURFACE,
   ATTENDANCE_STATUS_VISUAL,
+  attendanceCalendarTodayRingClass,
   CALENDAR_CELL_MAX_STATUS_LINES,
   type AttendanceCalendarStatusKey,
   calendarStatusSlices,
+  resolveAttendanceCalendarDayCardStyle,
 } from '../constants/attendance-calendar-theme';
-import { localTodayKey } from '../utils/calendar-month';
 
 function StatusRow({ label, value, color }: { label: string; value: number; color: string }) {
   return (
@@ -30,11 +31,11 @@ const BOARD_STATUS_TEXT: Record<
   { className: string; label: (n: number) => string }
 > = {
   PRESENT: { className: 'text-[#16A34A]', label: (n) => `Present ${n}` },
-  LATE: { className: 'text-[#CA8A04]', label: (n) => `Late ${n}` },
+  LATE: { className: 'text-[#EA580C]', label: (n) => `Late ${n}` },
   ABSENT: { className: 'text-[#DC2626]', label: (n) => `Absent ${n}` },
   HALF_DAY: { className: 'text-[#9333EA]', label: (n) => `Half Day ${n}` },
   HOLIDAY: { className: 'text-[#64748B]', label: (n) => `Holiday ${n}` },
-  WEEKLY_OFF: { className: 'text-[#64748B]', label: () => 'Weekly Off' },
+  WEEKLY_OFF: { className: 'text-[#6D28D9]', label: () => 'Weekly Off' },
   ON_LEAVE: { className: 'text-[#0284C7]', label: (n) => `On leave ${n}` },
   PENDING: { className: 'text-[#D97706]', label: (n) => `Pending ${n}` },
 };
@@ -59,14 +60,22 @@ function weekdayShortLabel(dateKey: string): string {
   return new Date(`${dateKey}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
 }
 
-function isWeeklyOffDay(summary: AttendanceCalendarDaySummary | null): boolean {
-  if (!summary || summary.total <= 0) return false;
-  return summary.weeklyOff > 0 && summary.weeklyOff === summary.total;
+function isOrgWeeklyOff(summary: AttendanceCalendarDaySummary | null): boolean {
+  return summary?.organizationDayKind === 'WEEKLY_OFF';
 }
 
-function isHolidayDay(summary: AttendanceCalendarDaySummary | null): boolean {
-  if (!summary || summary.total <= 0) return false;
-  return summary.holiday > 0 && summary.holiday === summary.total;
+function isOrgHoliday(summary: AttendanceCalendarDaySummary | null): boolean {
+  const kind = summary?.organizationDayKind;
+  return kind === 'HOLIDAY' || kind === 'OFFICE_CLOSURE';
+}
+
+function isOrgHalfDay(summary: AttendanceCalendarDaySummary | null): boolean {
+  return summary?.organizationDayKind === 'HALF_DAY';
+}
+
+function orgDayPrimaryLabel(summary: AttendanceCalendarDaySummary | null): string {
+  if (!summary) return '';
+  return summary.organizationDayLabel || 'Organisation calendar';
 }
 
 function boardAttendanceLines(
@@ -90,6 +99,7 @@ export function AttendanceCalendarDayCell({
   compact,
   equalGrid,
   boardStyle,
+  orgTodayKey,
   tabIndex,
   onSelect,
 }: {
@@ -100,13 +110,20 @@ export function AttendanceCalendarDayCell({
   compact?: boolean;
   equalGrid?: boolean;
   boardStyle?: boolean;
+  orgTodayKey: string;
   tabIndex: number;
   onSelect: (date: string) => void;
 }) {
   const dayNumber = Number(dateKey.slice(8, 10));
-  const today = localTodayKey();
-  const isToday = dateKey === today;
-  const isFuture = dateKey > today;
+  const isToday = dateKey === orgTodayKey;
+  const isFuture = dateKey > orgTodayKey;
+  const cardStyle = resolveAttendanceCalendarDayCardStyle({
+    dateKey,
+    organizationDayKind: summary?.organizationDayKind,
+    isCurrentMonth,
+    orgTodayKey,
+  });
+
   const primaryKeys = compact || equalGrid || boardStyle ? (['PRESENT', 'LATE', 'ABSENT', 'HALF_DAY'] as const) : null;
   const slices = calendarStatusSlices(summary).filter(
     (slice) => !primaryKeys || (primaryKeys as readonly string[]).includes(slice.key),
@@ -115,22 +132,32 @@ export function AttendanceCalendarDayCell({
   const visible = slices.slice(0, maxLines);
   const hiddenCount = slices.length - visible.length;
   const total = summary?.total ?? 0;
+  const attendanceLines = boardAttendanceLines(summary);
+  const showOrgLabel = summary && (isOrgWeeklyOff(summary) || isOrgHoliday(summary) || isOrgHalfDay(summary));
+
   const tooltipLines =
-    calendarStatusSlices(summary).length > 0
-      ? calendarStatusSlices(summary)
-          .map((slice) => `${ATTENDANCE_STATUS_VISUAL[slice.key].label}: ${slice.value}`)
-          .join(' · ')
-      : isFuture
-        ? 'No records yet'
-        : 'No attendance recorded';
+    showOrgLabel
+      ? `${orgDayPrimaryLabel(summary)}${total > 0 ? ` · ${total} record${total === 1 ? '' : 's'}` : ''}`
+      : calendarStatusSlices(summary).length > 0
+        ? calendarStatusSlices(summary)
+            .map((slice) => `${ATTENDANCE_STATUS_VISUAL[slice.key].label}: ${slice.value}`)
+            .join(' · ')
+        : isFuture
+          ? 'No records yet'
+          : 'No attendance recorded';
+
+  const cellSurfaceClass = cn(
+    'border transition-[box-shadow,transform,background-color] duration-200 ease-out',
+    cardStyle.bg,
+    cardStyle.border,
+    cardStyle.text,
+    attendanceCalendarTodayRingClass(isToday, isSelected),
+    !isSelected && !isToday && 'shadow-sm hover:-translate-y-px hover:shadow-md',
+    isSelected && !isToday && 'shadow-[0_0_0_1px_rgba(139,107,214,0.35),0_4px_12px_rgba(91,53,181,0.12)]',
+  );
 
   if (boardStyle) {
-    const faded = !isCurrentMonth;
     const dayName = weekdayShortLabel(dateKey);
-    const attendanceLines = boardAttendanceLines(summary);
-    const weeklyOffDay = isWeeklyOffDay(summary);
-    const holidayDay = isHolidayDay(summary);
-    const showAttendancePills = total > 0 && !weeklyOffDay && !holidayDay;
 
     return (
       <Tooltip>
@@ -143,43 +170,35 @@ export function AttendanceCalendarDayCell({
             aria-label={`${dateKey}, ${total} records`}
             onClick={() => onSelect(dateKey)}
             className={cn(
-              'flex h-full min-h-[4.75rem] w-full min-w-0 flex-col rounded-lg border border-[#E8E8EF] bg-white p-2 text-left transition-[box-shadow,transform] duration-150',
+              'flex h-full min-h-[4.75rem] w-full min-w-0 flex-col rounded-lg p-2 text-left',
               'focus-visible:ring-2 focus-visible:ring-[#8B6BD6] focus-visible:outline-none',
-              isToday &&
-                'border-[#8B6BD6] shadow-[0_0_0_1px_rgba(139,107,214,0.45),0_0_18px_rgba(91,53,181,0.28)]',
-              isSelected &&
-                !isToday &&
-                'border-[#8B6BD6] shadow-[0_0_0_1px_rgba(139,107,214,0.35),0_4px_12px_rgba(91,53,181,0.12)]',
-              isSelected && isToday && 'ring-2 ring-[#C4B5FD]/40',
-              !isSelected && !isToday && 'shadow-sm hover:-translate-y-px hover:shadow-md',
-              faded && 'opacity-45',
+              cellSurfaceClass,
+              cardStyle.mutedContent && 'opacity-80',
             )}
           >
             <div className="mb-1 flex items-start justify-between gap-1">
-              <span
-                className={cn(
-                  'text-sm font-bold tabular-nums',
-                  isToday ? 'text-[#5B35B5]' : 'text-[#1E293B]',
-                )}
-              >
+              <span className={cn('rounded-md px-1.5 py-0.5 text-sm tabular-nums', cardStyle.dayNumberClass)}>
                 {dayNumber}
               </span>
-              <span className="text-[10px] font-semibold tracking-wide text-[#64748B] uppercase">{dayName}</span>
+              <span className={cn('text-[10px] font-semibold tracking-wide uppercase', cardStyle.text, 'opacity-80')}>
+                {dayName}
+              </span>
             </div>
             <div className="mt-auto flex min-h-0 flex-col gap-0.5 leading-tight">
-              {weeklyOffDay ? (
-                <BoardStatusLine statusKey="WEEKLY_OFF" value={summary!.weeklyOff} />
-              ) : holidayDay ? (
-                <BoardStatusLine statusKey="HOLIDAY" value={summary!.holiday} />
-              ) : showAttendancePills ? (
+              {showOrgLabel ? (
+                <span className={cn('truncate text-[11px] font-semibold', cardStyle.text)}>
+                  {orgDayPrimaryLabel(summary)}
+                </span>
+              ) : null}
+              {attendanceLines.length > 0 ? (
                 attendanceLines.map((line) => (
                   <BoardStatusLine key={line.key} statusKey={line.key} value={line.value} />
                 ))
-              ) : (
+              ) : !showOrgLabel ? (
                 <span className="text-[11px] font-medium text-[#94A3B8]">
                   {isFuture ? 'Upcoming' : 'No records'}
                 </span>
-              )}
+              ) : null}
             </div>
           </button>
         </TooltipTrigger>
@@ -201,33 +220,36 @@ export function AttendanceCalendarDayCell({
           aria-label={`${dateKey}, ${total} records`}
           onClick={() => onSelect(dateKey)}
           className={cn(
-            'group flex w-full min-w-0 flex-col border-b border-r text-left transition-[background-color,box-shadow,transform] duration-150 last:border-r-0',
+            'group flex w-full min-w-0 flex-col text-left last:border-r-0',
             equalGrid ? 'aspect-square min-h-0 p-2' : compact ? 'min-h-[3.75rem] p-1.5' : 'min-h-[6.25rem] p-2',
+            'border-b border-r',
             'focus-visible:ring-2 focus-visible:ring-[#8B6BD6] focus-visible:outline-none',
-            !isSelected && 'hover:-translate-y-px hover:bg-[#FAFAFF] hover:shadow-sm',
-            !isCurrentMonth && 'opacity-70',
+            cellSurfaceClass,
+            cardStyle.mutedContent && 'opacity-75',
           )}
           style={{
             borderColor: ATTENDANCE_CALENDAR_SURFACE.border,
-            backgroundColor: isSelected
-              ? ATTENDANCE_CALENDAR_SURFACE.selectedBg
-              : isCurrentMonth
-                ? ATTENDANCE_CALENDAR_SURFACE.gridBg
-                : ATTENDANCE_CALENDAR_SURFACE.mutedCell,
-            boxShadow: isSelected ? `inset 0 0 0 2px ${ATTENDANCE_CALENDAR_SURFACE.selectedRing}` : undefined,
+            boxShadow:
+              isSelected && !isToday
+                ? `inset 0 0 0 2px ${ATTENDANCE_CALENDAR_SURFACE.selectedRing}`
+                : undefined,
           }}
         >
           <span
             className={cn(
-              'mb-1 flex shrink-0 items-center justify-center rounded-md font-semibold tabular-nums transition-colors',
+              'mb-1 flex shrink-0 items-center justify-center rounded-md tabular-nums transition-colors',
               equalGrid ? 'size-7 text-xs' : compact ? 'size-6 text-[11px]' : 'mb-1.5 size-7 text-xs',
-              isToday
-                ? 'border border-[#5B35B5] bg-[#F3EEFF] text-[#5B35B5]'
-                : 'bg-[#F1F2F5] text-[#293244] group-hover:bg-white',
+              cardStyle.dayNumberClass,
             )}
           >
             {dayNumber}
           </span>
+
+          {showOrgLabel ? (
+            <span className={cn('mt-auto text-[9px] font-semibold leading-snug', cardStyle.text)}>
+              {orgDayPrimaryLabel(summary)}
+            </span>
+          ) : null}
 
           {total > 0 ? (
             <div className="grid min-h-0 min-w-0 flex-1 content-start gap-0.5 overflow-hidden">
@@ -241,11 +263,11 @@ export function AttendanceCalendarDayCell({
                 <span className="text-[9px] font-medium text-[#64748B]">+{hiddenCount} more</span>
               ) : null}
             </div>
-          ) : (
+          ) : !showOrgLabel ? (
             <span className="text-muted-foreground/80 mt-auto text-[9px] leading-snug">
               {isFuture ? 'Upcoming' : 'No records'}
             </span>
-          )}
+          ) : null}
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-xs text-xs">

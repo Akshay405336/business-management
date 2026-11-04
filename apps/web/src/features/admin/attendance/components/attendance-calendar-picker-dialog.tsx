@@ -28,7 +28,7 @@ export function AttendanceCalendarPickerDialog({
   onDateApplied: () => void;
 }) {
   const ctx = useAttendanceRecordsContext();
-  const selectedDate = ctx.selectedCalendarDate || ctx.date;
+  const selectedDate = ctx.datePickerValue || ctx.selectedCalendarDate;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

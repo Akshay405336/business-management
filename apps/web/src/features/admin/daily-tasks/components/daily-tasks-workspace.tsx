@@ -26,6 +26,7 @@ import {
   fetchDailyTaskWorkflowStages,
   listDailyTasks,
 } from '../api/daily-tasks';
+import type { OrgCalendarMonthDay } from '@techwin/contracts';
 import type {
   DailyTaskBoardResponse,
   DailyTaskListItem,
@@ -38,8 +39,12 @@ import {
   filterTasksByStatusBucket,
   type TaskStatusBucket,
 } from '../utils/task-metrics';
+import { useAttendanceOrgTimeZone } from '@/features/admin/attendance/hooks/use-attendance-org-timezone';
+import { todayKeyInTimeZone } from '@/features/admin/attendance/utils/calendar-month';
+import { useOrgCalendarMonth } from '@/features/admin/org-calendar/hooks/use-org-calendar-month';
 import { DailyTaskAssignDialog } from './daily-task-assign-dialog';
 import { DailyTaskCalendarView } from './daily-task-calendar-view';
+import { DailyTaskOrgDayBadge } from './daily-task-org-day-badge';
 import { DailyTaskDetailDrawer } from './daily-task-detail-drawer';
 import { DailyTaskKanbanBoard } from './daily-task-kanban-board';
 import { DailyTaskListView } from './daily-task-list-view';
@@ -113,6 +118,28 @@ export function DailyTasksWorkspace({
     'ALL' | 'ASSIGNED' | 'UNASSIGNED'
   >('ALL');
   const [calendarWorkflowStageId, setCalendarWorkflowStageId] = useState('');
+
+  const orgTimeZone = useAttendanceOrgTimeZone();
+  const orgTodayKey = useMemo(() => todayKeyInTimeZone(orgTimeZone), [orgTimeZone]);
+
+  const orgMonthAnchor = view === 'calendar' ? calendarAnchor : assignDate;
+  const orgMonthParts = useMemo(() => {
+    const d = new Date(`${orgMonthAnchor}T12:00:00`);
+    return { year: d.getFullYear(), month: d.getMonth() + 1 };
+  }, [orgMonthAnchor]);
+  const { data: orgCalendarMonth, loading: orgCalendarLoading } = useOrgCalendarMonth({
+    year: orgMonthParts.year,
+    month: orgMonthParts.month,
+    enabled: view !== 'list',
+  });
+  const orgDaysByDate = useMemo(() => {
+    const map = new Map<string, OrgCalendarMonthDay>();
+    for (const day of orgCalendarMonth?.days ?? []) {
+      map.set(day.date, day);
+    }
+    return map;
+  }, [orgCalendarMonth]);
+  const orgDayForAssignDate = orgDaysByDate.get(assignDate);
 
   useEffect(() => {
     setCalendarAnchor(assignDate);
@@ -384,6 +411,11 @@ export function DailyTasksWorkspace({
                     >
                       <ChevronRight className="size-4" aria-hidden="true" />
                     </Button>
+                    <DailyTaskOrgDayBadge
+                      dateKey={assignDate}
+                      day={orgDayForAssignDate}
+                      orgTodayKey={orgTodayKey}
+                    />
                   </>
                 ) : null}
                 <div className="min-w-0 flex-1 basis-[10rem]">
@@ -572,7 +604,9 @@ export function DailyTasksWorkspace({
                 anchorDate={calendarAnchor}
                 selectedDate={assignDate}
                 tasks={calendarTasks}
-                loading={calendarLoading}
+                orgDaysByDate={orgDaysByDate}
+                orgTodayKey={orgTodayKey}
+                loading={calendarLoading || orgCalendarLoading}
                 onAnchorChange={setCalendarAnchor}
                 onSelectDate={openDailyTasksForDate}
               />

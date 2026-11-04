@@ -75,6 +75,14 @@ export const PERMISSION_KEYS = [
   'attendance.correct_records',
   'attendance.manage_devices',
   'attendance.view_audit',
+  'calendar.view',
+  'calendar.view_all',
+  'calendar.create',
+  'calendar.update',
+  'calendar.delete',
+  'calendar.manage_working_days',
+  'calendar.manage_holidays',
+  'calendar.export',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -320,6 +328,54 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
     action: 'View audit',
     description: 'View attendance corrections and security events.',
   },
+  {
+    key: 'calendar.view',
+    module: 'Calendar',
+    action: 'View',
+    description: 'View organisation calendar (read-only).',
+  },
+  {
+    key: 'calendar.view_all',
+    module: 'Calendar',
+    action: 'View all',
+    description: 'View full organisation calendar and event details.',
+  },
+  {
+    key: 'calendar.create',
+    module: 'Calendar',
+    action: 'Create',
+    description: 'Create calendar events and holidays.',
+  },
+  {
+    key: 'calendar.update',
+    module: 'Calendar',
+    action: 'Update',
+    description: 'Update calendar events and holidays.',
+  },
+  {
+    key: 'calendar.delete',
+    module: 'Calendar',
+    action: 'Delete',
+    description: 'Delete calendar events and holidays.',
+  },
+  {
+    key: 'calendar.manage_working_days',
+    module: 'Calendar',
+    action: 'Manage working days',
+    description: 'Configure weekly working schedules (via attendance settings).',
+  },
+  {
+    key: 'calendar.manage_holidays',
+    module: 'Calendar',
+    action: 'Manage holidays',
+    description: 'Manage organisation holidays and closures.',
+  },
+  {
+    key: 'calendar.export',
+    module: 'Calendar',
+    action: 'Export',
+    description: 'Export calendar and holiday lists.',
+  },
 ] as const;
 
 export const PERMISSION_KEY_SET: ReadonlySet<string> = new Set(PERMISSION_KEYS);
@@ -352,6 +408,7 @@ export const EMPLOYEE_PORTAL_PERMISSIONS: readonly PermissionKey[] = [
   'attendance.punch_out',
   'attendance.view_summary',
   'attendance.manage_devices',
+  'calendar.view',
 ];
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE_KEYS)[keyof typeof SYSTEM_ROLE_KEYS];

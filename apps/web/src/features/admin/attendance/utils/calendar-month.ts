@@ -47,6 +47,17 @@ export function localTodayKey(): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Calendar date key (YYYY-MM-DD) for the organisation attendance timezone. */
+export function todayKeyInTimeZone(timeZone: string, instant: Date = new Date()): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(instant);
+}
+
 function dateKeyFromParts(year: number, monthIndex: number, day: number): string {
   const m = String(monthIndex + 1).padStart(2, '0');
   const d = String(day).padStart(2, '0');
@@ -57,15 +68,15 @@ export type CalendarBoardCell = { readonly dateKey: string; readonly inMonth: bo
 
 /** Six full weeks (42 cells) with adjacent-month dates for a stable, scroll-free board. */
 export function monthGridBoardWeeks(year: number, monthIndex: number): CalendarBoardCell[][] {
-  const first = new Date(year, monthIndex, 1);
-  const startPad = (first.getDay() + 6) % 7;
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const first = new Date(Date.UTC(year, monthIndex, 1));
+  const startPad = (first.getUTCDay() + 6) % 7;
+  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
   const cells: CalendarBoardCell[] = [];
 
-  const prevMonthEnd = new Date(year, monthIndex, 0);
-  const prevYear = prevMonthEnd.getFullYear();
-  const prevMonthIndex = prevMonthEnd.getMonth();
-  const prevMonthDays = prevMonthEnd.getDate();
+  const prevMonthEnd = new Date(Date.UTC(year, monthIndex, 0));
+  const prevYear = prevMonthEnd.getUTCFullYear();
+  const prevMonthIndex = prevMonthEnd.getUTCMonth();
+  const prevMonthDays = prevMonthEnd.getUTCDate();
 
   for (let i = startPad - 1; i >= 0; i -= 1) {
     const day = prevMonthDays - i;
@@ -87,7 +98,7 @@ export function monthGridBoardWeeks(year: number, monthIndex: number): CalendarB
   while (cells.length < 42) {
     cells.push({ dateKey: dateKeyFromParts(nextYear, nextMonthIndex, nextDay), inMonth: false });
     nextDay += 1;
-    if (nextDay > new Date(nextYear, nextMonthIndex + 1, 0).getDate()) {
+    if (nextDay > new Date(Date.UTC(nextYear, nextMonthIndex + 1, 0)).getUTCDate()) {
       nextDay = 1;
       nextMonthIndex += 1;
       if (nextMonthIndex > 11) {

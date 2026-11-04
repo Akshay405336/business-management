@@ -4,6 +4,7 @@ import { DatabaseModule } from '../../infrastructure/database/database.module.js
 import { AuthModule } from '../auth/index.js';
 import { CrmModule } from '../crm/index.js';
 import { OrgAccessModule } from '../org-access/index.js';
+import { OrganizationCalendarModule } from '../organization-calendar/index.js';
 import { CreateAttendanceRecordHandler } from './application/create-record/create-record.handler.js';
 import { CorrectAttendanceRecordHandler } from './application/correct-record/correct-record.handler.js';
 import { GetAttendanceCalendarHandler } from './application/get-calendar/get-calendar.handler.js';
@@ -53,7 +54,7 @@ const attendanceHandlers = [
 ] as const;
 
 @Module({
-  imports: [DatabaseModule, CacheModule, AuthModule, CrmModule, OrgAccessModule],
+  imports: [DatabaseModule, CacheModule, AuthModule, CrmModule, OrgAccessModule, OrganizationCalendarModule],
   controllers: [AttendanceController],
   providers: [
     ...attendancePersistenceProviders,

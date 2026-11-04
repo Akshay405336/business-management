@@ -1,4 +1,5 @@
 import { API_PREFIX } from './http.js';
+import type { OrgCalendarDayKind } from './org-calendar.js';
 
 export const ATTENDANCE_ROUTES = {
   settings: `${API_PREFIX}/attendance/settings`,
@@ -123,6 +124,9 @@ export interface AttendanceCalendarDaySummary {
   readonly onLeave: number;
   readonly pending: number;
   readonly total: number;
+  /** Authoritative organisation calendar classification for this date. */
+  readonly organizationDayKind: OrgCalendarDayKind;
+  readonly organizationDayLabel: string;
 }
 
 export interface AttendanceCalendarResponse {

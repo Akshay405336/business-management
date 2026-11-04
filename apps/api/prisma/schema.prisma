@@ -202,6 +202,7 @@ model Organization {
   attendanceDevices            AttendanceDevice[]
   attendanceCorrections        AttendanceCorrection[]
   attendanceSecurityEvents     AttendanceSecurityEvent[]
+  organizationCalendarEvents   OrganizationCalendarEvent[]
   whatsappChannels             WhatsAppChannel[]
   whatsappWebhookEvents        WhatsAppWebhookEvent[]
   whatsappContacts             WhatsAppContact[]
@@ -1863,4 +1864,50 @@ model AttendanceSecurityEvent {
 
   @@index([organizationId, createdAt(sort: Desc)], map: "att_sec_org_created_idx")
   @@map("attendance_security_events")
+}
+
+enum OrganizationCalendarEventType {
+  PUBLIC_HOLIDAY
+  COMPANY_HOLIDAY
+  FESTIVAL_REGIONAL
+  WEEKLY_OFF
+  SPECIAL_WORKING_DAY
+  HALF_WORKING_DAY
+  OFFICE_CLOSURE
+  COMPANY_EVENT
+  OPTIONAL_HOLIDAY
+  CUSTOM
+}
+
+enum OrganizationCalendarRecurrence {
+  NONE
+  ANNUAL
+}
+
+model OrganizationCalendarEvent {
+  id                    String                         @id @db.Uuid
+  organizationId        String                         @map("organization_id") @db.Uuid
+  title                 String                         @db.VarChar(200)
+  description           String                         @default("") @db.VarChar(2000)
+  eventType             OrganizationCalendarEventType  @map("event_type")
+  startDate             DateTime                       @map("start_date") @db.Date
+  endDate               DateTime                       @map("end_date") @db.Date
+  isFullDay             Boolean                        @default(true) @map("is_full_day")
+  startTimeMinutes      Int?                           @map("start_time_minutes")
+  endTimeMinutes        Int?                           @map("end_time_minutes")
+  color                 String                         @default("#64748b") @db.VarChar(7)
+  isActive              Boolean                        @default(true) @map("is_active")
+  appliesToAllEmployees Boolean                        @default(true) @map("applies_to_all_employees")
+  employeeIds           Json                           @default("[]") @map("employee_ids")
+  recurrence            OrganizationCalendarRecurrence @default(NONE)
+  createdByAdminId      String                         @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId      String?                        @map("updated_by_admin_id") @db.Uuid
+  createdAt             DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, startDate, endDate], map: "org_cal_evt_org_range_idx")
+  @@index([organizationId, eventType, startDate], map: "org_cal_evt_org_type_date_idx")
+  @@map("organization_calendar_events")
 }

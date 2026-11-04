@@ -3,8 +3,14 @@
 import type { AttendanceRecordDetail, AttendanceRecordItem } from '@techwin/contracts';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdminToast } from '@/features/admin/components/toast';
-import { fetchAttendanceRecordDetail, listAttendanceRecords } from '@/features/attendance/api/attendance';
+import {
+  fetchAttendanceRecordDetail,
+  fetchAttendanceSettings,
+  listAttendanceRecords,
+} from '@/features/attendance/api/attendance';
 import { isAbortError } from '@/shared/lib/abort-error';
+import { subscribeOrgCalendarSync } from '@/features/admin/org-calendar/lib/org-calendar-sync';
+import { localTodayKey, todayKeyInTimeZone } from '../utils/calendar-month';
 import type { AttendanceStatusFilter } from '../constants/attendance-status-filter-options';
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -28,27 +34,55 @@ export function useAttendanceRecordsList(active: boolean) {
   const [search, setSearch] = useState('');
   const [date, setDate] = useState('');
   const [statusFilter, setStatusFilter] = useState<AttendanceStatusFilter>('ALL');
-  const [visibleMonth, setVisibleMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [visibleMonth, setVisibleMonth] = useState(() => localTodayKey().slice(0, 7));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
   const [calendarRefreshToken, setCalendarRefreshToken] = useState(0);
+  const [orgTimeZone, setOrgTimeZone] = useState<string | null>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const orgTodayKey = useMemo(
+    () => (orgTimeZone ? todayKeyInTimeZone(orgTimeZone) : null),
+    [orgTimeZone],
+  );
+
+  const queryDate = date || orgTodayKey || '';
+
   const filtersActive =
-    search.trim().length > 0 || date.length > 0 || statusFilter !== 'ALL';
+    search.trim().length > 0 ||
+    statusFilter !== 'ALL' ||
+    (orgTodayKey != null && queryDate !== orgTodayKey);
 
   const queryKey = useMemo(
     () => ({
       page,
       pageSize,
       search: search.trim() || undefined,
-      date: date || undefined,
+      date: queryDate || undefined,
       status: statusFilter === 'ALL' ? undefined : statusFilter,
     }),
-    [page, pageSize, search, date, statusFilter],
+    [page, pageSize, search, queryDate, statusFilter],
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAttendanceSettings().then((settings) => {
+      if (cancelled) return;
+      setOrgTimeZone(settings.current?.timeZone?.trim() || 'UTC');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!orgTodayKey || date !== '') return;
+    setDate(orgTodayKey);
+    setSelectedCalendarDate(orgTodayKey);
+    setVisibleMonth(orgTodayKey.slice(0, 7));
+  }, [date, orgTodayKey]);
+
   const load = useCallback(async () => {
-    if (!active) return;
+    if (!active || !queryDate) return;
     setLoading(true);
     setError(null);
     try {
@@ -60,11 +94,15 @@ export function useAttendanceRecordsList(active: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [active, queryKey]);
+  }, [active, queryDate, queryKey]);
 
   useEffect(() => {
     if (!active) {
       setLoading(false);
+      return;
+    }
+    if (!queryDate) {
+      setLoading(true);
       return;
     }
     const controller = new AbortController();
@@ -84,7 +122,14 @@ export function useAttendanceRecordsList(active: boolean) {
       }
     })();
     return () => controller.abort();
-  }, [active, queryKey]);
+  }, [active, queryDate, queryKey]);
+
+  useEffect(() => {
+    if (!active) return;
+    return subscribeOrgCalendarSync(() => {
+      setCalendarRefreshToken((token) => token + 1);
+    });
+  }, [active]);
 
   useEffect(() => {
     if (!active) return;
@@ -123,11 +168,15 @@ export function useAttendanceRecordsList(active: boolean) {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     setSearchDraft('');
     setSearch('');
-    setDate('');
+    const resetDate = orgTodayKey ?? date;
+    setDate(resetDate);
     setStatusFilter('ALL');
-    setSelectedCalendarDate('');
+    if (resetDate) {
+      setSelectedCalendarDate(resetDate);
+      setVisibleMonth(resetDate.slice(0, 7));
+    }
     setPage(1);
-  }, []);
+  }, [date, orgTodayKey]);
 
   const refreshAll = useCallback(() => {
     void load();
@@ -168,6 +217,8 @@ export function useAttendanceRecordsList(active: boolean) {
     searchDraft,
     setSearchDraft,
     date,
+    datePickerValue: queryDate,
+    orgTodayKey,
     setDateFilter,
     statusFilter,
     setStatusFilter: setStatusFilterAndResetPage,

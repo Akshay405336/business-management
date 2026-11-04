@@ -22,7 +22,8 @@ export function AttendanceHeaderActions({ onShowRecords }: { onShowRecords: () =
   const canAdd = has('attendance.correct_records');
   const [addOpen, setAddOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const dateFilterActive = records.date.length > 0;
+  const dateFilterActive =
+    records.orgTodayKey != null && records.datePickerValue !== records.orgTodayKey;
 
   return (
     <>
@@ -62,7 +63,7 @@ export function AttendanceHeaderActions({ onShowRecords }: { onShowRecords: () =
         <AttendanceAddRecordDialog
           open={addOpen}
           onOpenChange={setAddOpen}
-          defaultDate={records.date || records.selectedCalendarDate || undefined}
+          defaultDate={records.datePickerValue || undefined}
           onSaved={() => records.refreshAll()}
         />
       ) : null}

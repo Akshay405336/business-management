@@ -15,6 +15,7 @@ export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, readonly Permissio
   '/admin/roles': ['roles.read'],
   '/admin/employees': ['employees.read'],
   '/admin/attendance': ['attendance.view_all', 'attendance.manage_settings'],
+  '/admin/calendar': ['calendar.view', 'calendar.view_all', 'calendar.manage_holidays'],
   '/admin/pipeline': ['leads.read'],
   '/admin/leads': ['leads.read'],
   '/admin/packages': ['settings.read'],

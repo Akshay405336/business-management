@@ -1,3 +1,4 @@
+import type { OrgCalendarDayKind } from '@techwin/contracts';
 import type { AttendanceScheduleConfig } from '../types/attendance-schedule.types.js';
 import type { AttendanceStatus } from '../enums/attendance-status.enum.js';
 
@@ -78,6 +79,8 @@ export type AttendanceCalendarDaySummary = {
   readonly onLeave: number;
   readonly pending: number;
   readonly total: number;
+  readonly organizationDayKind: OrgCalendarDayKind;
+  readonly organizationDayLabel: string;
 };
 
 export type AttendanceCalendarResponse = {
