@@ -26,6 +26,7 @@ import type {
   OrgCalendarMonthQuery,
 } from '../../../../domain/types/org-calendar.types.js';
 import {
+  formatDateOnly as formatZonedDateOnly,
   getZonedParts,
 } from '../../../../../attendance/domain/services/attendance-time.service.js';
 import {
@@ -145,7 +146,7 @@ export class PrismaOrgCalendarRepository implements OrgCalendarRepository {
         color: input.color || defaultColorForType(input.eventType),
         isActive: input.isActive,
         appliesToAllEmployees: input.appliesToAllEmployees,
-        employeeIds: input.employeeIds as Prisma.InputJsonValue,
+        employeeIds: input.employeeIds,
         recurrence: input.recurrence,
         updatedByAdminId: adminId,
       },
@@ -427,6 +428,16 @@ export class PrismaOrgCalendarRepository implements OrgCalendarRepository {
     return expanded;
   }
 
+  async resolveOrganizationTodayKey(organizationId: string): Promise<string> {
+    const schedule = await this.prisma.attendanceSchedule.findFirst({
+      where: { organizationId },
+      orderBy: { effectiveFrom: 'desc' },
+      select: { timeZone: true },
+    });
+    const timeZone = schedule?.timeZone?.trim() || 'UTC';
+    return formatZonedDateOnly(getZonedParts(new Date(), timeZone));
+  }
+
   private toCreateData(
     organizationId: string,
     adminId: string,
@@ -446,7 +457,7 @@ export class PrismaOrgCalendarRepository implements OrgCalendarRepository {
       color: input.color || defaultColorForType(input.eventType),
       isActive: input.isActive,
       appliesToAllEmployees: input.appliesToAllEmployees,
-      employeeIds: input.employeeIds as Prisma.InputJsonValue,
+      employeeIds: input.employeeIds,
       recurrence: input.recurrence,
       createdByAdminId: adminId,
       updatedByAdminId: adminId,

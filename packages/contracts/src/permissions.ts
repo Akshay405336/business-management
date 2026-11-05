@@ -83,6 +83,23 @@ export const PERMISSION_KEYS = [
   'calendar.manage_working_days',
   'calendar.manage_holidays',
   'calendar.export',
+  'leave.types.read',
+  'leave.types.create',
+  'leave.types.update',
+  'leave.types.manage',
+  'leave.config.read',
+  'leave.config.manage',
+  'leave.allocations.read',
+  'leave.allocations.manage',
+  'leave.balances.read',
+  'leave.balances.read_own',
+  'leave.balances.adjust',
+  'leave.requests.create',
+  'leave.requests.read_own',
+  'leave.requests.read_all',
+  'leave.requests.approve',
+  'leave.requests.reject',
+  'leave.requests.cancel',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -376,6 +393,108 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
     action: 'Export',
     description: 'Export calendar and holiday lists.',
   },
+  {
+    key: 'leave.types.read',
+    module: 'Leave',
+    action: 'View leave types',
+    description: 'View organization leave type definitions.',
+  },
+  {
+    key: 'leave.types.create',
+    module: 'Leave',
+    action: 'Create leave types',
+    description: 'Create new leave types.',
+  },
+  {
+    key: 'leave.types.update',
+    module: 'Leave',
+    action: 'Edit leave types',
+    description: 'Update leave type configuration.',
+  },
+  {
+    key: 'leave.types.manage',
+    module: 'Leave',
+    action: 'Manage leave types',
+    description: 'Activate, deactivate or delete leave types when safe.',
+  },
+  {
+    key: 'leave.config.read',
+    module: 'Leave',
+    action: 'View annual configuration',
+    description: 'View yearly leave configuration and status.',
+  },
+  {
+    key: 'leave.config.manage',
+    module: 'Leave',
+    action: 'Manage annual configuration',
+    description: 'Create, update and activate yearly leave configuration.',
+  },
+  {
+    key: 'leave.allocations.read',
+    module: 'Leave',
+    action: 'View allocations',
+    description: 'View yearly leave allocations per leave type.',
+  },
+  {
+    key: 'leave.allocations.manage',
+    module: 'Leave',
+    action: 'Manage allocations',
+    description: 'Create and update yearly leave allocations.',
+  },
+  {
+    key: 'leave.balances.read',
+    module: 'Leave',
+    action: 'View employee balances',
+    description: 'View employee leave balances across the organization.',
+  },
+  {
+    key: 'leave.balances.read_own',
+    module: 'Leave',
+    action: 'View own balances',
+    description: 'View personal leave balances.',
+  },
+  {
+    key: 'leave.balances.adjust',
+    module: 'Leave',
+    action: 'Adjust balances',
+    description: 'Apply manual leave balance credits or debits.',
+  },
+  {
+    key: 'leave.requests.create',
+    module: 'Leave',
+    action: 'Apply for leave',
+    description: 'Submit personal leave applications.',
+  },
+  {
+    key: 'leave.requests.read_own',
+    module: 'Leave',
+    action: 'View own requests',
+    description: 'View personal leave request history.',
+  },
+  {
+    key: 'leave.requests.read_all',
+    module: 'Leave',
+    action: 'View all requests',
+    description: 'View leave requests for all employees.',
+  },
+  {
+    key: 'leave.requests.approve',
+    module: 'Leave',
+    action: 'Approve leave',
+    description: 'Approve pending leave requests.',
+  },
+  {
+    key: 'leave.requests.reject',
+    module: 'Leave',
+    action: 'Reject leave',
+    description: 'Reject pending leave requests.',
+  },
+  {
+    key: 'leave.requests.cancel',
+    module: 'Leave',
+    action: 'Cancel leave',
+    description: 'Cancel pending or approved leave requests when allowed.',
+  },
 ] as const;
 
 export const PERMISSION_KEY_SET: ReadonlySet<string> = new Set(PERMISSION_KEYS);
@@ -409,6 +528,10 @@ export const EMPLOYEE_PORTAL_PERMISSIONS: readonly PermissionKey[] = [
   'attendance.view_summary',
   'attendance.manage_devices',
   'calendar.view',
+  'leave.requests.create',
+  'leave.requests.read_own',
+  'leave.requests.cancel',
+  'leave.balances.read_own',
 ];
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE_KEYS)[keyof typeof SYSTEM_ROLE_KEYS];

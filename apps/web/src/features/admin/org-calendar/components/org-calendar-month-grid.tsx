@@ -22,6 +22,8 @@ export function OrgCalendarMonthGrid({
   canManageDate = false,
   orgTodayKey: orgTodayKeyProp,
   compact,
+  canSelectDate,
+  disabledDateTitle,
 }: {
   year: number;
   monthIndex: number;
@@ -32,6 +34,8 @@ export function OrgCalendarMonthGrid({
   canManageDate?: boolean;
   orgTodayKey?: string;
   compact?: boolean;
+  canSelectDate?: (dateKey: string, day: OrgCalendarMonthDay | undefined) => boolean;
+  disabledDateTitle?: (dateKey: string, day: OrgCalendarMonthDay | undefined) => string | undefined;
 }) {
   const orgTodayKey = orgTodayKeyProp ?? localTodayKey();
   const weeks = monthGridBoardWeeks(year, monthIndex);
@@ -62,6 +66,11 @@ export function OrgCalendarMonthGrid({
           const visible = events.slice(0, 2);
           const more = events.length - visible.length;
           const primaryTitle = events[0]?.title;
+          const selectable = canSelectDate ? canSelectDate(cell.dateKey, day) : true;
+          const disabledTitle = !selectable
+            ? (disabledDateTitle?.(cell.dateKey, day) ??
+              'This date is not available for leave selection.')
+            : undefined;
 
           return (
             <div
@@ -75,19 +84,27 @@ export function OrgCalendarMonthGrid({
               <div
                 className={cn(
                   'relative flex h-full flex-col rounded-lg border p-1.5 text-left transition duration-200 sm:rounded-xl sm:p-2',
-                  'shadow-sm hover:-translate-y-px hover:shadow-md',
+                  selectable && 'shadow-sm hover:-translate-y-px hover:shadow-md',
+                  !selectable && 'cursor-not-allowed opacity-55 saturate-75',
                   card.bg,
                   card.border,
                   card.text,
                   attendanceCalendarTodayRingClass(isToday, isSelected),
                   isSelected && !isToday && 'ring-2 ring-[#8B6BD6] ring-inset',
                 )}
+                title={disabledTitle}
               >
                 <button
                   type="button"
                   className="absolute inset-0 z-0 rounded-xl"
-                  aria-label={`Open ${cell.dateKey}`}
-                  onClick={() => onSelectDate(cell.dateKey)}
+                  aria-label={
+                    selectable ? `Select ${cell.dateKey}` : `Unavailable: ${cell.dateKey}`
+                  }
+                  aria-disabled={!selectable}
+                  disabled={!selectable}
+                  onClick={() => {
+                    if (selectable) onSelectDate(cell.dateKey);
+                  }}
                 />
                 {canManageDate && onManageDate ? (
                   <button

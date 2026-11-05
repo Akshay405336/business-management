@@ -15,6 +15,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { WhatsAppModule } from './modules/whatsapp/index.js';
 import { AttendanceModule } from './modules/attendance/index.js';
 import { OrganizationCalendarModule } from './modules/organization-calendar/index.js';
+import { LeaveModule } from './modules/leave/index.js';
 import { TenantContextModule } from './platform/tenant-context/tenant-context.module.js';
 
 @Module({
@@ -34,6 +35,7 @@ import { TenantContextModule } from './platform/tenant-context/tenant-context.mo
     WhatsAppModule,
     AttendanceModule,
     OrganizationCalendarModule,
+    LeaveModule,
   ],
 })
 export class AppModule implements NestModule {

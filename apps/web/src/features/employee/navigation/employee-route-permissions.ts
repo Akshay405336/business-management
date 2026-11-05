@@ -6,6 +6,12 @@ export const EMPLOYEE_ROUTE_PERMISSIONS: Readonly<Record<string, readonly Permis
   '/employee/daily-tasks': ['tasks.read'],
   '/employee/attendance': ['attendance.view_own'],
   '/employee/calendar': ['calendar.view'],
+  '/employee/leave': [
+    'leave.requests.create',
+    'leave.requests.read_own',
+    'leave.requests.cancel',
+    'leave.balances.read_own',
+  ],
 };
 
 function normalizePath(pathname: string): string {

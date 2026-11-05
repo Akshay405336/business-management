@@ -100,10 +100,10 @@ function formatMinutesLabel(minutes: number): string {
 
 function readOnlyScheduleFallback(
   dateKey: string | null,
-  day: OrgCalendarMonthDay | undefined,
+  dayKind: OrgCalendarMonthDay['dayKind'] | undefined,
 ): string {
   if (!dateKey) return 'Office schedule not available.';
-  const kind = day?.dayKind;
+  const kind = dayKind;
   if (kind === 'WEEKLY_OFF') return 'Weekly off per organisation office schedule.';
   if (kind === 'HOLIDAY' || kind === 'NON_WORKING') {
     return 'Non-working day per organisation calendar.';
@@ -172,6 +172,7 @@ export function OrgCalendarDateManageDialog({
   );
 
   const halfDayDurationMinutes = Math.max(0, time12ToMinutes(endTime) - time12ToMinutes(startTime));
+  const dayKind = day?.dayKind;
 
   useEffect(() => {
     if (!open || !dateKey || !day) return;
@@ -195,7 +196,7 @@ export function OrgCalendarDateManageDialog({
       .then((res) => {
         if (cancelled) return;
         if (!dateKey || !res.current) {
-          setScheduleLine(readOnlyScheduleFallback(dateKey, day));
+          setScheduleLine(readOnlyScheduleFallback(dateKey, dayKind));
           setMinHalfDayMinutes(null);
           return;
         }
@@ -220,13 +221,13 @@ export function OrgCalendarDateManageDialog({
       })
       .catch(() => {
         if (cancelled) return;
-        setScheduleLine(readOnlyScheduleFallback(dateKey, day));
+        setScheduleLine(readOnlyScheduleFallback(dateKey, dayKind));
         setMinHalfDayMinutes(null);
       });
     return () => {
       cancelled = true;
     };
-  }, [open, dateKey, day]);
+  }, [open, dateKey, dayKind]);
 
   useEffect(() => {
     if (!open || classificationEvents.length > 0) return;

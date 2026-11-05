@@ -45,7 +45,13 @@ export const orgCalendarEventBodySchema = z
   .refine(
     (v) => {
       if (v.isFullDay) return true;
-      return v.startTimeMinutes != null && v.endTimeMinutes != null && v.endTimeMinutes > v.startTimeMinutes;
+      return (
+        v.startTimeMinutes !== null &&
+        v.startTimeMinutes !== undefined &&
+        v.endTimeMinutes !== null &&
+        v.endTimeMinutes !== undefined &&
+        v.endTimeMinutes > v.startTimeMinutes
+      );
     },
     { message: 'Partial-day events require valid start and end times.', path: ['startTimeMinutes'] },
   )
@@ -119,8 +125,14 @@ export function parseOrgCalendarHolidaysQuery(raw: Record<string, unknown>): {
   const page = Math.max(1, Number(raw.page ?? 1) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(raw.pageSize ?? 25) || 25));
   const year =
-    raw.year != null && raw.year !== '' ? Number(raw.year) : undefined;
-  if (year != null && (!Number.isInteger(year) || year < 2000 || year > 2100)) {
+    raw.year !== null && raw.year !== undefined && raw.year !== ''
+      ? Number(raw.year)
+      : undefined;
+  if (
+    year !== null &&
+    year !== undefined &&
+    (!Number.isInteger(year) || year < 2000 || year > 2100)
+  ) {
     throw new Error('Invalid year.');
   }
   const eventTypes =

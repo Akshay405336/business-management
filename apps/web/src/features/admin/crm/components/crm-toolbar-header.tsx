@@ -24,6 +24,7 @@ export function CrmToolbarHeader({
   titleSectionClassName,
   descriptionClassName,
   layout = 'inline',
+  descriptionTruncate = false,
   toolbarRowClassName,
   headerRowClassName,
   bottomRow,
@@ -36,6 +37,8 @@ export function CrmToolbarHeader({
   descriptionClassName?: string;
   /** `stacked`: title row, then full-width toolbar row. */
   layout?: 'inline' | 'stacked';
+  /** Description below title; single-line ellipsis when space is tight. Toolbar stays on the same row. */
+  descriptionTruncate?: boolean;
   toolbarRowClassName?: string;
   /** Override the title + toolbar flex row (e.g. `flex-nowrap`). */
   headerRowClassName?: string;
@@ -46,14 +49,21 @@ export function CrmToolbarHeader({
     <div
       className={cn(
         bottomRow || layout !== 'stacked'
-          ? TITLE_SECTION_CLASS
+          ? descriptionTruncate
+            ? 'flex min-w-0 flex-1 flex-col overflow-hidden sm:basis-auto'
+            : TITLE_SECTION_CLASS
           : 'min-w-0 w-full max-w-full',
         titleSectionClassName,
       )}
     >
       <h1 className="type-page-title">{title}</h1>
       <p
-        className={cn('text-muted-foreground mt-0.5 text-sm leading-snug', descriptionClassName)}
+        className={cn(
+          'text-muted-foreground text-sm leading-snug',
+          descriptionTruncate ? 'mt-0.5 min-w-0 truncate' : 'mt-0.5',
+          descriptionClassName,
+        )}
+        title={descriptionTruncate ? description : undefined}
       >
         {description}
       </p>
@@ -84,6 +94,7 @@ export function CrmToolbarHeader({
       <div
         className={cn(
           'flex min-w-0 max-w-full flex-wrap items-center gap-x-4 gap-y-3',
+          descriptionTruncate && 'gap-x-3 gap-y-2 lg:flex-nowrap lg:items-center',
           bottomRow && 'justify-between',
           headerRowClassName,
         )}

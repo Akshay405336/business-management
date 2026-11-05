@@ -19,6 +19,7 @@ export function filterEmployeeNav(permissions: readonly PermissionKey[]): Employ
     { href: '/employee/daily-tasks', label: 'My tasks' },
     { href: '/employee/attendance', label: 'Attendance' },
     { href: '/employee/calendar', label: 'Calendar' },
+    { href: '/employee/leave', label: 'Leave' },
   ];
   return items.filter((item) => canAccessEmployeePath(item.href, granted));
 }

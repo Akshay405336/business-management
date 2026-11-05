@@ -59,7 +59,8 @@ export class OrgCalendarAttendanceReconcileService {
         const hasPunch = Boolean(record.punchInAt);
         const autoAbsent =
           record.status === 'ABSENT' &&
-          record.finalizationNote != null &&
+          record.finalizationNote !== null &&
+          record.finalizationNote !== undefined &&
           record.finalizationNote.includes('Marked absent after attendance cutoff');
 
         if (isNonWorkingCalendarKind(dayKind)) {

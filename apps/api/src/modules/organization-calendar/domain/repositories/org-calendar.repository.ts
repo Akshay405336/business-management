@@ -82,4 +82,7 @@ export interface OrgCalendarRepository {
     from: string,
     to: string,
   ): Promise<readonly OrgCalendarMonthDay[]>;
+
+  /** Calendar date key (YYYY-MM-DD) for "today" in the organization's attendance timezone. */
+  resolveOrganizationTodayKey(organizationId: string): Promise<string>;
 }
