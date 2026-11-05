@@ -1,0 +1,148 @@
+import { CRM_ROUTES } from '@techwin/contracts';
+import { apiRequest } from '@/shared/api/api-client';
+import type {
+  CrmPipeline,
+  CrmPipelineBulkActionResponse,
+  CrmPipelineListResponse,
+  CrmPipelineStage,
+  CreatePipelineRequest,
+  CreatePipelineStageRequest,
+  ReorderPipelineStagesRequest,
+  UpdatePipelineRequest,
+  UpdatePipelineStageRequest,
+} from '../types/pipeline.types';
+
+export type BulkPipelineStatusRequest = {
+  pipelineIds: readonly string[];
+  status: 'ACTIVE' | 'INACTIVE';
+};
+
+export type BulkPipelineIdsRequest = {
+  pipelineIds: readonly string[];
+};
+
+export type PipelineListQuery = {
+  search?: string;
+  status?: 'ACTIVE' | 'INACTIVE';
+};
+
+export function listPipelines(
+  query?: PipelineListQuery,
+  signal?: AbortSignal,
+): Promise<CrmPipelineListResponse> {
+  const params = new URLSearchParams();
+  const search = query?.search?.trim();
+  if (search) params.set('search', search);
+  if (query?.status) params.set('status', query.status);
+  const qs = params.toString();
+  const path = qs ? `${CRM_ROUTES.pipelines}?${qs}` : CRM_ROUTES.pipelines;
+  return apiRequest<CrmPipelineListResponse>(path, { auth: true, signal });
+}
+
+export function getDefaultPipeline(signal?: AbortSignal): Promise<CrmPipeline> {
+  return apiRequest<CrmPipeline>(CRM_ROUTES.defaultPipeline, { auth: true, signal });
+}
+
+export function getPipeline(id: string, signal?: AbortSignal): Promise<CrmPipeline> {
+  return apiRequest<CrmPipeline>(CRM_ROUTES.pipeline(id), { auth: true, signal });
+}
+
+export function createPipeline(body: CreatePipelineRequest): Promise<CrmPipeline> {
+  return apiRequest<CrmPipeline>(CRM_ROUTES.pipelines, { method: 'POST', auth: true, body });
+}
+
+export function updatePipeline(id: string, body: UpdatePipelineRequest): Promise<CrmPipeline> {
+  return apiRequest<CrmPipeline>(CRM_ROUTES.pipeline(id), { method: 'PATCH', auth: true, body });
+}
+
+export function deletePipeline(id: string): Promise<void> {
+  return apiRequest<void>(CRM_ROUTES.pipeline(id), { method: 'DELETE', auth: true });
+}
+
+export function bulkUpdatePipelineStatus(
+  body: BulkPipelineStatusRequest,
+): Promise<CrmPipelineBulkActionResponse> {
+  return apiRequest<CrmPipelineBulkActionResponse>(CRM_ROUTES.pipelineBulkStatus, {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function bulkDeletePipelines(
+  body: BulkPipelineIdsRequest,
+): Promise<CrmPipelineBulkActionResponse> {
+  return apiRequest<CrmPipelineBulkActionResponse>(CRM_ROUTES.pipelineBulkDelete, {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function createPipelineStage(
+  pipelineId: string,
+  body: CreatePipelineStageRequest,
+): Promise<CrmPipelineStage> {
+  return apiRequest<CrmPipelineStage>(CRM_ROUTES.pipelineStages(pipelineId), {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function updatePipelineStage(
+  pipelineId: string,
+  stageId: string,
+  body: UpdatePipelineStageRequest,
+): Promise<CrmPipelineStage> {
+  return apiRequest<CrmPipelineStage>(CRM_ROUTES.pipelineStage(pipelineId, stageId), {
+    method: 'PATCH',
+    auth: true,
+    body,
+  });
+}
+
+export function deletePipelineStage(
+  pipelineId: string,
+  stageId: string,
+  targetStageId?: string,
+): Promise<void> {
+  return apiRequest<void>(CRM_ROUTES.pipelineStage(pipelineId, stageId), {
+    method: 'DELETE',
+    auth: true,
+    body: targetStageId ? { targetStageId } : {},
+  });
+}
+
+export function reorderPipelineStages(
+  pipelineId: string,
+  body: ReorderPipelineStagesRequest,
+): Promise<readonly CrmPipelineStage[]> {
+  return apiRequest<readonly CrmPipelineStage[]>(CRM_ROUTES.pipelineStageReorder(pipelineId), {
+    method: 'POST',
+    auth: true,
+    body,
+  });
+}
+
+export function activatePipelineStage(
+  pipelineId: string,
+  stageId: string,
+): Promise<CrmPipelineStage> {
+  return apiRequest<CrmPipelineStage>(CRM_ROUTES.pipelineStageActivate(pipelineId, stageId), {
+    method: 'POST',
+    auth: true,
+  });
+}
+
+export function deactivatePipelineStage(
+  pipelineId: string,
+  stageId: string,
+  targetStageId?: string,
+): Promise<CrmPipelineStage> {
+  return apiRequest<CrmPipelineStage>(CRM_ROUTES.pipelineStageDeactivate(pipelineId, stageId), {
+    method: 'POST',
+    auth: true,
+    body: targetStageId ? { targetStageId } : {},
+  });
+}

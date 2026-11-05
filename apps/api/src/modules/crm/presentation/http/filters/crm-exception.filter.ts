@@ -2,7 +2,12 @@ import { Catch, HttpStatus, type ArgumentsHost, type ExceptionFilter } from '@ne
 import { API_ERROR_CODES, type ApiErrorCode } from '@techwin/contracts';
 import type { Request, Response } from 'express';
 import { sendApiError } from '../../../../../common/filters/api-error.response.js';
-import { CrmError, CrmValidationError, type CrmErrorCode } from '../../../domain/errors/crm.errors.js';
+import {
+  CrmError,
+  CrmPipelineHasDependentLeadsError,
+  CrmValidationError,
+  type CrmErrorCode,
+} from '../../../domain/errors/crm.errors.js';
 
 const HTTP_MAPPING: Record<CrmErrorCode, { status: number; code: ApiErrorCode }> = {
   NOT_FOUND: { status: HttpStatus.NOT_FOUND, code: API_ERROR_CODES.NOT_FOUND },
@@ -14,7 +19,10 @@ const HTTP_MAPPING: Record<CrmErrorCode, { status: number; code: ApiErrorCode }>
     code: API_ERROR_CODES.VALIDATION_FAILED,
   },
   STAGE_DELETE_BLOCKED: { status: HttpStatus.BAD_REQUEST, code: API_ERROR_CODES.BAD_REQUEST },
-  PIPELINE_IN_USE: { status: HttpStatus.CONFLICT, code: API_ERROR_CODES.BAD_REQUEST },
+  PIPELINE_HAS_DEPENDENT_LEADS: {
+    status: HttpStatus.CONFLICT,
+    code: API_ERROR_CODES.PIPELINE_HAS_DEPENDENT_LEADS,
+  },
 };
 
 @Catch(CrmError)
@@ -28,7 +36,12 @@ export class CrmExceptionFilter implements ExceptionFilter<CrmError> {
       status: mapping.status,
       code: mapping.code,
       message: error.message,
-      details: error instanceof CrmValidationError ? error.details : undefined,
+      details:
+        error instanceof CrmValidationError
+          ? error.details
+          : error instanceof CrmPipelineHasDependentLeadsError
+            ? [{ path: 'leadCount', message: String(error.leadCount) }]
+            : undefined,
     });
   }
 }

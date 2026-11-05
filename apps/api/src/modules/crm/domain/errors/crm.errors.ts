@@ -5,7 +5,7 @@ export type CrmErrorCode =
   | 'FORBIDDEN'
   | 'INVALID_STATUS_TRANSITION'
   | 'STAGE_DELETE_BLOCKED'
-  | 'PIPELINE_IN_USE';
+  | 'PIPELINE_HAS_DEPENDENT_LEADS';
 
 export abstract class CrmError extends Error {
   abstract readonly code: CrmErrorCode;
@@ -61,9 +61,17 @@ export class CrmStageDeleteBlockedError extends CrmError {
   }
 }
 
-export class CrmPipelineInUseError extends CrmError {
-  readonly code = 'PIPELINE_IN_USE';
-  constructor() {
-    super('This pipeline cannot be removed while it still has leads.');
+export class CrmPipelineHasDependentLeadsError extends CrmError {
+  readonly code = 'PIPELINE_HAS_DEPENDENT_LEADS';
+
+  constructor(readonly leadCount: number) {
+    super(
+      leadCount === 1
+        ? 'This pipeline cannot be deleted because 1 lead is associated with it.'
+        : `This pipeline cannot be deleted because ${leadCount} leads are associated with it.`,
+    );
   }
 }
+
+/** @deprecated Use {@link CrmPipelineHasDependentLeadsError}. */
+export const CrmPipelineInUseError = CrmPipelineHasDependentLeadsError;

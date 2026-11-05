@@ -144,6 +144,17 @@ const FRAMEWORK_OR_DRIVER_PACKAGES = [
  */
 function classifyApiFile(filePath) {
   const relative = path.relative(apiSrc, filePath).split(path.sep).join('/');
+  const nestedFeatureMatch =
+    /^modules\/([^/]+)\/([^/]+)\/(domain|application|infrastructure|presentation|cli)(?:\/|$)/.exec(
+      relative,
+    );
+  if (nestedFeatureMatch) {
+    const [, moduleName, , layer] = nestedFeatureMatch;
+    const isPublicApi =
+      relative === `modules/${moduleName}/index.ts` ||
+      /^modules\/[^/]+\/[^/]+\/index\.ts$/.test(relative);
+    return { relative, area: 'module', moduleName, layer, isPublicApi };
+  }
   const moduleMatch =
     /^modules\/([^/]+)\/(?:(domain|application|infrastructure|presentation|cli)\/)?/.exec(relative);
   if (moduleMatch) {

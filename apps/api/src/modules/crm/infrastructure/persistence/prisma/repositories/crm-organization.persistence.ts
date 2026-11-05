@@ -8,7 +8,7 @@ import {
   DEFAULT_ORGANIZATION_NAME,
   ORGANIZATION_SLUG_TECHWIN,
 } from '../../../../domain/repositories/crm.repository.js';
-import { DEFAULT_PIPELINE_STAGES } from '../../../../domain/policies/default-stages.js';
+import { DEFAULT_PIPELINE_STAGES } from '../../../../domain/pipelines/default-stages.js';
 import {
   DEFAULT_PIPELINE_NAME,
   pipelineStagesInclude,
