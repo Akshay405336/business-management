@@ -46,5 +46,6 @@ const employeeUseCaseHandlers = [
     ...employeeUseCaseHandlers,
     EmployeeExceptionFilter,
   ],
+  exports: [...employeePersistenceProviders],
 })
 export class EmployeesModule {}

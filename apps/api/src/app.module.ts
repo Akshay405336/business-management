@@ -6,11 +6,10 @@ import { CacheModule } from './infrastructure/cache/cache.module.js';
 import { LoggingModule } from './infrastructure/logging/logging.module.js';
 import { AuthModule } from './modules/auth/index.js';
 import { CrmModule } from './modules/crm/index.js';
-import { ProjectsModule } from './modules/projects/index.js';
+import { ProjectManagementModule } from './modules/project-management/index.js';
 import { EmployeesModule } from './modules/employees/index.js';
 import { OrgAccessModule } from './modules/org-access/index.js';
 import { MediaModule } from './modules/media/index.js';
-import { DailyTasksModule } from './modules/daily-tasks/index.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { WhatsAppModule } from './modules/whatsapp/index.js';
 import { AttendanceModule } from './modules/attendance/index.js';
@@ -27,11 +26,10 @@ import { TenantContextModule } from './platform/tenant-context/tenant-context.mo
     AuthModule,
     TenantContextModule,
     CrmModule,
-    ProjectsModule,
+    ProjectManagementModule,
     EmployeesModule,
     MediaModule,
     OrgAccessModule,
-    DailyTasksModule,
     WhatsAppModule,
     AttendanceModule,
     OrganizationCalendarModule,

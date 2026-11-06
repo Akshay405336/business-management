@@ -8,6 +8,8 @@ export type DataTableEmptyStateContent = {
   title: string;
   description?: string;
   icon?: LucideIcon;
+  /** When false, no leading icon (e.g. minimal filter-empty copy). Default true. */
+  showIcon?: boolean;
   action?: { label: string; onClick: () => void };
   secondaryAction?: { label: string; onClick: () => void };
 };
@@ -21,16 +23,22 @@ export function DataTableEmptyStateRow({
   content: DataTableEmptyStateContent;
   className?: string;
 }) {
+  const showIcon = content.showIcon !== false;
   const Icon = content.icon ?? Inbox;
   return (
     <TableRow className="hover:bg-transparent">
       <TableCell colSpan={colSpan} className={cn('p-0', className)}>
-        <div className="flex flex-col items-center justify-center gap-2 px-6 py-8 text-center">
-          <Icon className="text-muted-foreground size-9 opacity-50" aria-hidden="true" />
-          <div className="grid max-w-md gap-1">
-            <p className="text-foreground text-sm font-medium">{content.title}</p>
+        <div className="flex min-h-[14rem] flex-col items-center justify-center gap-3 px-6 py-12 text-center">
+          {showIcon ? (
+            <Icon
+              className="text-muted-foreground size-12 stroke-[1.15] opacity-70"
+              aria-hidden="true"
+            />
+          ) : null}
+          <div className="grid max-w-md gap-1.5">
+            <p className="text-foreground text-base font-semibold tracking-tight">{content.title}</p>
             {content.description ? (
-              <p className="text-muted-foreground text-sm">{content.description}</p>
+              <p className="text-muted-foreground text-sm leading-relaxed">{content.description}</p>
             ) : null}
           </div>
           {content.action || content.secondaryAction ? (

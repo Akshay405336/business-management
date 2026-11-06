@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { PointerEvent } from 'react';
+import { useEffect, useRef, type PointerEvent } from 'react';
 import {
   Calendar,
   CalendarClock,
@@ -297,6 +297,7 @@ export function DailyTaskKanbanCard({
   dragging = false,
   employeeMode = false,
   dragDisabled = false,
+  highlighted = false,
 }: {
   task: DailyTaskListItem;
   columnStageName?: string;
@@ -307,8 +308,10 @@ export function DailyTaskKanbanCard({
   dragging?: boolean;
   employeeMode?: boolean;
   dragDisabled?: boolean;
+  highlighted?: boolean;
 }) {
   const toast = useAdminToast();
+  const highlightRef = useRef<HTMLDivElement | null>(null);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: task.id,
     data: { task, stageId: task.workflowStageId },
@@ -316,6 +319,11 @@ export function DailyTaskKanbanCard({
   });
 
   const style = transform ? { transform: CSS.Translate.toString(transform) } : undefined;
+
+  useEffect(() => {
+    if (!highlighted) return;
+    highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, [highlighted]);
 
   const onDelete = async () => {
     if (employeeMode) return;
@@ -331,9 +339,17 @@ export function DailyTaskKanbanCard({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        highlightRef.current = node;
+        setNodeRef(node);
+      }}
       style={style}
-      className={cn('relative touch-none', (isDragging || dragging) && 'z-20')}
+      data-task-id={task.id}
+      className={cn(
+        'relative touch-none rounded-lg',
+        (isDragging || dragging) && 'z-20',
+        highlighted && 'z-10 ring-2 ring-primary ring-offset-2 ring-offset-background',
+      )}
       {...attributes}
       {...listeners}
     >

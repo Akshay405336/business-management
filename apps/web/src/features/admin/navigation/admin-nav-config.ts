@@ -139,9 +139,9 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
     ],
   },
   {
-    id: 'tasks',
-    label: 'Tasks',
-    icon: ClipboardList,
+    id: 'projects',
+    label: 'Project Management',
+    icon: FolderKanban,
     items: [
       {
         kind: 'link',
@@ -155,13 +155,6 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
         label: 'Task Calendar',
         icon: CalendarDays,
       },
-    ],
-  },
-  {
-    id: 'projects',
-    label: 'Project Management',
-    icon: FolderKanban,
-    items: [
       {
         kind: 'link',
         href: '/admin/project-tasks',

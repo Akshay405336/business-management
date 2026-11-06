@@ -145,6 +145,7 @@ function detailToListItem(
 
 export function DailyTaskKanbanBoard({
   board,
+  highlightTaskId = null,
   onRefresh,
   onOpenTask,
   onEditTask,
@@ -155,6 +156,7 @@ export function DailyTaskKanbanBoard({
   canUpdateStatus: canUpdateStatusProp,
 }: {
   board: DailyTaskBoardResponse;
+  highlightTaskId?: string | null;
   onRefresh: () => void | Promise<void>;
   onOpenTask: (task: DailyTaskListItem) => void;
   onEditTask: (task: DailyTaskListItem) => void;
@@ -457,6 +459,7 @@ export function DailyTaskKanbanBoard({
                           key={taskId}
                           task={task}
                           columnStageName={column.stage.name}
+                          highlighted={highlightTaskId === taskId}
                           employeeMode={employeeMode}
                           dragDisabled={!canUpdateStatus || pendingTaskIds.has(taskId)}
                           onOpen={onOpenTask}

@@ -35,7 +35,7 @@ export function DailyTaskOrgDayBadge({
   return (
     <span
       className={cn(
-        'inline-flex max-w-[14rem] shrink-0 items-center truncate rounded-md border px-2 py-1 text-xs font-semibold',
+        'inline-flex max-w-none min-w-0 shrink-0 items-center whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-semibold',
         style.bg,
         style.border,
         style.text,

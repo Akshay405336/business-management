@@ -1,8 +1,8 @@
 'use client';
 
 import { FileText } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,8 +43,12 @@ import { ProjectTaskKanbanBoard } from './project-task-kanban-board';
 import { ProjectViewPlanModal } from './project-view-plan-modal';
 import { ProjectWorkspaceShell } from './project-workspace-shell';
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const toast = useAdminToast();
   const { pending, run } = useAsyncAction();
@@ -62,6 +66,8 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
   const [statusToggleTarget, setStatusToggleTarget] = useState<ProjectActionTarget | null>(null);
   const [projectFormOpen, setProjectFormOpen] = useState(false);
   const [viewOnlyTask, setViewOnlyTask] = useState(false);
+  const [taskIdFromUrlHandled, setTaskIdFromUrlHandled] = useState(false);
+  const missingProjectTaskToast = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +122,31 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
   const tasks = useMemo(() => board?.phases.flatMap((phase) => phase.tasks) ?? [], [board]);
   const phases = useMemo(() => board?.phases ?? [], [board]);
 
+  useEffect(() => {
+    setTaskIdFromUrlHandled(false);
+  }, [projectId]);
+
+  useEffect(() => {
+    const tid = searchParams.get('taskId');
+    if (!tid || !UUID_RE.test(tid) || loading || !board || taskIdFromUrlHandled) return;
+    const lifecycle = board.project.executionLifecycle;
+    if (lifecycle === 'NOT_PLANNED' || lifecycle === 'PLANNED') return;
+    if (searchParams.get('focus') === 'board') {
+      if (tasks.some((task) => task.id === tid)) return;
+      if (missingProjectTaskToast.current === tid) return;
+      missingProjectTaskToast.current = tid;
+      toast.error('That task is not on this project board.');
+      router.replace(`/admin/project-tasks/${projectId}`, { scroll: false });
+      return;
+    }
+    const task = tasks.find((t) => t.id === tid);
+    if (!task) return;
+    setViewOnlyTask(true);
+    setEditingTask(task);
+    setFormOpen(true);
+    setTaskIdFromUrlHandled(true);
+  }, [board, loading, projectId, router, searchParams, taskIdFromUrlHandled, tasks, toast]);
+
   const openCreate = (phaseId?: string) => {
     setViewOnlyTask(false);
     setEditingTask(null);
@@ -128,6 +159,10 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
     setViewOnlyTask(true);
     setEditingTask(task);
     setFormOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('focus');
+    params.set('taskId', taskId);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const changeTaskStatus = async (taskId: string, status: ProjectTaskStatus) => {
@@ -300,6 +335,9 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
         <ProjectTaskKanbanBoard
           phases={phases}
           tasks={tasks}
+          highlightTaskId={
+            searchParams.get('focus') === 'board' ? searchParams.get('taskId') : null
+          }
           columnVariant="pipeline"
           cardVariant="pipeline"
           showPhaseTimelineHint={lifecycle === 'IN_PRODUCTION'}
@@ -334,7 +372,13 @@ export function ProjectTaskBoardPage({ projectId }: { projectId: string }) {
         open={formOpen}
         onOpenChange={(open) => {
           setFormOpen(open);
-          if (!open) setViewOnlyTask(false);
+          if (!open) {
+            setViewOnlyTask(false);
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete('taskId');
+            const qs = params.toString();
+            router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+          }
         }}
         phases={phases}
         editingTask={editingTask}

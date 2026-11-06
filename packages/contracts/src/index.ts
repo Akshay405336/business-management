@@ -11,6 +11,7 @@ export * from './permissions.js';
 export * from './permission-hierarchy.js';
 export * from './org-access.js';
 export * from './daily-tasks.js';
+export * from './org-task-calendar.js';
 export * from './daily-task-permissions.js';
 export * from './daily-task-note-permissions.js';
 export * from './whatsapp.js';

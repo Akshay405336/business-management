@@ -21,3 +21,12 @@ export function formatDisplayDate(value: string): string {
     year: 'numeric',
   });
 }
+
+/** Toolbar date label: `06-Nov-2026` (day padded, short month, full year). */
+export function formatDailyTaskNavDateLabel(value: string): string {
+  const parsed = new Date(`${value}T12:00:00`);
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const month = parsed.toLocaleDateString('en-GB', { month: 'short' });
+  const year = parsed.getFullYear();
+  return `${day}-${month}-${year}`;
+}

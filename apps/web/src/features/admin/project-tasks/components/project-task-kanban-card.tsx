@@ -13,7 +13,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import type { CSSProperties, PointerEvent } from 'react';
+import { useEffect, useRef, type CSSProperties, type PointerEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -550,6 +550,7 @@ export function SortableProjectTaskKanbanCard({
   hideCardMenu,
   onStatusChange,
   statusControlDisabled,
+  highlighted = false,
 }: {
   task: ProjectTask;
   variant?: 'default' | 'plan' | 'pipeline';
@@ -561,20 +562,35 @@ export function SortableProjectTaskKanbanCard({
   onDelete: () => void;
   onStatusChange?: (status: ProjectTaskStatus) => void;
   statusControlDisabled?: boolean;
+  highlighted?: boolean;
 }) {
+  const highlightRef = useRef<HTMLDivElement | null>(null);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id: task.id,
     disabled,
   });
 
+  useEffect(() => {
+    if (!highlighted) return;
+    highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  }, [highlighted]);
+
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        highlightRef.current = node;
+        setNodeRef(node);
+      }}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      className={cn('relative touch-none', isDragging && 'z-20')}
+      data-task-id={task.id}
+      className={cn(
+        'relative touch-none rounded-lg',
+        isDragging && 'z-20',
+        highlighted && 'z-10 ring-2 ring-primary ring-offset-2 ring-offset-background',
+      )}
       {...attributes}
       {...listeners}
     >

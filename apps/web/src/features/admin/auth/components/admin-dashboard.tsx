@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertCircle, Loader2, MonitorSmartphone, ShieldCheck } from 'lucide-react';
+import { AlertCircle, MonitorSmartphone, ShieldCheck } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
+import { ListSkeleton } from '@/components/loading/skeletons';
 import { describeUserAgent, formatDateTime } from '@/shared/lib/format';
 import { API_ERROR_CODES } from '@techwin/contracts';
 import { isApiError } from '@/shared/api/api-error';
@@ -59,8 +59,8 @@ export function AdminDashboard() {
           <Button
             type="button"
             variant="destructive"
+            loading={isSigningOut}
             onClick={() => void signOutEverywhere()}
-            disabled={isSigningOut}
           >
             {isSigningOut ? 'Signing out...' : 'Sign out all devices'}
           </Button>
@@ -134,12 +134,7 @@ function SessionList({ currentSessionId }: { currentSessionId: string }) {
           </Alert>
         ) : null}
 
-        {sessions === null && !error ? (
-          <div className="grid gap-2">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : null}
+        {sessions === null && !error ? <ListSkeleton rows={2} /> : null}
 
         {sessions?.map((item) => (
           <div
@@ -171,12 +166,9 @@ function SessionList({ currentSessionId }: { currentSessionId: string }) {
                 variant="outline"
                 size="sm"
                 className="shrink-0"
-                disabled={pendingId === item.id}
+                loading={pendingId === item.id}
                 onClick={() => void onRevoke(item.id)}
               >
-                {pendingId === item.id ? (
-                  <Loader2 className="animate-spin" aria-hidden="true" />
-                ) : null}
                 Revoke
               </Button>
             )}

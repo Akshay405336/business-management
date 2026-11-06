@@ -324,6 +324,7 @@ function SortablePlanPhaseColumn({
 export function ProjectTaskKanbanBoard({
   phases,
   tasks,
+  highlightTaskId = null,
   disabled,
   dragDisabled,
   columnVariant = 'default',
@@ -345,6 +346,7 @@ export function ProjectTaskKanbanBoard({
 }: {
   phases: readonly ProjectTaskBoardPhase[];
   tasks: readonly ProjectTask[];
+  highlightTaskId?: string | null;
   disabled?: boolean;
   dragDisabled?: boolean;
   readOnlyView?: boolean;
@@ -664,6 +666,7 @@ export function ProjectTaskKanbanBoard({
                       <SortableProjectTaskKanbanCard
                         key={taskId}
                         task={task}
+                        highlighted={highlightTaskId === taskId}
                         variant={cardVariant}
                         phaseBounds={
                           cardVariant === 'plan'

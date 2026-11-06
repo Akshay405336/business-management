@@ -7,9 +7,12 @@ export type DailyTasksWorkspaceView = 'kanban' | 'list' | 'calendar';
 export function DailyTasksViewTabs({
   value,
   onValueChange,
+  includeCalendar = true,
 }: {
   value: DailyTasksWorkspaceView;
   onValueChange: (view: DailyTasksWorkspaceView) => void;
+  /** Admin daily tasks hides this tab. Employee workspace keeps it. */
+  includeCalendar?: boolean;
 }) {
   return (
     <Tabs
@@ -30,12 +33,14 @@ export function DailyTasksViewTabs({
         >
           List
         </TabsTrigger>
-        <TabsTrigger
-          value="calendar"
-          className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
-        >
-          Calendar
-        </TabsTrigger>
+        {includeCalendar ? (
+          <TabsTrigger
+            value="calendar"
+            className="h-8 rounded-md px-3 text-xs data-[state=active]:border data-[state=active]:border-[#E8E8EF] data-[state=active]:bg-white data-[state=active]:text-[#5B35B5] data-[state=active]:shadow-xs"
+          >
+            Calendar
+          </TabsTrigger>
+        ) : null}
       </TabsList>
     </Tabs>
   );

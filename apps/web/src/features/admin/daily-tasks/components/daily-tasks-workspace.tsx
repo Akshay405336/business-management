@@ -1,23 +1,13 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Folder, ListFilter, Plus, Search, Users } from 'lucide-react';
-import { cn } from '@/shared/lib/utils';
+import { Flag, Folder, GitBranch, ListFilter, Plus, UserRound, Users } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { CrmIconFilterDropdown, type CrmFilterOption } from '@/components/shared/crm-icon-filter-dropdown';
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
-import { CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
-import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
 import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { useAdminToast } from '@/features/admin/components/toast';
 import { listAssignableEmployees } from '@/features/admin/employees/api/employees';
 import { listProjects } from '@/features/admin/projects/api/projects';
 import { listAllDailyTasksInRange } from '../api/list-all-daily-tasks';
@@ -33,7 +23,7 @@ import type {
   DailyTaskWorkflowStage,
 } from '../types';
 import { useDailyTasksPolling } from '../hooks/use-daily-tasks-polling';
-import { addDaysToDateInput, localDateInputValue } from '../utils/local-date';
+import { localDateInputValue } from '../utils/local-date';
 import {
   filterTasksByAssignment,
   filterTasksByStatusBucket,
@@ -44,10 +34,17 @@ import { todayKeyInTimeZone } from '@/features/admin/attendance/utils/calendar-m
 import { useOrgCalendarMonth } from '@/features/admin/org-calendar/hooks/use-org-calendar-month';
 import { DailyTaskAssignDialog } from './daily-task-assign-dialog';
 import { DailyTaskCalendarView } from './daily-task-calendar-view';
-import { DailyTaskOrgDayBadge } from './daily-task-org-day-badge';
+import { DailyTaskDateNavigation } from './daily-task-date-navigation';
+import { DailyTaskHeader } from './daily-task-header';
+import {
+  DailyTaskSort,
+  type DailyTaskSortBy,
+  type DailyTaskSortDir,
+} from './daily-task-sort';
 import { DailyTaskDetailDrawer } from './daily-task-detail-drawer';
 import { DailyTaskKanbanBoard } from './daily-task-kanban-board';
 import { DailyTaskListView } from './daily-task-list-view';
+import { DailyTaskToolbar, DailyTaskToolbarSearch } from './daily-task-toolbar';
 import { DailyTaskWorkflowDialog } from './daily-task-workflow-dialog';
 import { MyDailyTasksPage } from './my-daily-tasks-page';
 import {
@@ -56,12 +53,6 @@ import {
 } from './daily-tasks-view-tabs';
 
 type WorkspaceView = DailyTasksWorkspaceView;
-
-const FILTER_SELECT_TRIGGER_CLASS =
-  'h-9 min-w-0 shrink-0 gap-1.5 rounded-lg py-0 pl-2.5 sm:w-[9.375rem] sm:max-w-[10.5rem] [&_[data-slot=select-value]]:min-w-0 [&_[data-slot=select-value]]:flex-1 [&_[data-slot=select-value]]:truncate [&_[data-slot=select-value]]:text-left';
-
-const TOOLBAR_ROW_SCROLL_CLASS =
-  'overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 export function DailyTasksWorkspace({
   title = 'Daily Task Management',
@@ -75,6 +66,8 @@ export function DailyTasksWorkspace({
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const toast = useAdminToast();
+  const missingBoardTaskToast = useRef<string | null>(null);
   const { has } = useAdminAccess();
   const canAssignTasks = has('tasks.create') && has('tasks.assign');
   const canManageWorkflow = has('tasks.update') || has('daily_tasks.manage_workflow');
@@ -87,13 +80,33 @@ export function DailyTasksWorkspace({
   });
   const [view, setView] = useState<WorkspaceView>(() => {
     const viewParam = searchParams.get('view');
-    if (viewParam === 'kanban' || viewParam === 'list' || viewParam === 'calendar') return viewParam;
+    if (viewParam === 'kanban' || viewParam === 'list') return viewParam;
     return defaultView;
   });
+
+  useEffect(() => {
+    const viewParam = searchParams.get('view');
+    if (viewParam === 'kanban' || viewParam === 'list') {
+      setView(viewParam);
+    }
+  }, [searchParams]);
+
+  const setViewInUrl = useCallback(
+    (next: WorkspaceView) => {
+      setView(next);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', next);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'GENERAL' | 'PROJECT'>('ALL');
   const [employeeId, setEmployeeId] = useState('');
   const [projectId, setProjectId] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'>('ALL');
+  const [sortBy, setSortBy] = useState<DailyTaskSortBy>('priority');
+  const [sortDir, setSortDir] = useState<DailyTaskSortDir>('desc');
 
   const [board, setBoard] = useState<DailyTaskBoardResponse | null>(null);
   const [boardLoading, setBoardLoading] = useState(true);
@@ -139,8 +152,6 @@ export function DailyTasksWorkspace({
     }
     return map;
   }, [orgCalendarMonth]);
-  const orgDayForAssignDate = orgDaysByDate.get(assignDate);
-
   useEffect(() => {
     setCalendarAnchor(assignDate);
   }, [assignDate]);
@@ -149,7 +160,6 @@ export function DailyTasksWorkspace({
     (date: string) => {
       setAssignDate(date);
       setCalendarAnchor(date);
-      setView('kanban');
       const params = new URLSearchParams(searchParams.toString());
       params.set('date', date);
       params.set('view', 'kanban');
@@ -158,9 +168,76 @@ export function DailyTasksWorkspace({
     [pathname, router, searchParams],
   );
 
+  const setAssignDateFromNav = useCallback(
+    (next: string) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return;
+      setAssignDate(next);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('date', next);
+      router.push(`${pathname}?${params.toString()}`);
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    const dateParam = searchParams.get('date');
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      setAssignDate((prev) => (dateParam !== prev ? dateParam : prev));
+    }
+  }, [searchParams]);
+
   const [stages, setStages] = useState<readonly DailyTaskWorkflowStage[]>([]);
   const [employees, setEmployees] = useState<readonly { id: string; displayName: string }[]>([]);
   const [projects, setProjects] = useState<readonly { id: string; name: string }[]>([]);
+
+  const typeMenuOptions = useMemo<CrmFilterOption[]>(
+    () => [
+      { value: 'GENERAL', label: 'General' },
+      { value: 'PROJECT', label: 'Project' },
+    ],
+    [],
+  );
+  const employeeMenuOptions = useMemo(
+    () => employees.map((e) => ({ value: e.id, label: e.displayName })),
+    [employees],
+  );
+  const projectMenuOptions = useMemo(
+    () => projects.map((p) => ({ value: p.id, label: p.name })),
+    [projects],
+  );
+  const priorityMenuOptions = useMemo<CrmFilterOption[]>(
+    () => [
+      { value: 'LOW', label: 'Low' },
+      { value: 'MEDIUM', label: 'Medium' },
+      { value: 'HIGH', label: 'High' },
+      { value: 'URGENT', label: 'Urgent' },
+    ],
+    [],
+  );
+  const calendarStatusMenuOptions = useMemo<CrmFilterOption[]>(
+    () => [
+      { value: 'COMPLETED', label: 'Completed' },
+      { value: 'in_progress', label: 'In progress' },
+      { value: 'pending', label: 'Pending' },
+      { value: 'OVERDUE', label: 'Overdue' },
+      { value: 'cancelled', label: 'Cancelled' },
+    ],
+    [],
+  );
+  const calendarAssignmentMenuOptions = useMemo<CrmFilterOption[]>(
+    () => [
+      { value: 'ASSIGNED', label: 'Assigned only' },
+      { value: 'UNASSIGNED', label: 'Unassigned only' },
+    ],
+    [],
+  );
+  const workflowStageMenuOptions = useMemo(
+    () =>
+      stages
+        .filter((s) => s.isActive)
+        .map((s) => ({ value: s.id, label: s.name })),
+    [stages],
+  );
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignPrefillDate, setAssignPrefillDate] = useState(assignDate);
@@ -179,8 +256,9 @@ export function DailyTasksWorkspace({
       type: typeFilter === 'ALL' ? undefined : typeFilter,
       employeeId: employeeId || undefined,
       projectId: projectId || undefined,
+      priority: priorityFilter === 'ALL' ? undefined : priorityFilter,
     }),
-    [assignDate, clientToday, search, typeFilter, employeeId, projectId],
+    [assignDate, clientToday, search, typeFilter, employeeId, projectId, priorityFilter],
   );
 
   const loadBoard = useCallback(async () => {
@@ -205,8 +283,8 @@ export function DailyTasksWorkspace({
         ...filterQuery,
         page: listPage,
         pageSize: listPageSize,
-        sortBy: 'priority',
-        sortDir: 'desc',
+        sortBy,
+        sortDir,
       });
       setListData(response);
     } catch {
@@ -214,7 +292,7 @@ export function DailyTasksWorkspace({
     } finally {
       setListLoading(false);
     }
-  }, [filterQuery, listPage, listPageSize]);
+  }, [filterQuery, listPage, listPageSize, sortBy, sortDir]);
 
   const loadCalendarMonth = useCallback(async () => {
     const anchor = new Date(`${calendarAnchor}T12:00:00`);
@@ -232,7 +310,10 @@ export function DailyTasksWorkspace({
         type: filterQuery.type,
         employeeId: filterQuery.employeeId,
         projectId: filterQuery.projectId,
-        priority: calendarPriorityFilter === 'ALL' ? undefined : calendarPriorityFilter,
+        priority:
+          calendarPriorityFilter === 'ALL'
+            ? filterQuery.priority
+            : calendarPriorityFilter,
         workflowStageId: calendarWorkflowStageId || undefined,
         completedOnly: calendarStatusFilter === 'COMPLETED' ? true : undefined,
         overdueOnly: calendarStatusFilter === 'OVERDUE' ? true : undefined,
@@ -249,7 +330,11 @@ export function DailyTasksWorkspace({
     calendarStatusFilter,
     calendarWorkflowStageId,
     clientToday,
-    filterQuery,
+    filterQuery.priority,
+    filterQuery.search,
+    filterQuery.type,
+    filterQuery.employeeId,
+    filterQuery.projectId,
   ]);
 
   const calendarTasks = useMemo(() => {
@@ -321,7 +406,46 @@ export function DailyTasksWorkspace({
     setDetailId(task.id);
     setDetailRescheduleFocus(Boolean(options?.focusReschedule));
     setDetailOpen(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('focus');
+    params.set('taskId', task.id);
+    router.replace(`${pathname}?${params.toString()}`);
   };
+
+  const highlightTaskId = useMemo(() => {
+    if (searchParams.get('focus') !== 'board') return null;
+    const tid = searchParams.get('taskId');
+    if (!tid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tid)) {
+      return null;
+    }
+    return tid;
+  }, [searchParams]);
+
+  useEffect(() => {
+    const tid = searchParams.get('taskId');
+    if (!tid || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(tid)) {
+      return;
+    }
+    if (searchParams.get('focus') === 'board') return;
+    setDetailId(tid);
+    setDetailOpen(true);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get('focus') !== 'board') return;
+    const tid = searchParams.get('taskId');
+    if (!tid || boardLoading || boardError || !board || board.assignDate !== assignDate) return;
+    const found = board.columns.some((column) => column.tasks.some((task) => task.id === tid));
+    if (found) return;
+    if (missingBoardTaskToast.current === tid) return;
+    missingBoardTaskToast.current = tid;
+    toast.error('That task is not on the board for this date.');
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('taskId');
+    params.delete('focus');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [assignDate, board, boardError, boardLoading, pathname, router, searchParams, toast]);
 
   if (workspaceMode === 'my') {
     return <MyDailyTasksPage />;
@@ -339,217 +463,149 @@ export function DailyTasksWorkspace({
       />
       <section className="workspace-surface min-w-0">
         <div className="rounded-lg">
-          <CrmToolbarHeader
-            title={title}
-            description={description}
-            className="rounded-none border-0 bg-card shadow-none"
-            headerRowClassName="flex-nowrap items-center gap-3 min-w-0 overflow-hidden"
-            titleSectionClassName="min-w-0 shrink overflow-hidden sm:max-w-[13rem] lg:max-w-[15rem]"
-            descriptionClassName="truncate"
-            toolbarRowClassName={cn(
-              'ml-auto flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-2',
-              TOOLBAR_ROW_SCROLL_CLASS,
-            )}
-            toolbar={
-              <div className="flex w-max max-w-full flex-nowrap items-center justify-end gap-2 pl-1">
-                <DailyTasksViewTabs value={view} onValueChange={setView} />
-                {canAssignTasks ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
-                    onClick={() => openAssign({})}
-                  >
-                    <Plus aria-hidden="true" />
-                    Assign Task
-                  </Button>
-                ) : null}
-              </div>
-            }
-            bottomRow={
-              <div
-                className={cn(
-                  'flex min-w-0 w-full flex-wrap items-center gap-2 lg:flex-nowrap',
-                  TOOLBAR_ROW_SCROLL_CLASS,
-                )}
-              >
-                {view !== 'calendar' ? (
-                  <>
+          <div className="flex min-w-0 flex-col gap-3 border-b border-[#E8E8EF] px-4 py-3 sm:px-5">
+            <DailyTaskHeader
+              title={title}
+              description={description}
+              toolbar={
+                <>
+                  <DailyTasksViewTabs
+                    value={view === 'calendar' ? 'kanban' : view}
+                    onValueChange={setViewInUrl}
+                    includeCalendar={false}
+                  />
+                  {canAssignTasks ? (
                     <Button
                       type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-9 shrink-0"
-                      aria-label="Previous day"
-                      onClick={() => setAssignDate(addDaysToDateInput(assignDate, -1))}
-                    >
-                      <ChevronLeft className="size-4" aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={assignDate === clientToday ? 'default' : 'outline'}
                       size="sm"
-                      className="h-9 shrink-0 px-3"
-                      onClick={() => setAssignDate(clientToday)}
+                      className="h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900"
+                      onClick={() => openAssign({})}
                     >
-                      Today
+                      <Plus aria-hidden="true" />
+                      Assign Task
                     </Button>
-                    <Input
-                      type="date"
-                      aria-label="Selected date"
-                      className="h-9 w-[9.75rem] shrink-0 rounded-lg sm:w-[10.5rem]"
-                      value={assignDate}
-                      onChange={(e) => setAssignDate(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-9 shrink-0"
-                      aria-label="Next day"
-                      onClick={() => setAssignDate(addDaysToDateInput(assignDate, 1))}
-                    >
-                      <ChevronRight className="size-4" aria-hidden="true" />
-                    </Button>
-                    <DailyTaskOrgDayBadge
-                      dateKey={assignDate}
-                      day={orgDayForAssignDate}
-                      orgTodayKey={orgTodayKey}
-                    />
-                  </>
+                  ) : null}
+                </>
+              }
+            />
+            <DailyTaskToolbar>
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+                {view !== 'calendar' ? (
+                  <DailyTaskDateNavigation
+                    assignDate={assignDate}
+                    onAssignDateChange={setAssignDateFromNav}
+                  />
                 ) : null}
-                <div className="min-w-0 flex-1 basis-[10rem]">
-                  <InputGroup leading={<Search aria-hidden="true" />} className="min-w-0 w-full">
-                    <Input
-                      className={cn(
-                        CRM_PIPELINE_SEARCH_INPUT_CLASS,
-                        inputGroupPaddingClass({ leading: true }),
-                        'h-9',
-                      )}
-                      placeholder="Search tasks…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      aria-label="Search tasks"
+                <DailyTaskToolbarSearch
+                  search={search}
+                  onSearchChange={setSearch}
+                  className="min-w-[11rem] flex-1"
+                />
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <CrmIconFilterDropdown
+                    icon={<ListFilter aria-hidden="true" />}
+                    tooltip="Task Type"
+                    label="Task type"
+                    allLabel="All types"
+                    value={typeFilter === 'ALL' ? 'all' : typeFilter}
+                    options={typeMenuOptions}
+                    onValueChange={(v) => setTypeFilter(v === 'all' ? 'ALL' : (v as typeof typeFilter))}
+                  />
+                  <CrmIconFilterDropdown
+                    icon={<Users aria-hidden="true" />}
+                    tooltip="Employee"
+                    label="Employee"
+                    allLabel="All employees"
+                    value={employeeId || 'all'}
+                    options={employeeMenuOptions}
+                    onValueChange={(v) => setEmployeeId(v === 'all' ? '' : v)}
+                  />
+                  <CrmIconFilterDropdown
+                    icon={<Folder aria-hidden="true" />}
+                    tooltip="Project"
+                    label="Project"
+                    allLabel="All projects"
+                    value={projectId || 'all'}
+                    options={projectMenuOptions}
+                    onValueChange={(v) => setProjectId(v === 'all' ? '' : v)}
+                  />
+                  {view === 'calendar' ? (
+                    <CrmIconFilterDropdown
+                      icon={<Flag aria-hidden="true" />}
+                      tooltip="Priority"
+                      label="Priority"
+                      allLabel="All priorities"
+                      value={calendarPriorityFilter === 'ALL' ? 'all' : calendarPriorityFilter}
+                      options={priorityMenuOptions}
+                      onValueChange={(v) =>
+                        setCalendarPriorityFilter(v === 'all' ? 'ALL' : (v as typeof calendarPriorityFilter))
+                      }
                     />
-                  </InputGroup>
+                  ) : (
+                    <CrmIconFilterDropdown
+                      icon={<Flag aria-hidden="true" />}
+                      tooltip="Priority"
+                      label="Priority"
+                      allLabel="All priorities"
+                      value={priorityFilter === 'ALL' ? 'all' : priorityFilter}
+                      options={priorityMenuOptions}
+                      onValueChange={(v) =>
+                        setPriorityFilter(v === 'all' ? 'ALL' : (v as typeof priorityFilter))
+                      }
+                    />
+                  )}
+                  {view === 'calendar' ? (
+                    <>
+                      <CrmIconFilterDropdown
+                        icon={<ListFilter aria-hidden="true" />}
+                        tooltip="Status"
+                        label="Status"
+                        allLabel="All statuses"
+                        value={calendarStatusFilter === 'ALL' ? 'all' : calendarStatusFilter}
+                        options={calendarStatusMenuOptions}
+                        onValueChange={(v) => {
+                          setCalendarStatusFilter(v === 'all' ? 'ALL' : (v as typeof calendarStatusFilter));
+                          setCalendarWorkflowStageId('');
+                        }}
+                      />
+                      <CrmIconFilterDropdown
+                        icon={<UserRound aria-hidden="true" />}
+                        tooltip="Assignment"
+                        label="Assignment"
+                        allLabel="Assigned & unassigned"
+                        value={calendarAssignmentFilter === 'ALL' ? 'all' : calendarAssignmentFilter}
+                        options={calendarAssignmentMenuOptions}
+                        onValueChange={(v) =>
+                          setCalendarAssignmentFilter(
+                            v === 'all' ? 'ALL' : (v as typeof calendarAssignmentFilter),
+                          )
+                        }
+                      />
+                      <CrmIconFilterDropdown
+                        icon={<GitBranch aria-hidden="true" />}
+                        tooltip="Workflow stage"
+                        label="Workflow stage"
+                        allLabel="All workflow stages"
+                        value={calendarWorkflowStageId || 'all'}
+                        options={workflowStageMenuOptions}
+                        onValueChange={(v) => {
+                          setCalendarWorkflowStageId(v === 'all' ? '' : v);
+                          if (v !== 'all') setCalendarStatusFilter('ALL');
+                        }}
+                        contentClassName="w-56"
+                      />
+                    </>
+                  ) : null}
+                  <DailyTaskSort
+                    sortBy={sortBy}
+                    sortDir={sortDir}
+                    onSortByChange={setSortBy}
+                    onSortDirChange={setSortDir}
+                  />
                 </div>
-                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
-                  <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Task type">
-                    <ListFilter className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-                    <SelectValue placeholder="All types" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">All types</SelectItem>
-                    <SelectItem value="GENERAL">General</SelectItem>
-                    <SelectItem value="PROJECT">Project</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={employeeId || '__all__'}
-                  onValueChange={(v) => setEmployeeId(v === '__all__' ? '' : v)}
-                >
-                  <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Employee">
-                    <Users className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-                    <SelectValue placeholder="All employees" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All employees</SelectItem>
-                    {employees.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.displayName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={projectId || '__all__'} onValueChange={(v) => setProjectId(v === '__all__' ? '' : v)}>
-                  <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Project">
-                    <Folder className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
-                    <SelectValue placeholder="All projects" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__all__">All projects</SelectItem>
-                    {projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {view === 'calendar' ? (
-                  <>
-                    <Select
-                      value={calendarStatusFilter}
-                      onValueChange={(v) => {
-                        setCalendarStatusFilter(v as typeof calendarStatusFilter);
-                        setCalendarWorkflowStageId('');
-                      }}
-                    >
-                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Task status">
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">All statuses</SelectItem>
-                        <SelectItem value="COMPLETED">Completed</SelectItem>
-                        <SelectItem value="in_progress">In progress</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="OVERDUE">Overdue</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={calendarPriorityFilter}
-                      onValueChange={(v) => setCalendarPriorityFilter(v as typeof calendarPriorityFilter)}
-                    >
-                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Priority">
-                        <SelectValue placeholder="All priorities" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">All priorities</SelectItem>
-                        <SelectItem value="LOW">Low</SelectItem>
-                        <SelectItem value="MEDIUM">Medium</SelectItem>
-                        <SelectItem value="HIGH">High</SelectItem>
-                        <SelectItem value="URGENT">Urgent</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={calendarAssignmentFilter}
-                      onValueChange={(v) => setCalendarAssignmentFilter(v as typeof calendarAssignmentFilter)}
-                    >
-                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Assignment">
-                        <SelectValue placeholder="All assignments" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ALL">Assigned & unassigned</SelectItem>
-                        <SelectItem value="ASSIGNED">Assigned only</SelectItem>
-                        <SelectItem value="UNASSIGNED">Unassigned only</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={calendarWorkflowStageId || '__all__'}
-                      onValueChange={(v) => {
-                        setCalendarWorkflowStageId(v === '__all__' ? '' : v);
-                        if (v !== '__all__') setCalendarStatusFilter('ALL');
-                      }}
-                    >
-                      <SelectTrigger className={FILTER_SELECT_TRIGGER_CLASS} aria-label="Workflow stage">
-                        <SelectValue placeholder="All workflow stages" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__">All workflow stages</SelectItem>
-                        {stages
-                          .filter((s) => s.isActive)
-                          .map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </>
-                ) : null}
               </div>
-            }
-          />
+            </DailyTaskToolbar>
+          </div>
 
           {view === 'kanban' ? (
             boardLoading && !board ? (
@@ -566,6 +622,7 @@ export function DailyTasksWorkspace({
                 <div className="min-w-0 px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
                   <DailyTaskKanbanBoard
                     board={board}
+                    highlightTaskId={highlightTaskId}
                     onRefresh={refreshAll}
                     onOpenTask={(task) => openTask(task)}
                     onEditTask={openEdit}
@@ -634,7 +691,16 @@ export function DailyTasksWorkspace({
         taskId={detailId}
         open={detailOpen}
         stages={stages}
-        onOpenChange={setDetailOpen}
+        onOpenChange={(open) => {
+          setDetailOpen(open);
+          if (!open) {
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete('taskId');
+            params.delete('focus');
+            const qs = params.toString();
+            router.replace(qs ? `${pathname}?${qs}` : pathname);
+          }
+        }}
         onChanged={refreshAll}
         focusReschedule={detailRescheduleFocus}
       />
