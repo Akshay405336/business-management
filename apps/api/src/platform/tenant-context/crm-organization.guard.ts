@@ -10,7 +10,7 @@ import { ApiException } from '../../common/filters/api-error.response.js';
 import {
   CRM_REPOSITORY,
   type CrmRepository,
-} from '../../modules/crm/domain/repositories/crm.repository.js';
+} from '../../modules/crm/shared/domain/repositories/crm.repository.js';
 import type { PlatformAuthenticatedRequest } from '../../modules/auth/index.js';
 import {
   ORG_ACCESS_REPOSITORY,

@@ -1,0 +1,290 @@
+import { Inject, Injectable } from '@nestjs/common';
+import type {
+  ClientRecord,
+  CreateLeadActivityInput,
+  CreateLeadInput,
+  CreatePipelineInput,
+  CreateStageInput,
+  CrmAuditInput,
+  CrmRepository,
+  LeadActivityRecord,
+  LeadListFilters,
+  LeadRecord,
+  PaginatedLeads,
+  PipelineListFilters,
+  PipelineRecord,
+  PipelineStageRecord,
+  UpdateLeadInput,
+  UpdatePipelineInput,
+  UpdateStageInput,
+} from '../../../../domain/repositories/crm.repository.js';
+import { PrismaService } from '../../../../../../../infrastructure/database/prisma.service.js';
+import {
+  CLIENT_REPOSITORY,
+  LEAD_TO_CLIENT_CONVERSION,
+  type ClientRepository,
+  type LeadToClientConversionPort,
+} from '../../../../../modules/clients/index.js';
+import { CrmLeadPersistence } from './crm-lead.persistence.js';
+import { CrmOrganizationPersistence } from './crm-organization.persistence.js';
+import { CrmPipelinePersistence } from './crm-pipeline.persistence.js';
+import type { CrmPersistenceHost } from './crm-persistence.shared.js';
+
+@Injectable()
+export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
+  private readonly organizationPersistence: CrmOrganizationPersistence;
+  private readonly pipelinePersistence: CrmPipelinePersistence;
+  private readonly leadPersistence: CrmLeadPersistence;
+  readonly leadToClientConversion: LeadToClientConversionPort;
+
+  constructor(
+    @Inject(PrismaService) readonly prisma: PrismaService,
+    @Inject(CLIENT_REPOSITORY) private readonly clients: ClientRepository,
+    @Inject(LEAD_TO_CLIENT_CONVERSION) leadToClientConversion: LeadToClientConversionPort,
+  ) {
+    this.leadToClientConversion = leadToClientConversion;
+    this.organizationPersistence = new CrmOrganizationPersistence(prisma);
+    this.pipelinePersistence = new CrmPipelinePersistence(this);
+    this.leadPersistence = new CrmLeadPersistence(this);
+  }
+
+  ensureOrganizationForAdmin(adminId: string): Promise<{ organizationId: string }> {
+    return this.organizationPersistence.ensureOrganizationForAdmin(adminId);
+  }
+
+  ensureDefaultPipeline(organizationId: string): Promise<PipelineRecord> {
+    return this.organizationPersistence.ensureDefaultPipeline(organizationId);
+  }
+
+  getDefaultPipeline(organizationId: string): Promise<PipelineRecord> {
+    return this.organizationPersistence.getDefaultPipeline(organizationId);
+  }
+
+  getPipeline(organizationId: string, pipelineId: string): Promise<PipelineRecord | null> {
+    return this.pipelinePersistence.getPipeline(organizationId, pipelineId);
+  }
+
+  getLead(organizationId: string, leadId: string): Promise<LeadRecord | null> {
+    return this.leadPersistence.getLead(organizationId, leadId);
+  }
+
+  getClient(organizationId: string, clientId: string): Promise<ClientRecord | null> {
+    return this.clients.findById(organizationId, clientId);
+  }
+
+  listPipelines(
+    organizationId: string,
+    filters?: PipelineListFilters,
+  ): Promise<readonly PipelineRecord[]> {
+    return this.pipelinePersistence.listPipelines(organizationId, filters);
+  }
+
+  createPipeline(
+    organizationId: string,
+    input: CreatePipelineInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineRecord> {
+    return this.pipelinePersistence.createPipeline(organizationId, input, audit);
+  }
+
+  updatePipeline(
+    organizationId: string,
+    pipelineId: string,
+    input: UpdatePipelineInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineRecord> {
+    return this.pipelinePersistence.updatePipeline(organizationId, pipelineId, input, audit);
+  }
+
+  deletePipeline(
+    organizationId: string,
+    pipelineId: string,
+    audit: CrmAuditInput,
+  ): Promise<void> {
+    return this.pipelinePersistence.deletePipeline(organizationId, pipelineId, audit);
+  }
+
+  createStage(
+    organizationId: string,
+    pipelineId: string,
+    input: CreateStageInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord> {
+    return this.pipelinePersistence.createStage(organizationId, pipelineId, input, audit);
+  }
+
+  updateStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    input: UpdateStageInput,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord> {
+    return this.pipelinePersistence.updateStage(organizationId, pipelineId, stageId, input, audit);
+  }
+
+  deleteStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    targetStageId: string | undefined,
+    audit: CrmAuditInput,
+  ): Promise<void> {
+    return this.pipelinePersistence.deleteStage(
+      organizationId,
+      pipelineId,
+      stageId,
+      targetStageId,
+      audit,
+    );
+  }
+
+  reorderStages(
+    organizationId: string,
+    pipelineId: string,
+    orderedStageIds: readonly string[],
+    audit: CrmAuditInput,
+  ): Promise<readonly PipelineStageRecord[]> {
+    return this.pipelinePersistence.reorderStages(
+      organizationId,
+      pipelineId,
+      orderedStageIds,
+      audit,
+    );
+  }
+
+  activateStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord> {
+    return this.pipelinePersistence.activateStage(organizationId, pipelineId, stageId, audit);
+  }
+
+  deactivateStage(
+    organizationId: string,
+    pipelineId: string,
+    stageId: string,
+    targetStageId: string | undefined,
+    audit: CrmAuditInput,
+  ): Promise<PipelineStageRecord> {
+    return this.pipelinePersistence.deactivateStage(
+      organizationId,
+      pipelineId,
+      stageId,
+      targetStageId,
+      audit,
+    );
+  }
+
+  listLeads(organizationId: string, filters: LeadListFilters): Promise<PaginatedLeads> {
+    return this.leadPersistence.listLeads(organizationId, filters);
+  }
+
+  findLeadIdByPhone(
+    organizationId: string,
+    phone: string,
+    excludeLeadId?: string,
+  ): Promise<string | null> {
+    return this.leadPersistence.findLeadIdByPhone(organizationId, phone, excludeLeadId);
+  }
+
+  findLeadIdByEmail(
+    organizationId: string,
+    email: string,
+    excludeLeadId?: string,
+  ): Promise<string | null> {
+    return this.leadPersistence.findLeadIdByEmail(organizationId, email, excludeLeadId);
+  }
+
+  createLead(
+    organizationId: string,
+    input: CreateLeadInput,
+    audit: CrmAuditInput,
+  ): Promise<LeadRecord> {
+    return this.leadPersistence.createLead(organizationId, input, audit);
+  }
+
+  updateLead(
+    organizationId: string,
+    leadId: string,
+    input: UpdateLeadInput,
+    audit: CrmAuditInput,
+  ): Promise<LeadRecord> {
+    return this.leadPersistence.updateLead(organizationId, leadId, input, audit);
+  }
+
+  deleteLead(organizationId: string, leadId: string, audit: CrmAuditInput): Promise<void> {
+    return this.leadPersistence.deleteLead(organizationId, leadId, audit);
+  }
+
+  changeLeadStage(
+    organizationId: string,
+    leadId: string,
+    stageId: string,
+    beforeLeadId: string | null | undefined,
+    adminId: string,
+    audit: CrmAuditInput,
+  ): Promise<LeadRecord> {
+    return this.leadPersistence.changeLeadStage(
+      organizationId,
+      leadId,
+      stageId,
+      beforeLeadId,
+      adminId,
+      audit,
+    );
+  }
+
+  listLeadActivities(
+    organizationId: string,
+    leadId: string,
+  ): Promise<readonly LeadActivityRecord[]> {
+    return this.leadPersistence.listLeadActivities(organizationId, leadId);
+  }
+
+  createLeadActivity(
+    organizationId: string,
+    leadId: string,
+    input: CreateLeadActivityInput,
+  ): Promise<LeadActivityRecord> {
+    return this.leadPersistence.createLeadActivity(organizationId, leadId, input);
+  }
+
+  convertLeadToClient(
+    organizationId: string,
+    leadId: string,
+    adminId: string,
+    audit: CrmAuditInput,
+  ): Promise<{
+    lead: LeadRecord;
+    client: ClientRecord | null;
+    duplicateClient: {
+      id: string;
+      name: string;
+      referenceNumber: string;
+      type: ClientRecord['type'];
+      phone: string | null;
+    } | null;
+  }> {
+    return this.leadPersistence.convertLeadToClient(organizationId, leadId, adminId, audit);
+  }
+
+  linkLeadToExistingClient(
+    organizationId: string,
+    leadId: string,
+    clientId: string,
+    adminId: string,
+    audit: CrmAuditInput,
+  ): Promise<{ lead: LeadRecord; client: ClientRecord }> {
+    return this.leadPersistence.linkLeadToExistingClient(
+      organizationId,
+      leadId,
+      clientId,
+      adminId,
+      audit,
+    );
+  }
+
+}

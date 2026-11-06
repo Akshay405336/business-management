@@ -24,7 +24,7 @@ import {
   UpdatePipelineHandler,
   UpdatePipelineStageHandler,
   UpdatePipelineStatusHandler,
-} from './pipelines/index.js';
+} from './modules/pipelines/index.js';
 import {
   ChangeClientStatusHandler,
   ClientController,
@@ -38,9 +38,9 @@ import {
   CLIENT_REPOSITORY,
   LEAD_TO_CLIENT_CONVERSION,
   PrismaLeadToClientConversionAdapter,
-} from './clients/index.js';
-import { CRM_REPOSITORY } from './domain/repositories/crm.repository.js';
-import { PrismaCrmRepository } from './infrastructure/persistence/prisma/repositories/prisma-crm.repository.js';
+} from './modules/clients/index.js';
+import { CRM_REPOSITORY } from './shared/domain/repositories/crm.repository.js';
+import { PrismaCrmRepository } from './shared/infrastructure/persistence/prisma/repositories/prisma-crm.repository.js';
 import {
   BulkDeleteLeadsHandler,
   ChangeLeadStageHandler,
@@ -61,7 +61,7 @@ import {
   ExecuteLeadImportHandler,
   ListLeadTagsHandler,
   ValidateLeadImportHandler,
-} from './leads/index.js';
+} from './modules/leads/index.js';
 import {
   ChangeQuotationStatusHandler,
   CreateQuotationHandler,
@@ -80,7 +80,7 @@ import {
   QuotationPdfService,
   SendQuotationHandler,
   UpdateQuotationHandler,
-} from './quotations/index.js';
+} from './modules/quotations/index.js';
 import {
   ChangeServicePackageStatusHandler,
   CreateServicePackageHandler,
@@ -92,8 +92,8 @@ import {
   SERVICE_PACKAGE_REPOSITORY,
   ServicePackageController,
   UpdateServicePackageHandler,
-} from './service-packages/index.js';
-import { CrmExceptionFilter } from './presentation/http/filters/crm-exception.filter.js';
+} from './modules/service-packages/index.js';
+import { CrmExceptionFilter } from './shared/presentation/http/filters/crm-exception.filter.js';
 
 export const crmPersistenceProviders: Provider[] = [
   { provide: CLIENT_REPOSITORY, useClass: PrismaClientRepository },
