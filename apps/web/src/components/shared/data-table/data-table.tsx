@@ -27,11 +27,11 @@ export function DataTableFrame({
 }) {
   const tableBlock =
     frame === 'flush' ? (
-      <div className={cn('max-w-full min-h-[8rem] min-w-0 bg-card', frameClassName)}>
+      <div className={cn('max-w-full min-h-0 min-w-0 bg-card', frameClassName)}>
         {children}
       </div>
     ) : (
-      <div className="workspace-surface max-w-full min-h-[8rem] min-w-0">
+      <div className="workspace-surface max-w-full min-h-0 min-w-0">
         <div className="overflow-hidden rounded-lg">{children}</div>
       </div>
     );

@@ -1,5 +1,4 @@
 import type {
-  CrmClient,
   CrmLead,
   CrmLeadActivity,
   CrmPipeline,
@@ -8,7 +7,6 @@ import type {
   CatalogSelection,
 } from '@techwin/contracts';
 import type {
-  ClientRecord,
   LeadActivityRecord,
   LeadRecord,
   PipelineRecord,
@@ -99,24 +97,7 @@ export const toCrmLeadActivity = (activity: LeadActivityRecord): CrmLeadActivity
   updatedAt: iso(activity.updatedAt),
 });
 
-export const toCrmClient = (client: ClientRecord): CrmClient => ({
-  id: client.id,
-  referenceNumber: client.referenceNumber,
-  type: client.type,
-  name: client.name,
-  primaryContact: client.primaryContact,
-  email: client.email,
-  phone: client.phone,
-  website: client.website,
-  billingAddress: client.billingAddress,
-  taxRegistration: client.taxRegistration,
-  status: client.status,
-  notes: client.notes,
-  sourceLeadId: client.sourceLeadId,
-  archivedAt: client.archivedAt ? iso(client.archivedAt) : null,
-  createdAt: iso(client.createdAt),
-  updatedAt: iso(client.updatedAt),
-});
+export { toCrmClient } from '../../../clients/presentation/mappers/client-response.mapper.js';
 
 const asSelections = (value: unknown): readonly CatalogSelection[] =>
   Array.isArray(value) ? (value as CatalogSelection[]) : [];

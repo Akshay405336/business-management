@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { CRM_REPOSITORY, type CrmRepository } from '../../../domain/repositories/crm.repository.js';
+import { CLIENT_REPOSITORY, type ClientRepository } from '../../../clients/index.js';
 import {
   SERVICE_PACKAGE_REPOSITORY,
   type ServicePackageRepository,
@@ -25,7 +25,7 @@ export class CreateQuotationHandler {
   constructor(
     @Inject(QUOTATION_REPOSITORY) private readonly quotations: QuotationRepository,
     @Inject(SERVICE_PACKAGE_REPOSITORY) private readonly servicePackages: ServicePackageRepository,
-    @Inject(CRM_REPOSITORY) private readonly crm: CrmRepository,
+    @Inject(CLIENT_REPOSITORY) private readonly clients: ClientRepository,
   ) {}
 
   async execute(command: CreateQuotationCommand): Promise<QuotationReadModel> {
@@ -39,7 +39,7 @@ export class CreateQuotationHandler {
       expiryDate: validated.expiryDate,
     });
     const withDates = { ...validated, ...dates };
-    await assertQuotationClientExists(this.crm, actor.organizationId, withDates.clientId);
+    await assertQuotationClientExists(this.clients, actor.organizationId, withDates.clientId);
     const { lineItems, packageSnapshot } = await resolveLineItemsForCreate(
       actor.organizationId,
       withDates,

@@ -26,6 +26,7 @@ export const CRM_ROUTES = {
   leadStage: (id: string) => `${API_PREFIX}/crm/leads/${id}/stage`,
   leadActivities: (id: string) => `${API_PREFIX}/crm/leads/${id}/activities`,
   leadConvert: (id: string) => `${API_PREFIX}/crm/leads/${id}/convert`,
+  leadLinkClient: (id: string) => `${API_PREFIX}/crm/leads/${id}/link-client`,
   clients: `${API_PREFIX}/crm/clients`,
   client: (id: string) => `${API_PREFIX}/crm/clients/${id}`,
   clientFromLead: (leadId: string) => `${API_PREFIX}/crm/clients/from-lead/${leadId}`,
@@ -58,7 +59,8 @@ export type LeadActivityType =
   | 'STAGE_CHANGE'
   | 'PROPOSAL_CREATED'
   | 'PROPOSAL_STATUS_CHANGE'
-  | 'LEAD_CONVERTED';
+  | 'LEAD_CONVERTED'
+  | 'LEAD_LINKED_TO_CLIENT';
 export type ClientType = 'INDIVIDUAL' | 'COMPANY';
 export type ClientStatus = 'ACTIVE' | 'INACTIVE';
 export type QuotationDocumentType = 'PROPOSAL' | 'QUOTATION';
@@ -252,9 +254,22 @@ export interface CrmLeadActivityListResponse {
   readonly activities: readonly CrmLeadActivity[];
 }
 
+/** Shown when converting a lead whose phone matches an existing client (same organization). */
+export interface CrmDuplicateClientSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly referenceNumber: string;
+  readonly type: ClientType;
+  /** Display / stored phone for the existing client. */
+  readonly phone: string | null;
+}
+
 export interface CrmLeadConvertResponse {
   readonly lead: CrmLead;
-  readonly client: CrmClient;
+  /** Present when conversion created a new client. Null when `duplicateClient` is set or when only a duplicate was found. */
+  readonly client: CrmClient | null;
+  /** When non-null, a client with the same normalized phone already exists — link explicitly or cancel. */
+  readonly duplicateClient: CrmDuplicateClientSummary | null;
 }
 
 export interface CrmClient {
@@ -278,6 +293,9 @@ export interface CrmClient {
 
 export interface CrmClientListResponse {
   readonly clients: readonly CrmClient[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
 }
 
 export interface ClientReferencePreviewResponse {

@@ -2,6 +2,7 @@ import { Decimal } from '@prisma/client/runtime/client';
 import { Prisma } from '../../../../../../generated/prisma/client.js';
 import type { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
 import { decimalToString } from '../../../services/quotation-money.js';
+import type { LeadToClientConversionPort } from '../../../../clients/application/conversion/lead-to-client-conversion.port.js';
 import type {
   ClientRecord,
   CrmAuditInput,
@@ -180,6 +181,7 @@ export function toClient(row: {
   primaryContact: string;
   email: string | null;
   phone: string | null;
+  phoneNormalized: string | null;
   website: string | null;
   billingAddress: string;
   taxRegistration: string;
@@ -250,6 +252,7 @@ export async function applyKanbanOrder(
 
 export type CrmPersistenceHost = {
   readonly prisma: PrismaService;
+  readonly leadToClientConversion: LeadToClientConversionPort;
   ensureDefaultPipeline(organizationId: string): Promise<PipelineRecord>;
   getPipeline(organizationId: string, pipelineId: string): Promise<PipelineRecord | null>;
   getLead(organizationId: string, leadId: string): Promise<LeadRecord | null>;

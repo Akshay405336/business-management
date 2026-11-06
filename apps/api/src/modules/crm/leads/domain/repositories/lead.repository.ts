@@ -62,6 +62,23 @@ export interface LeadRepository {
     leadId: string,
     adminId: string,
     audit: LeadAuditEntry,
+  ): Promise<{
+    readonly lead: Lead;
+    readonly client: ClientRecord | null;
+    readonly duplicateClient: {
+      readonly id: string;
+      readonly name: string;
+      readonly referenceNumber: string;
+      readonly type: ClientRecord['type'];
+      readonly phone: string | null;
+    } | null;
+  }>;
+  linkLeadToExistingClient(
+    organizationId: string,
+    leadId: string,
+    clientId: string,
+    adminId: string,
+    audit: LeadAuditEntry,
   ): Promise<{ readonly lead: Lead; readonly client: ClientRecord }>;
   loadTagsByLeadIds(
     organizationId: string,

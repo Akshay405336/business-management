@@ -9,6 +9,7 @@ import {
   CrmValidationError,
   type CrmErrorCode,
 } from '../../../domain/errors/crm.errors.js';
+import { CrmDuplicateClientPhoneError } from '../../../domain/errors/crm-client-phone.errors.js';
 
 const HTTP_MAPPING: Record<CrmErrorCode, { status: number; code: ApiErrorCode }> = {
   NOT_FOUND: { status: HttpStatus.NOT_FOUND, code: API_ERROR_CODES.NOT_FOUND },
@@ -36,6 +37,22 @@ export class CrmExceptionFilter implements ExceptionFilter<CrmError> {
     const http = host.switchToHttp();
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
+    if (error instanceof CrmDuplicateClientPhoneError) {
+      const s = error.summary;
+      sendApiError(request, response, {
+        status: HttpStatus.CONFLICT,
+        code: API_ERROR_CODES.DUPLICATE_CLIENT_PHONE,
+        message: error.message,
+        details: [
+          { path: 'existingClientId', message: s.id },
+          { path: 'existingClientName', message: s.name },
+          { path: 'existingClientReferenceNumber', message: s.referenceNumber },
+          { path: 'existingClientType', message: s.type },
+          { path: 'existingClientPhone', message: s.phone ?? '' },
+        ],
+      });
+      return;
+    }
     const mapping = HTTP_MAPPING[error.code];
     sendApiError(request, response, {
       status: mapping.status,

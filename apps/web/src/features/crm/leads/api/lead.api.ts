@@ -1,4 +1,5 @@
 import { CRM_ROUTES, type CrmLeadBulkActionResponse } from '@techwin/contracts';
+import type { LinkLeadToClientRequest } from '@techwin/validation';
 import { apiRequest } from '@/shared/api/api-client';
 import { buildQueryString } from '../utils/query-string';
 import type {
@@ -81,5 +82,16 @@ export function convertLead(id: string): Promise<CrmLeadConvertResponse> {
   return apiRequest<CrmLeadConvertResponse>(CRM_ROUTES.leadConvert(id), {
     method: 'POST',
     auth: true,
+  });
+}
+
+export function linkLeadToClient(
+  id: string,
+  body: LinkLeadToClientRequest,
+): Promise<CrmLeadConvertResponse> {
+  return apiRequest<CrmLeadConvertResponse>(CRM_ROUTES.leadLinkClient(id), {
+    method: 'POST',
+    auth: true,
+    body,
   });
 }

@@ -26,6 +26,8 @@ export const API_ERROR_CODES = {
   MEMBERSHIP_DENIED: 'MEMBERSHIP_DENIED',
   PIPELINE_HAS_DEPENDENT_LEADS: 'PIPELINE_HAS_DEPENDENT_LEADS',
   TAG_IN_USE: 'TAG_IN_USE',
+  /** Lead conversion: another client already uses this phone in the organization. */
+  DUPLICATE_CLIENT_PHONE: 'DUPLICATE_CLIENT_PHONE',
 } as const;
 
 export type ApiErrorCode = (typeof API_ERROR_CODES)[keyof typeof API_ERROR_CODES];

@@ -52,6 +52,11 @@ export const ACTIVITY_TYPES = [
   'EMAIL',
   'NOTE',
   'TASK',
+  'STAGE_CHANGE',
+  'PROPOSAL_CREATED',
+  'PROPOSAL_STATUS_CHANGE',
+  'LEAD_CONVERTED',
+  'LEAD_LINKED_TO_CLIENT',
 ] as const;
 
 export const PROPOSAL_STATUSES = [

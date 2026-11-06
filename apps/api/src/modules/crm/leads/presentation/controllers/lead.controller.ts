@@ -38,6 +38,7 @@ import {
   createLeadTagRequestSchema,
   executeLeadImportRequestSchema,
   parseLeadListQuery,
+  type LinkLeadToClientRequest,
   validateLeadImportRequestSchema,
   type ChangeLeadStageRequest,
   type CreateLeadActivityRequest,
@@ -53,6 +54,7 @@ import {
 } from '../../../../org-access/index.js';
 import { ChangeLeadStageHandler } from '../../application/change-stage/change-lead-stage.handler.js';
 import { ConvertLeadHandler } from '../../application/convert/convert-lead.handler.js';
+import { LinkLeadToClientHandler } from '../../application/link-client/link-lead-to-client.handler.js';
 import { CreateLeadActivityHandler } from '../../application/create-activity/create-lead-activity.handler.js';
 import { CreateLeadHandler } from '../../application/create/create-lead.handler.js';
 import { BulkDeleteLeadsHandler } from '../../application/bulk-delete/bulk-delete-leads.handler.js';
@@ -80,8 +82,10 @@ import {
   createLeadActivityBodySchema,
   createLeadBodySchema,
   crmLeadActivityResponseSchema,
+  crmLeadConvertResponseSchema,
   crmLeadListResponseSchema,
   crmLeadResponseSchema,
+  linkLeadToClientRequestSchema,
   updateLeadBodySchema,
 } from '../dto/lead.dto.js';
 import {
@@ -118,6 +122,7 @@ export class LeadController {
     @Inject(ListLeadActivitiesHandler) private readonly listLeadActivities: ListLeadActivitiesHandler,
     @Inject(CreateLeadActivityHandler) private readonly createLeadActivity: CreateLeadActivityHandler,
     @Inject(ConvertLeadHandler) private readonly convertLead: ConvertLeadHandler,
+    @Inject(LinkLeadToClientHandler) private readonly linkLeadToClient: LinkLeadToClientHandler,
     @Inject(ListLeadTagsHandler) private readonly listLeadTags: ListLeadTagsHandler,
     @Inject(CreateLeadTagHandler) private readonly createLeadTag: CreateLeadTagHandler,
     @Inject(ValidateLeadImportHandler) private readonly validateLeadImport: ValidateLeadImportHandler,
@@ -353,11 +358,7 @@ export class LeadController {
   @Post(':leadId/convert')
   @RequirePermissions('leads.update', 'clients.create')
   @ApiOperation({ summary: 'Convert lead to client (idempotent)' })
-  @ApiOkResponse({
-    schema: toOpenApiSchema(
-      z.object({ lead: crmLeadResponseSchema, client: z.object({ id: z.uuid() }) }),
-    ),
-  })
+  @ApiOkResponse({ schema: toOpenApiSchema(crmLeadConvertResponseSchema) })
   async convert(
     @CrmContext() ctx: CrmRequestContext,
     @Param('leadId') leadId: string,
@@ -365,7 +366,29 @@ export class LeadController {
     const result = await this.convertLead.execute({ actor: toCrmActor(ctx), leadId });
     return {
       lead: toCrmLeadFromReadModel(result.lead),
+      client: result.client ? toCrmClient(result.client) : null,
+      duplicateClient: result.duplicateClient,
+    };
+  }
+
+  @Post(':leadId/link-client')
+  @RequirePermissions('leads.update', 'clients.create')
+  @ApiOperation({ summary: 'Link lead to an existing client (same phone)' })
+  @ApiOkResponse({ schema: toOpenApiSchema(crmLeadConvertResponseSchema) })
+  async linkClient(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('leadId') leadId: string,
+    @Body({ schema: linkLeadToClientRequestSchema }) body: LinkLeadToClientRequest,
+  ): Promise<CrmLeadConvertResponse> {
+    const result = await this.linkLeadToClient.execute({
+      actor: toCrmActor(ctx),
+      leadId,
+      clientId: body.clientId,
+    });
+    return {
+      lead: toCrmLeadFromReadModel(result.lead),
       client: toCrmClient(result.client),
+      duplicateClient: null,
     };
   }
 }

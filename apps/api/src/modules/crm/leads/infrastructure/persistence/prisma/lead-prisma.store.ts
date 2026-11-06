@@ -1,4 +1,10 @@
 import { Decimal } from '@prisma/client/runtime/client';
+import { normalizedLeadPhoneForStorage } from '@techwin/validation';
+import { prepareClientCreateFromLead } from '../../../../clients/application/conversion/lead-to-client.integration.js';
+import {
+  findClientByNormalizedPhone,
+} from '../../../../clients/infrastructure/persistence/prisma/client-prisma.store.js';
+import { clientRowToReadModel } from '../../../../clients/infrastructure/persistence/prisma/mappers/client.mapper.js';
 import type { ClientRecord } from '../../../../domain/repositories/crm.repository.js';
 import { SEQUENCE_KEYS } from '../../../../domain/repositories/crm.repository.js';
 import { rethrowLeadContactUniqueViolation } from '../../../../infrastructure/persistence/prisma/mappers/lead-contact-unique-violation.js';
@@ -10,7 +16,6 @@ import {
   nextSequence,
   resolveKanbanInsertIndex,
   sameLeadIdOrder,
-  toClient,
   writeAudit,
   type CrmPersistenceHost,
 } from '../../../../infrastructure/persistence/prisma/repositories/crm-persistence.shared.js';
@@ -445,41 +450,85 @@ export class LeadPrismaStore {
     leadId: string,
     adminId: string,
     audit: LeadAuditEntry,
-  ): Promise<{ lead: Lead; client: ClientRecord }> {
+  ): Promise<{
+    lead: Lead;
+    client: ClientRecord | null;
+    duplicateClient: {
+      id: string;
+      name: string;
+      referenceNumber: string;
+      type: ClientRecord['type'];
+      phone: string | null;
+    } | null;
+  }> {
     const lead = await this.getLead(organizationId, leadId);
     if (!lead) throw new LeadNotFoundError('Lead');
 
     if (lead.convertedClientId) {
       const client = await this.host.getClient(organizationId, lead.convertedClientId);
       if (!client) throw new LeadNotFoundError('Client');
-      return { lead, client };
+      return { lead, client, duplicateClient: null };
+    }
+
+    const readModel = lead.toReadModel();
+    const leadPhoneRaw = readModel.phone?.trim() ?? '';
+    if (!leadPhoneRaw) {
+      throw new LeadValidationError(
+        'Add a valid phone number to this lead before converting it into a client.',
+      );
+    }
+    let normalizedPhoneKey: string;
+    try {
+      normalizedPhoneKey = normalizedLeadPhoneForStorage(leadPhoneRaw);
+    } catch {
+      throw new LeadValidationError(
+        'Add a valid phone number to this lead before converting it into a client.',
+      );
+    }
+
+    const existing = await findClientByNormalizedPhone(this.prisma, organizationId, normalizedPhoneKey);
+    if (existing) {
+      return {
+        lead,
+        client: null,
+        duplicateClient: {
+          id: existing.id,
+          name: existing.name,
+          referenceNumber: existing.referenceNumber,
+          type: existing.type,
+          phone: existing.phone,
+        },
+      };
     }
 
     const clientId = crypto.randomUUID();
     const now = new Date();
-    const readModel = lead.toReadModel();
+    const clientCreateInput = prepareClientCreateFromLead({
+      leadId,
+      fullName: readModel.fullName,
+      companyName: readModel.companyName,
+      email: readModel.email,
+      phone: leadPhoneRaw,
+      website: readModel.website,
+      createdByAdminId: adminId,
+    });
     const result = await this.prisma.$transaction(async (tx) => {
-      const seq = await nextSequence(tx, organizationId, SEQUENCE_KEYS.client);
-      const referenceNumber = formatReference('CL', seq);
-      const client = await tx.client.create({
-        data: {
-          id: clientId,
-          organizationId,
-          referenceNumber,
-          type: readModel.companyName ? 'COMPANY' : 'INDIVIDUAL',
-          name: readModel.companyName || readModel.fullName,
-          primaryContact: readModel.fullName,
-          email: readModel.email,
-          phone: readModel.phone,
-          website: readModel.website,
-          sourceLeadId: leadId,
-          createdByAdminId: adminId,
+      const clientReadModel = await this.host.leadToClientConversion.createClientWithinTransaction(
+        tx,
+        organizationId,
+        clientId,
+        clientCreateInput,
+        {
+          type: 'CLIENT_CREATED',
+          adminId,
+          entityType: 'client',
+          entityId: clientId,
         },
-      });
+      );
       const updatedLead = await tx.lead.update({
         where: { id: leadId },
         data: {
-          convertedClientId: client.id,
+          convertedClientId: clientReadModel.id,
           convertedAt: now,
           convertedByAdminId: adminId,
           lastActivityAt: now,
@@ -492,16 +541,93 @@ export class LeadPrismaStore {
           leadId,
           type: 'LEAD_CONVERTED',
           title: 'Lead converted to client',
-          description: client.referenceNumber,
+          description: clientReadModel.referenceNumber,
           occurredAt: now,
-          metadata: { clientId: client.id },
+          metadata: { clientId: clientReadModel.id },
           createdByAdminId: adminId,
         },
       });
       await writeAudit(tx, organizationId, audit);
-      return { lead: updatedLead, client };
+      return { lead: updatedLead, client: clientReadModel };
     });
-    return { lead: leadRowToDomain(result.lead), client: toClient(result.client) };
+    return {
+      lead: leadRowToDomain(result.lead),
+      client: result.client,
+      duplicateClient: null,
+    };
+  }
+
+  async linkLeadToExistingClient(
+    organizationId: string,
+    leadId: string,
+    clientId: string,
+    adminId: string,
+    audit: LeadAuditEntry,
+  ): Promise<{ lead: Lead; client: ClientRecord }> {
+    const lead = await this.getLead(organizationId, leadId);
+    if (!lead) throw new LeadNotFoundError('Lead');
+    if (lead.convertedClientId) {
+      throw new LeadValidationError('This lead has already been converted or linked.');
+    }
+
+    const readModel = lead.toReadModel();
+    const leadPhoneRaw = readModel.phone?.trim() ?? '';
+    if (!leadPhoneRaw) {
+      throw new LeadValidationError(
+        'Add a valid phone number to this lead before linking it to a client.',
+      );
+    }
+    let normalizedPhoneKey: string;
+    try {
+      normalizedPhoneKey = normalizedLeadPhoneForStorage(leadPhoneRaw);
+    } catch {
+      throw new LeadValidationError(
+        'Add a valid phone number to this lead before linking it to a client.',
+      );
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      const clientRow = await tx.client.findFirst({
+        where: { id: clientId, organizationId, archivedAt: null },
+      });
+      if (!clientRow) {
+        throw new LeadNotFoundError('Client');
+      }
+      if (!clientRow.phoneNormalized || clientRow.phoneNormalized !== normalizedPhoneKey) {
+        throw new LeadValidationError(
+          'The selected client does not match this lead’s phone number.',
+        );
+      }
+
+      const now = new Date();
+      const updatedLead = await tx.lead.update({
+        where: { id: leadId },
+        data: {
+          convertedClientId: clientRow.id,
+          convertedAt: now,
+          convertedByAdminId: adminId,
+          lastActivityAt: now,
+        },
+      });
+      await tx.leadActivity.create({
+        data: {
+          id: crypto.randomUUID(),
+          organizationId,
+          leadId,
+          type: 'LEAD_LINKED_TO_CLIENT',
+          title: 'Lead linked to existing client',
+          description: clientRow.referenceNumber,
+          occurredAt: now,
+          metadata: { clientId: clientRow.id },
+          createdByAdminId: adminId,
+        },
+      });
+      await writeAudit(tx, organizationId, audit);
+      return {
+        lead: leadRowToDomain(updatedLead),
+        client: clientRowToReadModel(clientRow),
+      };
+    });
   }
 
   private async assertListFilters(organizationId: string, filters: LeadListFilters): Promise<void> {

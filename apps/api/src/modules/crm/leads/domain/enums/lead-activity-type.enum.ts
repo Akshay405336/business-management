@@ -9,6 +9,7 @@ export const LEAD_ACTIVITY_TYPES = [
   'PROPOSAL_CREATED',
   'PROPOSAL_STATUS_CHANGE',
   'LEAD_CONVERTED',
+  'LEAD_LINKED_TO_CLIENT',
 ] as const;
 export type LeadActivityType = (typeof LEAD_ACTIVITY_TYPES)[number];
 

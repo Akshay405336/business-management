@@ -172,6 +172,20 @@ export const crmClientResponseSchema = z.object({
   updatedAt: isoDateTime,
 });
 
+export const crmDuplicateClientSummarySchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  referenceNumber: z.string(),
+  type: z.enum(['INDIVIDUAL', 'COMPANY']),
+  phone: z.string().nullable(),
+});
+
+export const crmLeadConvertResponseSchema = z.object({
+  lead: crmLeadResponseSchema,
+  client: crmClientResponseSchema.nullable(),
+  duplicateClient: crmDuplicateClientSummarySchema.nullable(),
+});
+
 export const crmQuotationLineItemResponseSchema = z.object({
   id: z.uuid(),
   name: z.string(),

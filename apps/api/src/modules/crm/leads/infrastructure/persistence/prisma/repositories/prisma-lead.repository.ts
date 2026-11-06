@@ -56,6 +56,10 @@ export class PrismaLeadRepository implements LeadRepository {
     return this.store.convertLeadToClient(...args);
   }
 
+  linkLeadToExistingClient(...args: Parameters<LeadPrismaStore['linkLeadToExistingClient']>) {
+    return this.store.linkLeadToExistingClient(...args);
+  }
+
   loadTagsByLeadIds(...args: Parameters<LeadPrismaStore['loadTagsByLeadIds']>) {
     return this.store.loadTagsByLeadIds(...args);
   }

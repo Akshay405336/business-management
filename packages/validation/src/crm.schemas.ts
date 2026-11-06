@@ -3,7 +3,12 @@ import {
   pipelineStageColorFieldSchema,
   pipelineStageNameFieldSchema,
 } from './field-schemas.js';
-import { leadEmailSchema, leadPhoneSchema, optionalLeadEmailSchema } from './lead-contact.js';
+import {
+  coalesceOptionalPhoneField,
+  leadEmailSchema,
+  leadPhoneSchema,
+  optionalLeadEmailSchema,
+} from './lead-contact.js';
 import { MONEY_PARSE_ERROR, normalizeMoneyInput } from './money.js';
 import { normalizeQuotationTaxRateFraction } from './quotation-pricing.js';
 
@@ -33,6 +38,7 @@ export const leadActivityTypeSchema = z.enum([
   'PROPOSAL_CREATED',
   'PROPOSAL_STATUS_CHANGE',
   'LEAD_CONVERTED',
+  'LEAD_LINKED_TO_CLIENT',
 ]);
 export const clientTypeSchema = z.enum(['INDIVIDUAL', 'COMPANY']);
 export const clientStatusSchema = z.enum(['ACTIVE', 'INACTIVE']);
@@ -297,7 +303,7 @@ export const createClientRequestSchema = z
     name: z.string().trim().min(1, 'Enter a name.').max(160),
     primaryContact: z.string().max(160).optional(),
     email: z.email().max(254).nullable().optional(),
-    phone: z.string().max(32).nullable().optional(),
+    phone: z.preprocess(coalesceOptionalPhoneField, leadPhoneSchema),
     website: z.string().max(512).nullable().optional(),
     billingAddress: z.string().max(1000).optional(),
     taxRegistration: z.string().max(120).optional(),
@@ -310,7 +316,60 @@ export const createClientRequestSchema = z
 export const updateClientRequestSchema = createClientRequestSchema
   .partial()
   .extend({ archived: z.boolean().optional() })
+  .superRefine((data, ctx) => {
+    const hasPhoneKey = Object.prototype.hasOwnProperty.call(data, 'phone');
+    if (!hasPhoneKey) return;
+    const raw = (data as { phone?: unknown }).phone;
+    if (raw === undefined) return;
+    const preprocessed = coalesceOptionalPhoneField(raw);
+    const parsed = leadPhoneSchema.safeParse(preprocessed);
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) {
+        ctx.addIssue({ ...issue, path: ['phone'] });
+      }
+    }
+  })
   .strict();
+
+/** Link a lead to an existing client (explicit confirmation after duplicate phone detection). */
+export const linkLeadToClientRequestSchema = z
+  .object({
+    clientId: uuid,
+  })
+  .strict();
+
+export const changeClientStatusRequestSchema = z
+  .object({
+    status: clientStatusSchema,
+  })
+  .strict();
+
+const clientListQueryShape = {
+  search: z.string().max(200).optional(),
+  status: clientStatusSchema.optional(),
+  type: clientTypeSchema.optional(),
+  includeArchived: z.coerce.boolean().optional(),
+  createdFrom: dateOnly.optional(),
+  createdTo: dateOnly.optional(),
+  sort: z.enum(['createdAt', 'name', 'referenceNumber']).optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(1).max(500).optional(),
+} as const;
+
+export const clientListQuerySchema = z.object(clientListQueryShape);
+
+const clientListQueryKeys = Object.keys(clientListQueryShape) as (keyof typeof clientListQueryShape)[];
+
+export function parseClientListQuery(input: unknown): z.infer<typeof clientListQuerySchema> {
+  const record =
+    input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const picked: Record<string, unknown> = {};
+  for (const key of clientListQueryKeys) {
+    if (key in record) picked[key] = record[key];
+  }
+  return clientListQuerySchema.parse(picked);
+}
 
 export const quotationLineItemSchema = z
   .object({
@@ -442,6 +501,8 @@ export type ChangeLeadStageRequest = z.infer<typeof changeLeadStageRequestSchema
 export type CreateLeadActivityRequest = z.infer<typeof createLeadActivityRequestSchema>;
 export type CreateClientRequest = z.infer<typeof createClientRequestSchema>;
 export type UpdateClientRequest = z.infer<typeof updateClientRequestSchema>;
+export type LinkLeadToClientRequest = z.infer<typeof linkLeadToClientRequestSchema>;
+export type ChangeClientStatusRequest = z.infer<typeof changeClientStatusRequestSchema>;
 export type CreateQuotationRequest = z.infer<typeof createQuotationRequestSchema>;
 export type UpdateQuotationRequest = z.infer<typeof updateQuotationRequestSchema>;
 export type ChangeQuotationStatusRequest = z.infer<typeof changeQuotationStatusRequestSchema>;

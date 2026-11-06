@@ -114,12 +114,38 @@ export class CrmLeadPersistence {
     leadId: string,
     adminId: string,
     audit: CrmAuditInput,
-  ): Promise<{ lead: LeadRecord; client: ClientRecord }> {
+  ): Promise<{
+    lead: LeadRecord;
+    client: ClientRecord | null;
+    duplicateClient: {
+      id: string;
+      name: string;
+      referenceNumber: string;
+      type: ClientRecord['type'];
+      phone: string | null;
+    } | null;
+  }> {
     return this.store.convertLeadToClient(organizationId, leadId, adminId, audit as LeadAuditEntry).then(
-      ({ lead, client }) => ({
+      ({ lead, client, duplicateClient }) => ({
         lead: lead.toReadModel() as LeadRecord,
         client,
+        duplicateClient,
       }),
     );
+  }
+
+  linkLeadToExistingClient(
+    organizationId: string,
+    leadId: string,
+    clientId: string,
+    adminId: string,
+    audit: CrmAuditInput,
+  ): Promise<{ lead: LeadRecord; client: ClientRecord }> {
+    return this.store
+      .linkLeadToExistingClient(organizationId, leadId, clientId, adminId, audit as LeadAuditEntry)
+      .then(({ lead, client }) => ({
+        lead: lead.toReadModel() as LeadRecord,
+        client,
+      }));
   }
 }

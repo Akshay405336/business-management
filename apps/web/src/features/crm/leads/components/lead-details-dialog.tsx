@@ -1,8 +1,9 @@
 'use client';
 
-import { Loader2, Pencil, UserCheck } from 'lucide-react';
+import { AlertCircle, Loader2, Pencil, UserCheck } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PriorityBadge } from '@/features/admin/components/priority-badge';
@@ -22,20 +23,45 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
-import { convertLead, createLeadActivity, getLead, listLeadActivities } from '../api/lead.api';
+import {
+  convertLead,
+  createLeadActivity,
+  getLead,
+  linkLeadToClient,
+  listLeadActivities,
+} from '../api/lead.api';
 import {
   CRM_PIPELINE_FORM_FIELD_CLASS,
   CRM_PIPELINE_FORM_TEXTAREA_CLASS,
 } from '../utils/lead-constants';
 import { CRM_FORM_PLACEHOLDERS } from '../utils/form-placeholders';
 import { ACTIVITY_TYPES } from '../utils/lead-constants';
-import type { CrmLead, CrmLeadActivity, CrmPipeline, LeadActivityType } from '../types/lead.types';
+import type { CrmDuplicateClientSummary } from '@techwin/contracts';
+import { API_ERROR_CODES } from '@techwin/contracts';
+import { ApiError } from '@/shared/api/api-error';
+import type {
+  CrmLead,
+  CrmLeadActivity,
+  CrmPipeline,
+  LeadActivityType,
+} from '../types/lead.types';
 import { dateTimeLocalToIso, formatMoney, toDateInputValue, toDateTimeLocalValue } from '../utils/format';
 import { describeCrmError } from '../utils/errors';
 import { labelActivityType, labelLeadPriority, labelLeadSource } from '../utils/labels';
+import { labelClientType } from '@/features/admin/crm/utils/labels';
 import { formatDateTime } from '@/shared/lib/format';
 import {
   LEAD_FORM_DIALOG_SHELL_CLASS,
@@ -107,6 +133,9 @@ export function LeadDetailsDialog({
   const [activityTitle, setActivityTitle] = useState('');
   const [activityDescription, setActivityDescription] = useState('');
   const [activityOccurredAt, setActivityOccurredAt] = useState('');
+  const [duplicateClient, setDuplicateClient] = useState<CrmDuplicateClientSummary | null>(null);
+  const [phoneRequiredNotice, setPhoneRequiredNotice] = useState(false);
+  const convertInFlight = useRef(false);
 
   const pipeline = pipelines.find((item) => item.id === lead?.pipelineId);
   const stages = useMemo(
@@ -144,6 +173,13 @@ export function LeadDetailsDialog({
     return () => controller.abort();
   }, [leadId, open, mode]);
 
+  useEffect(() => {
+    if (!open) {
+      setPhoneRequiredNotice(false);
+      setDuplicateClient(null);
+    }
+  }, [open]);
+
   const logActivity = async () => {
     if (!lead || !activityTitle.trim() || !activityOccurredAt) return;
     setError(null);
@@ -169,23 +205,70 @@ export function LeadDetailsDialog({
   };
 
   const convert = async () => {
-    if (!lead || lead.convertedClientId) return;
+    if (!lead || lead.convertedClientId || convertInFlight.current) return;
+    setDuplicateClient(null);
+    const rawPhone = lead.phone?.trim() ?? '';
+    if (!rawPhone) {
+      setPhoneRequiredNotice(true);
+      setError(null);
+      toast.error('Phone number required');
+      return;
+    }
+    setPhoneRequiredNotice(false);
     setError(null);
+    convertInFlight.current = true;
     try {
       const result = await runConvert(() => convertLead(lead.id));
       if (result) {
         setLead(result.lead);
-        toast.success('Lead converted to client.');
+        if (result.duplicateClient) {
+          setDuplicateClient(result.duplicateClient);
+        } else if (result.client) {
+          toast.success('Lead converted to client.');
+          onUpdated();
+        }
+      }
+    } catch (failure) {
+      const msg = describeCrmError(failure);
+      if (
+        failure instanceof ApiError &&
+        failure.code === API_ERROR_CODES.VALIDATION_FAILED &&
+        msg.toLowerCase().includes('phone')
+      ) {
+        setPhoneRequiredNotice(true);
+        setError(null);
+      }
+      toast.error(msg);
+    } finally {
+      convertInFlight.current = false;
+    }
+  };
+
+  const linkToExistingClient = async () => {
+    if (!lead || !duplicateClient || convertInFlight.current) return;
+    setError(null);
+    convertInFlight.current = true;
+    try {
+      const result = await runConvert(() =>
+        linkLeadToClient(lead.id, { clientId: duplicateClient.id }),
+      );
+      if (result) {
+        setLead(result.lead);
+        setDuplicateClient(null);
+        toast.success('Lead linked to existing client.');
         onUpdated();
       }
     } catch (failure) {
       toast.error(describeCrmError(failure));
+    } finally {
+      convertInFlight.current = false;
     }
   };
 
   if (mode === 'edit') return null;
 
   return (
+    <Fragment>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         key={leadId ?? 'view'}
@@ -213,6 +296,19 @@ export function LeadDetailsDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">
+          {phoneRequiredNotice ? (
+            <div className="mb-4">
+              <Alert variant="destructive" role="alert">
+                <AlertCircle aria-hidden="true" />
+                <AlertDescription>
+                  <p className="text-foreground font-semibold">Phone number required</p>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    Please add a valid phone number to this Lead before converting it into a Client.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            </div>
+          ) : null}
           {error ? (
             <div className="mb-4">
               <CrmErrorAlert message={error} />
@@ -438,7 +534,10 @@ export function LeadDetailsDialog({
               type="button"
               variant="outline"
               className={LEAD_FORM_SECONDARY_BTN}
-              onClick={() => onOpenChange(false)}
+              onClick={() => {
+                setDuplicateClient(null);
+                onOpenChange(false);
+              }}
             >
               Close
             </Button>
@@ -448,6 +547,7 @@ export function LeadDetailsDialog({
                 variant="outline"
                 className={LEAD_FORM_SECONDARY_BTN}
                 onClick={() => {
+                  setDuplicateClient(null);
                   onOpenChange(false);
                   onEditLead(lead.id);
                 }}
@@ -481,6 +581,73 @@ export function LeadDetailsDialog({
         ) : null}
       </DialogContent>
     </Dialog>
+
+      <AlertDialog
+        open={duplicateClient !== null}
+        onOpenChange={(open) => {
+          if (!open) setDuplicateClient(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Client already exists!</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="grid gap-3 text-left">
+                <p>A client with this phone number is already registered.</p>
+                {duplicateClient ? (
+                  <dl className="border-border/60 grid gap-2 rounded-md border bg-muted/30 px-3 py-3 text-sm">
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+                      <dt className="text-muted-foreground">Name</dt>
+                      <dd className="font-medium">{duplicateClient.name}</dd>
+                    </div>
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+                      <dt className="text-muted-foreground">Reference</dt>
+                      <dd className="font-mono font-medium">{duplicateClient.referenceNumber}</dd>
+                    </div>
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+                      <dt className="text-muted-foreground">Type</dt>
+                      <dd className="font-medium">{labelClientType(duplicateClient.type)}</dd>
+                    </div>
+                    <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between">
+                      <dt className="text-muted-foreground">Phone</dt>
+                      <dd className="font-medium">{duplicateClient.phone ?? '—'}</dd>
+                    </div>
+                  </dl>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              type="button"
+              className={LEAD_FORM_SECONDARY_BTN}
+              disabled={convertPending}
+            >
+              Cancel
+            </AlertDialogCancel>
+            {duplicateClient ? (
+              <Button type="button" variant="outline" className={LEAD_FORM_SECONDARY_BTN} asChild>
+                <Link href={`${clientsHref}?clientId=${duplicateClient.id}`}>View existing client</Link>
+              </Button>
+            ) : null}
+            <AlertDialogAction
+              type="button"
+              className={cn(LEAD_FORM_PRIMARY_BTN, 'h-11 px-5')}
+              disabled={convertPending || !duplicateClient}
+              onClick={(event) => {
+                event.preventDefault();
+                void linkToExistingClient();
+              }}
+            >
+              {convertPending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : null}
+              Link lead to existing client
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Fragment>
   );
 }
 

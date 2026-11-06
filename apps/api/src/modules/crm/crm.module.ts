@@ -25,19 +25,27 @@ import {
   UpdatePipelineStageHandler,
   UpdatePipelineStatusHandler,
 } from './pipelines/index.js';
-import { CreateClientHandler } from './application/create-client/create-client.handler.js';
-import { DeleteClientHandler } from './application/delete-client/delete-client.handler.js';
-import { GetClientHandler } from './application/get-client/get-client.handler.js';
-import { ListClientsHandler } from './application/list-clients/list-clients.handler.js';
-import { PreviewClientReferenceHandler } from './application/preview-client-reference/preview-client-reference.handler.js';
-import { UpdateClientHandler } from './application/update-client/update-client.handler.js';
+import {
+  ChangeClientStatusHandler,
+  ClientController,
+  CreateClientHandler,
+  DeleteClientHandler,
+  GetClientHandler,
+  ListClientsHandler,
+  PreviewClientReferenceHandler,
+  PrismaClientRepository,
+  UpdateClientHandler,
+  CLIENT_REPOSITORY,
+  LEAD_TO_CLIENT_CONVERSION,
+  PrismaLeadToClientConversionAdapter,
+} from './clients/index.js';
 import { CRM_REPOSITORY } from './domain/repositories/crm.repository.js';
 import { PrismaCrmRepository } from './infrastructure/persistence/prisma/repositories/prisma-crm.repository.js';
-import { ClientsController } from './presentation/http/controllers/clients.controller.js';
 import {
   BulkDeleteLeadsHandler,
   ChangeLeadStageHandler,
   ConvertLeadHandler,
+  LinkLeadToClientHandler,
   CreateLeadActivityHandler,
   CreateLeadHandler,
   DeleteLeadHandler,
@@ -88,6 +96,8 @@ import {
 import { CrmExceptionFilter } from './presentation/http/filters/crm-exception.filter.js';
 
 export const crmPersistenceProviders: Provider[] = [
+  { provide: CLIENT_REPOSITORY, useClass: PrismaClientRepository },
+  { provide: LEAD_TO_CLIENT_CONVERSION, useClass: PrismaLeadToClientConversionAdapter },
   { provide: CRM_REPOSITORY, useClass: PrismaCrmRepository },
   { provide: PIPELINE_REPOSITORY, useClass: PrismaPipelineRepository },
   { provide: LEAD_REPOSITORY, useClass: PrismaLeadRepository },
@@ -100,10 +110,12 @@ const crmUseCaseHandlers = [
   BulkDeletePipelinesHandler,
   BulkUpdatePipelineStatusHandler,
   ChangeLeadStageHandler,
+  ChangeClientStatusHandler,
   ChangeQuotationStatusHandler,
   ExpireQuotationsHandler,
   ChangeServicePackageStatusHandler,
   ConvertLeadHandler,
+  LinkLeadToClientHandler,
   CreateClientHandler,
   CreateLeadActivityHandler,
   CreateLeadHandler,
@@ -161,7 +173,7 @@ const crmUseCaseHandlers = [
   controllers: [
     PipelineController,
     LeadController,
-    ClientsController,
+    ClientController,
     QuotationController,
     ServicePackageController,
   ],

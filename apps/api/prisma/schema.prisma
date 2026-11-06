@@ -379,6 +379,7 @@ enum LeadActivityType {
   PROPOSAL_CREATED
   PROPOSAL_STATUS_CHANGE
   LEAD_CONVERTED
+  LEAD_LINKED_TO_CLIENT
 }
 
 model LeadActivity {
@@ -461,6 +462,8 @@ model Client {
   primaryContact   String       @default("") @map("primary_contact") @db.VarChar(160)
   email            String?      @db.VarChar(254)
   phone            String?      @db.VarChar(32)
+  /** Canonical 10-digit key for duplicate detection (nullable for legacy rows). */
+  phoneNormalized  String?      @map("phone_normalized") @db.VarChar(16)
   website          String?      @db.VarChar(512)
   billingAddress   String       @default("") @map("billing_address") @db.VarChar(1000)
   taxRegistration  String       @default("") @map("tax_registration") @db.VarChar(120)
@@ -481,6 +484,7 @@ model Client {
   whatsappContacts  WhatsAppContact[]
 
   @@unique([organizationId, referenceNumber])
+  @@unique([organizationId, phoneNormalized], map: "clients_organization_id_phone_normalized_key")
   @@index([organizationId, status, createdAt])
   @@map("clients")
 }
@@ -864,11 +868,13 @@ enum CrmAuditEventType {
   LEAD_DELETED
   LEAD_STAGE_CHANGED
   LEAD_CONVERTED
+  LEAD_LINKED_TO_CLIENT
   LEAD_TAG_CREATED
   LEAD_TAG_UPDATED
   LEAD_TAG_DELETED
   CLIENT_CREATED
   CLIENT_UPDATED
+  CLIENT_DELETED
   PROPOSAL_CREATED
   PROPOSAL_UPDATED
   PROPOSAL_STATUS_CHANGED

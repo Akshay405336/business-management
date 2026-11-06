@@ -21,6 +21,7 @@ export { ChangeLeadStageHandler } from './application/change-stage/change-lead-s
 export { CreateLeadActivityHandler } from './application/create-activity/create-lead-activity.handler.js';
 export { ListLeadActivitiesHandler } from './application/list-activities/list-lead-activities.handler.js';
 export { ConvertLeadHandler } from './application/convert/convert-lead.handler.js';
+export { LinkLeadToClientHandler } from './application/link-client/link-lead-to-client.handler.js';
 export { ListLeadTagsHandler } from './application/tags/list-lead-tags.handler.js';
 export { CreateLeadTagHandler } from './application/tags/create-lead-tag.handler.js';
 export { ValidateLeadImportHandler } from './application/import/validate-lead-import.handler.js';

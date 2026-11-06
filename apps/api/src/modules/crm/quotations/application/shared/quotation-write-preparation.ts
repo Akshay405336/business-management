@@ -1,6 +1,7 @@
 import { ServicePackageQuotationIntegration } from '../../../service-packages/index.js';
 import type { ServicePackageRepository } from '../../../service-packages/domain/repositories/service-package.repository.js';
-import type { CrmRepository } from '../../../domain/repositories/crm.repository.js';
+import type { ClientRepository } from '../../../clients/domain/repositories/client.repository.js';
+import { ClientQuotationIntegration } from '../../../clients/application/quotation-integration/client-quotation.integration.js';
 import { QuotationNotFoundError } from '../../domain/errors/quotation.errors.js';
 import { QuotationPricingPolicy } from '../../domain/policies/quotation-pricing.policy.js';
 import type {
@@ -9,13 +10,15 @@ import type {
 } from '../../domain/types/quotation.types.js';
 
 export async function assertQuotationClientExists(
-  crm: CrmRepository,
+  clients: ClientRepository,
   organizationId: string,
   clientId: string | null | undefined,
 ): Promise<void> {
-  if (!clientId) return;
-  const client = await crm.getClient(organizationId, clientId);
-  if (!client) throw new QuotationNotFoundError('Client');
+  await ClientQuotationIntegration.assertClientExistsForQuotation(
+    clients,
+    organizationId,
+    clientId,
+  );
 }
 
 export async function resolveLineItemsForCreate(

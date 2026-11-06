@@ -20,6 +20,10 @@ export class ConvertLeadHandler {
       actor.adminId,
       leadAudit(actor, 'LEAD_CONVERTED', leadId),
     );
-    return { lead: toLeadReadModel(result.lead), client: result.client };
+    return {
+      lead: toLeadReadModel(result.lead),
+      client: result.client,
+      duplicateClient: result.duplicateClient,
+    };
   }
 }

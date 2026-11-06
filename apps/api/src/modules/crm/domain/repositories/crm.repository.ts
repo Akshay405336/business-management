@@ -106,26 +106,9 @@ export interface LeadActivityRecord {
   readonly updatedAt: Date;
 }
 
-export interface ClientRecord {
-  readonly id: string;
-  readonly organizationId: string;
-  readonly referenceNumber: string;
-  readonly type: ClientType;
-  readonly name: string;
-  readonly primaryContact: string;
-  readonly email: string | null;
-  readonly phone: string | null;
-  readonly website: string | null;
-  readonly billingAddress: string;
-  readonly taxRegistration: string;
-  readonly status: ClientStatus;
-  readonly notes: string;
-  readonly sourceLeadId: string | null;
-  readonly createdByAdminId: string;
-  readonly archivedAt: Date | null;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
+import type { ClientReadModel as ClientRecord } from '../../clients/domain/types/client-read-model.js';
+
+export type { ClientRecord };
 
 export interface PaginatedLeads {
   readonly items: readonly LeadRecord[];
@@ -240,35 +223,6 @@ export interface CreateLeadActivityInput {
   readonly createdByAdminId: string;
 }
 
-export interface CreateClientInput {
-  readonly type: ClientType;
-  readonly name: string;
-  readonly primaryContact?: string;
-  readonly email?: string | null;
-  readonly phone?: string | null;
-  readonly website?: string | null;
-  readonly billingAddress?: string;
-  readonly taxRegistration?: string;
-  readonly status?: ClientStatus;
-  readonly notes?: string;
-  readonly sourceLeadId?: string | null;
-  readonly createdByAdminId: string;
-}
-
-export interface UpdateClientInput {
-  readonly type?: ClientType;
-  readonly name?: string;
-  readonly primaryContact?: string;
-  readonly email?: string | null;
-  readonly phone?: string | null;
-  readonly website?: string | null;
-  readonly billingAddress?: string;
-  readonly taxRegistration?: string;
-  readonly status?: ClientStatus;
-  readonly notes?: string;
-  readonly archivedAt?: Date | null;
-}
-
 export interface CrmRepository {
   ensureOrganizationForAdmin(adminId: string): Promise<{ readonly organizationId: string }>;
 
@@ -380,23 +334,27 @@ export interface CrmRepository {
     leadId: string,
     adminId: string,
     audit: CrmAuditInput,
+  ): Promise<{
+    readonly lead: LeadRecord;
+    readonly client: ClientRecord | null;
+    readonly duplicateClient: {
+      readonly id: string;
+      readonly name: string;
+      readonly referenceNumber: string;
+      readonly type: ClientRecord['type'];
+      readonly phone: string | null;
+    } | null;
+  }>;
+
+  linkLeadToExistingClient(
+    organizationId: string,
+    leadId: string,
+    clientId: string,
+    adminId: string,
+    audit: CrmAuditInput,
   ): Promise<{ readonly lead: LeadRecord; readonly client: ClientRecord }>;
 
-  listClients(organizationId: string): Promise<readonly ClientRecord[]>;
   getClient(organizationId: string, clientId: string): Promise<ClientRecord | null>;
-  createClient(
-    organizationId: string,
-    input: CreateClientInput,
-    audit: CrmAuditInput,
-  ): Promise<ClientRecord>;
-  updateClient(
-    organizationId: string,
-    clientId: string,
-    input: UpdateClientInput,
-    audit: CrmAuditInput,
-  ): Promise<ClientRecord>;
-  previewClientReference(organizationId: string): Promise<string>;
-  deleteClient(organizationId: string, clientId: string, audit: CrmAuditInput): Promise<void>;
 }
 
 export type {

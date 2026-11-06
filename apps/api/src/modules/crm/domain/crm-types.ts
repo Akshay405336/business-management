@@ -13,7 +13,8 @@ export type LeadActivityType =
   | 'STAGE_CHANGE'
   | 'PROPOSAL_CREATED'
   | 'PROPOSAL_STATUS_CHANGE'
-  | 'LEAD_CONVERTED';
+  | 'LEAD_CONVERTED'
+  | 'LEAD_LINKED_TO_CLIENT';
 export type ClientType = 'INDIVIDUAL' | 'COMPANY';
 export type ClientStatus = 'ACTIVE' | 'INACTIVE';
 export type QuotationDocumentType = 'PROPOSAL' | 'QUOTATION';
@@ -33,11 +34,13 @@ export type CrmAuditEventType =
   | 'LEAD_DELETED'
   | 'LEAD_STAGE_CHANGED'
   | 'LEAD_CONVERTED'
+  | 'LEAD_LINKED_TO_CLIENT'
   | 'LEAD_TAG_CREATED'
   | 'LEAD_TAG_UPDATED'
   | 'LEAD_TAG_DELETED'
   | 'CLIENT_CREATED'
   | 'CLIENT_UPDATED'
+  | 'CLIENT_DELETED'
   | 'PROPOSAL_CREATED'
   | 'PROPOSAL_UPDATED'
   | 'PROPOSAL_STATUS_CHANGED'

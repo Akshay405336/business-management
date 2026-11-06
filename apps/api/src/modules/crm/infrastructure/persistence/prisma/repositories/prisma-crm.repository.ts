@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   ClientRecord,
-  CreateClientInput,
   CreateLeadActivityInput,
   CreateLeadInput,
   CreatePipelineInput,
@@ -15,13 +14,17 @@ import type {
   PipelineListFilters,
   PipelineRecord,
   PipelineStageRecord,
-  UpdateClientInput,
   UpdateLeadInput,
   UpdatePipelineInput,
   UpdateStageInput,
 } from '../../../../domain/repositories/crm.repository.js';
 import { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
-import { CrmClientPersistence } from './crm-client.persistence.js';
+import {
+  CLIENT_REPOSITORY,
+  LEAD_TO_CLIENT_CONVERSION,
+  type ClientRepository,
+  type LeadToClientConversionPort,
+} from '../../../../clients/index.js';
 import { CrmLeadPersistence } from './crm-lead.persistence.js';
 import { CrmOrganizationPersistence } from './crm-organization.persistence.js';
 import { CrmPipelinePersistence } from './crm-pipeline.persistence.js';
@@ -32,11 +35,16 @@ export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
   private readonly organizationPersistence: CrmOrganizationPersistence;
   private readonly pipelinePersistence: CrmPipelinePersistence;
   private readonly leadPersistence: CrmLeadPersistence;
-  private readonly clientPersistence: CrmClientPersistence;
-  constructor(@Inject(PrismaService) readonly prisma: PrismaService) {
+  readonly leadToClientConversion: LeadToClientConversionPort;
+
+  constructor(
+    @Inject(PrismaService) readonly prisma: PrismaService,
+    @Inject(CLIENT_REPOSITORY) private readonly clients: ClientRepository,
+    @Inject(LEAD_TO_CLIENT_CONVERSION) leadToClientConversion: LeadToClientConversionPort,
+  ) {
+    this.leadToClientConversion = leadToClientConversion;
     this.organizationPersistence = new CrmOrganizationPersistence(prisma);
     this.pipelinePersistence = new CrmPipelinePersistence(this);
-    this.clientPersistence = new CrmClientPersistence(this);
     this.leadPersistence = new CrmLeadPersistence(this);
   }
 
@@ -61,7 +69,7 @@ export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
   }
 
   getClient(organizationId: string, clientId: string): Promise<ClientRecord | null> {
-    return this.clientPersistence.getClient(organizationId, clientId);
+    return this.clients.findById(organizationId, clientId);
   }
 
   listPipelines(
@@ -249,36 +257,34 @@ export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
     leadId: string,
     adminId: string,
     audit: CrmAuditInput,
-  ): Promise<{ lead: LeadRecord; client: ClientRecord }> {
+  ): Promise<{
+    lead: LeadRecord;
+    client: ClientRecord | null;
+    duplicateClient: {
+      id: string;
+      name: string;
+      referenceNumber: string;
+      type: ClientRecord['type'];
+      phone: string | null;
+    } | null;
+  }> {
     return this.leadPersistence.convertLeadToClient(organizationId, leadId, adminId, audit);
   }
 
-  listClients(organizationId: string): Promise<readonly ClientRecord[]> {
-    return this.clientPersistence.listClients(organizationId);
-  }
-
-  createClient(
+  linkLeadToExistingClient(
     organizationId: string,
-    input: CreateClientInput,
-    audit: CrmAuditInput,
-  ): Promise<ClientRecord> {
-    return this.clientPersistence.createClient(organizationId, input, audit);
-  }
-
-  updateClient(
-    organizationId: string,
+    leadId: string,
     clientId: string,
-    input: UpdateClientInput,
+    adminId: string,
     audit: CrmAuditInput,
-  ): Promise<ClientRecord> {
-    return this.clientPersistence.updateClient(organizationId, clientId, input, audit);
+  ): Promise<{ lead: LeadRecord; client: ClientRecord }> {
+    return this.leadPersistence.linkLeadToExistingClient(
+      organizationId,
+      leadId,
+      clientId,
+      adminId,
+      audit,
+    );
   }
 
-  previewClientReference(organizationId: string): Promise<string> {
-    return this.clientPersistence.previewClientReference(organizationId);
-  }
-
-  deleteClient(organizationId: string, clientId: string, audit: CrmAuditInput): Promise<void> {
-    return this.clientPersistence.deleteClient(organizationId, clientId, audit);
-  }
 }

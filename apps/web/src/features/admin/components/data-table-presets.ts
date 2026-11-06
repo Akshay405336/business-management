@@ -105,14 +105,26 @@ export const CRM_LEAVE_TYPES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] 
   },
 ];
 
+export const CRM_CLIENTS_TABLE_COLUMN_CLASS = {
+  name: 'w-[24%] min-w-[10rem]',
+  type: 'w-[9%] min-w-[5.5rem]',
+  email: 'w-[26%] min-w-[11rem]',
+  phone: 'w-[14%] min-w-[7rem]',
+  status: 'w-[9%] min-w-[5.75rem]',
+  actions: 'w-[18%] min-w-[10rem]',
+} as const;
+
 export const CRM_CLIENTS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
-  { variant: 'textWide' },
-  { variant: 'text' },
-  { variant: 'badge' },
-  { variant: 'text' },
-  { variant: 'text' },
-  { variant: 'badge' },
-  { variant: 'actions', headClassName: 'w-[7.5rem] text-right' },
+  { variant: 'textWide', className: CRM_CLIENTS_TABLE_COLUMN_CLASS.name },
+  { variant: 'badge', className: CRM_CLIENTS_TABLE_COLUMN_CLASS.type },
+  { variant: 'text', className: CRM_CLIENTS_TABLE_COLUMN_CLASS.email },
+  { variant: 'text', className: CRM_CLIENTS_TABLE_COLUMN_CLASS.phone },
+  { variant: 'badge', className: CRM_CLIENTS_TABLE_COLUMN_CLASS.status },
+  {
+    variant: 'actions',
+    className: CRM_CLIENTS_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${CRM_CLIENTS_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
 ];
 
 export const CRM_PROPOSALS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [

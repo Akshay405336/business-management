@@ -202,7 +202,7 @@ export function QuotationFormModal({
 
   useEffect(() => {
     if (!open) return;
-    void listClients()
+    void listClients({ page: 1, pageSize: 500 })
       .then((result) => setClients(result.clients))
       .catch(() => setClients([]));
     void listServicePackages()
