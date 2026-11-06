@@ -24,26 +24,19 @@ import {
   UpdatePipelineStatusHandler,
 } from './pipelines/index.js';
 import { ChangeProposalStatusHandler } from './application/change-proposal-status/change-proposal-status.handler.js';
-import { ChangeServicePackageStatusHandler } from './application/change-service-package-status/change-service-package-status.handler.js';
 import { CreateClientHandler } from './application/create-client/create-client.handler.js';
 import { CreateProposalHandler } from './application/create-proposal/create-proposal.handler.js';
-import { CreateServicePackageHandler } from './application/create-service-package/create-service-package.handler.js';
 import { DeleteClientHandler } from './application/delete-client/delete-client.handler.js';
 import { DeleteProposalHandler } from './application/delete-proposal/delete-proposal.handler.js';
-import { DeleteServicePackageHandler } from './application/delete-service-package/delete-service-package.handler.js';
 import { GetClientHandler } from './application/get-client/get-client.handler.js';
 import { GetProposalHandler } from './application/get-proposal/get-proposal.handler.js';
 import { GetProposalPrintDataHandler } from './application/get-proposal-print-data/get-proposal-print-data.handler.js';
-import { GetServicePackageHandler } from './application/get-service-package/get-service-package.handler.js';
 import { ListClientsHandler } from './application/list-clients/list-clients.handler.js';
 import { ListProposalsHandler } from './application/list-proposals/list-proposals.handler.js';
-import { ListServicePackagesHandler } from './application/list-service-packages/list-service-packages.handler.js';
 import { PreviewClientReferenceHandler } from './application/preview-client-reference/preview-client-reference.handler.js';
 import { PreviewProposalDocumentNumberHandler } from './application/preview-proposal-document-number/preview-proposal-document-number.handler.js';
-import { PreviewServicePackageCodeHandler } from './application/preview-service-package-code/preview-service-package-code.handler.js';
 import { UpdateClientHandler } from './application/update-client/update-client.handler.js';
 import { UpdateProposalHandler } from './application/update-proposal/update-proposal.handler.js';
-import { UpdateServicePackageHandler } from './application/update-service-package/update-service-package.handler.js';
 import { CRM_REPOSITORY } from './domain/repositories/crm.repository.js';
 import { PrismaCrmRepository } from './infrastructure/persistence/prisma/repositories/prisma-crm.repository.js';
 import { ClientsController } from './presentation/http/controllers/clients.controller.js';
@@ -68,13 +61,25 @@ import {
   ValidateLeadImportHandler,
 } from './leads/index.js';
 import { ProposalsController } from './presentation/http/controllers/proposals.controller.js';
-import { ServicePackagesController } from './presentation/http/controllers/service-packages.controller.js';
+import {
+  ChangeServicePackageStatusHandler,
+  CreateServicePackageHandler,
+  DeleteServicePackageHandler,
+  GetServicePackageHandler,
+  ListServicePackagesHandler,
+  PreviewServicePackageCodeHandler,
+  PrismaServicePackageRepository,
+  SERVICE_PACKAGE_REPOSITORY,
+  ServicePackageController,
+  UpdateServicePackageHandler,
+} from './service-packages/index.js';
 import { CrmExceptionFilter } from './presentation/http/filters/crm-exception.filter.js';
 
 export const crmPersistenceProviders: Provider[] = [
   { provide: CRM_REPOSITORY, useClass: PrismaCrmRepository },
   { provide: PIPELINE_REPOSITORY, useClass: PrismaPipelineRepository },
   { provide: LEAD_REPOSITORY, useClass: PrismaLeadRepository },
+  { provide: SERVICE_PACKAGE_REPOSITORY, useClass: PrismaServicePackageRepository },
 ];
 
 const crmUseCaseHandlers = [
@@ -139,7 +144,7 @@ const crmUseCaseHandlers = [
     LeadController,
     ClientsController,
     ProposalsController,
-    ServicePackagesController,
+    ServicePackageController,
   ],
   providers: [
     ...crmPersistenceProviders,

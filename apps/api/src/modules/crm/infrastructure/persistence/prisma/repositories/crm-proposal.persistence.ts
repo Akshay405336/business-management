@@ -11,9 +11,7 @@ import {
   computeProposalTotals,
 } from '../../../services/proposal-money.js';
 import type {
-  ChangeServicePackageStatusInput,
   CreateProposalInput,
-  CreateServicePackageInput,
   CrmAuditInput,
   PaginatedProposals,
   ProposalLineItemWriteInput,
@@ -21,21 +19,12 @@ import type {
   ProposalRecord,
   ServicePackageRecord,
   UpdateProposalInput,
-  UpdateServicePackageInput,
 } from '../../../../domain/repositories/crm.repository.js';
 import { SEQUENCE_KEYS } from '../../../../domain/repositories/crm.repository.js';
 import {
-  buildPackageSnapshot,
-  buildProposalLinesFromPackage,
-  changeServicePackageStatus as changeServicePackageStatusRow,
-  createServicePackage as createServicePackageRow,
-  deleteServicePackage as deleteServicePackageRow,
-  getServicePackage as getServicePackageRow,
-  listServicePackages as listServicePackagesRows,
-  nextServicePackageCode,
-  previewServicePackageCode as previewServicePackageCodeRow,
-  updateServicePackage as updateServicePackageRow,
-} from '../service-packages.persistence.js';
+  ServicePackageProposalIntegration,
+  getServicePackageRow,
+} from '../../../../service-packages/index.js';
 import {
   assertProposalStatusTransition,
   nextSequence,
@@ -141,9 +130,9 @@ export class CrmProposalPersistence {
     if (sourcePackageId && lineItems.length === 0) {
       const pkg = await getServicePackageRow(this.prisma, organizationId, sourcePackageId);
       if (!pkg) throw new CrmNotFoundError('Service package');
-      if (pkg.status !== 'ACTIVE') throw new CrmValidationError('Service package is not active.');
-      packageSnapshot = buildPackageSnapshot(pkg);
-      const built = buildProposalLinesFromPackage(pkg);
+      ServicePackageProposalIntegration.assertActiveForProposal(pkg);
+      packageSnapshot = ServicePackageProposalIntegration.buildPackageSnapshot(pkg);
+      const built = ServicePackageProposalIntegration.buildProposalLinesFromPackage(pkg);
       lineItems = built.lineItems;
     }
     if (input.clientId) {
@@ -217,79 +206,6 @@ export class CrmProposalPersistence {
       });
     });
     return toProposal(row);
-  }
-
-  async listServicePackages(organizationId: string): Promise<readonly ServicePackageRecord[]> {
-    return listServicePackagesRows(this.prisma, organizationId);
-  }
-
-  async getServicePackage(
-    organizationId: string,
-    packageId: string,
-  ): Promise<ServicePackageRecord | null> {
-    return getServicePackageRow(this.prisma, organizationId, packageId);
-  }
-
-  previewServicePackageCode(organizationId: string): Promise<string> {
-    return previewServicePackageCodeRow(this.prisma, organizationId);
-  }
-
-  async createServicePackage(
-    organizationId: string,
-    input: CreateServicePackageInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const code = await nextServicePackageCode(tx, organizationId);
-      const created = await createServicePackageRow(tx, organizationId, input, code);
-      await writeAudit(tx, organizationId, { ...audit, entityId: created.id });
-      return created;
-    });
-    return row;
-  }
-
-  async changeServicePackageStatus(
-    organizationId: string,
-    packageId: string,
-    input: ChangeServicePackageStatusInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await changeServicePackageStatusRow(
-        tx,
-        organizationId,
-        packageId,
-        input.status,
-      );
-      await writeAudit(tx, organizationId, { ...audit, entityId: updated.id });
-      return updated;
-    });
-    return row;
-  }
-
-  async updateServicePackage(
-    organizationId: string,
-    packageId: string,
-    input: UpdateServicePackageInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await updateServicePackageRow(tx, organizationId, packageId, input);
-      await writeAudit(tx, organizationId, { ...audit, entityId: updated.id });
-      return updated;
-    });
-    return row;
-  }
-
-  async deleteServicePackage(
-    organizationId: string,
-    packageId: string,
-    audit: CrmAuditInput,
-  ): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      await deleteServicePackageRow(tx, organizationId, packageId);
-      await writeAudit(tx, organizationId, audit);
-    });
   }
 
   async updateProposal(

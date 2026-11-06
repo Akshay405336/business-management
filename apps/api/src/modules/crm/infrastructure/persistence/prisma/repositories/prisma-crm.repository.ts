@@ -1,14 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { ProposalStatus } from '../../../../domain/crm-types.js';
 import type {
-  ChangeServicePackageStatusInput,
   ClientRecord,
   CreateClientInput,
   CreateLeadActivityInput,
   CreateLeadInput,
   CreatePipelineInput,
   CreateProposalInput,
-  CreateServicePackageInput,
   CreateStageInput,
   CrmAuditInput,
   CrmRepository,
@@ -22,12 +20,10 @@ import type {
   PipelineStageRecord,
   ProposalListFilters,
   ProposalRecord,
-  ServicePackageRecord,
   UpdateClientInput,
   UpdateLeadInput,
   UpdatePipelineInput,
   UpdateProposalInput,
-  UpdateServicePackageInput,
   UpdateStageInput,
 } from '../../../../domain/repositories/crm.repository.js';
 import { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
@@ -321,60 +317,6 @@ export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
     audit: CrmAuditInput,
   ): Promise<ProposalRecord> {
     return this.proposalPersistence.createProposal(organizationId, input, audit);
-  }
-
-  listServicePackages(organizationId: string): Promise<readonly ServicePackageRecord[]> {
-    return this.proposalPersistence.listServicePackages(organizationId);
-  }
-
-  getServicePackage(
-    organizationId: string,
-    packageId: string,
-  ): Promise<ServicePackageRecord | null> {
-    return this.proposalPersistence.getServicePackage(organizationId, packageId);
-  }
-
-  previewServicePackageCode(organizationId: string): Promise<string> {
-    return this.proposalPersistence.previewServicePackageCode(organizationId);
-  }
-
-  createServicePackage(
-    organizationId: string,
-    input: CreateServicePackageInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord> {
-    return this.proposalPersistence.createServicePackage(organizationId, input, audit);
-  }
-
-  changeServicePackageStatus(
-    organizationId: string,
-    packageId: string,
-    input: ChangeServicePackageStatusInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord> {
-    return this.proposalPersistence.changeServicePackageStatus(
-      organizationId,
-      packageId,
-      input,
-      audit,
-    );
-  }
-
-  updateServicePackage(
-    organizationId: string,
-    packageId: string,
-    input: UpdateServicePackageInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord> {
-    return this.proposalPersistence.updateServicePackage(organizationId, packageId, input, audit);
-  }
-
-  deleteServicePackage(
-    organizationId: string,
-    packageId: string,
-    audit: CrmAuditInput,
-  ): Promise<void> {
-    return this.proposalPersistence.deleteServicePackage(organizationId, packageId, audit);
   }
 
   updateProposal(

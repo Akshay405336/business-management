@@ -564,113 +564,15 @@ export interface CrmRepository {
     proposalId: string,
   ): Promise<ProposalRecord & { readonly organizationName: string }>;
 
-  listServicePackages(organizationId: string): Promise<readonly ServicePackageRecord[]>;
-  previewServicePackageCode(organizationId: string): Promise<string>;
-  getServicePackage(organizationId: string, packageId: string): Promise<ServicePackageRecord | null>;
-  createServicePackage(
-    organizationId: string,
-    input: CreateServicePackageInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord>;
-  updateServicePackage(
-    organizationId: string,
-    packageId: string,
-    input: UpdateServicePackageInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord>;
-  changeServicePackageStatus(
-    organizationId: string,
-    packageId: string,
-    input: ChangeServicePackageStatusInput,
-    audit: CrmAuditInput,
-  ): Promise<ServicePackageRecord>;
-  deleteServicePackage(
-    organizationId: string,
-    packageId: string,
-    audit: CrmAuditInput,
-  ): Promise<void>;
 }
 
-export type ServicePackageStatus = 'ACTIVE' | 'INACTIVE';
-export type ServicePackageDeliveryUnit = 'DAYS' | 'WEEKS' | 'MONTHS';
-export type PackageDiscountType = 'FIXED' | 'PERCENT';
-
-export interface ServicePackageRecord {
-  readonly id: string;
-  readonly organizationId: string;
-  readonly code: string;
-  readonly name: string;
-  readonly categories: unknown;
-  readonly shortDescription: string;
-  readonly detailedDescription: string;
-  readonly status: ServicePackageStatus;
-  readonly technologyStack: unknown;
-  readonly includedPages: unknown;
-  readonly integrations: unknown;
-  readonly adminPanelFeatures: unknown;
-  readonly hostingDeployment: unknown;
-  readonly deliveryServices: unknown;
-  readonly integrationNotes: string;
-  readonly pageCount: number | null;
-  readonly basePrice: string;
-  readonly addOns: unknown;
-  readonly discountType: PackageDiscountType;
-  readonly discountValue: string;
-  readonly gstRate: string;
-  readonly taxableAmount: string;
-  readonly gstAmount: string;
-  readonly finalPrice: string;
-  readonly deliveryDurationValue: number | null;
-  readonly deliveryDurationUnit: ServicePackageDeliveryUnit | null;
-  readonly supportPeriod: string;
-  readonly revisionAllowance: string;
-  readonly termsExclusions: string;
-  readonly createdByAdminId: string;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
-
-export interface ServicePackageWriteInput {
-  readonly code?: string;
-  readonly name?: string;
-  readonly categories?: unknown;
-  readonly deliveryDurationValue?: number | null;
-  readonly deliveryDurationUnit?: ServicePackageDeliveryUnit | null;
-  readonly shortDescription?: string;
-  readonly detailedDescription?: string;
-  readonly technologyStack?: unknown;
-  readonly includedPages?: unknown;
-  readonly integrations?: unknown;
-  readonly adminPanelFeatures?: unknown;
-  readonly hostingDeployment?: unknown;
-  readonly deliveryServices?: unknown;
-  readonly integrationNotes?: string;
-  readonly pageCount?: number | null;
-  readonly basePrice?: string | number;
-  readonly addOns?: unknown;
-  readonly discountType?: PackageDiscountType | null;
-  readonly discountValue?: string | number;
-  readonly gstRate?: string | number | null;
-  readonly supportPeriod?: string;
-  readonly revisionAllowance?: string;
-  readonly termsExclusions?: string;
-  readonly createdByAdminId?: string;
-}
-
-export interface CreateServicePackageInput extends ServicePackageWriteInput {
-  readonly name: string;
-  readonly categories: unknown;
-  readonly basePrice: string | number;
-  readonly discountType: PackageDiscountType;
-  readonly discountValue: string | number;
-  readonly gstRate?: string | number | null;
-  readonly deliveryDurationValue: number;
-  readonly deliveryDurationUnit: ServicePackageDeliveryUnit;
-  readonly createdByAdminId: string;
-}
-
-export interface ChangeServicePackageStatusInput {
-  readonly status: ServicePackageStatus;
-}
-
-export type UpdateServicePackageInput = ServicePackageWriteInput;
+export type {
+  ServicePackageReadModel as ServicePackageRecord,
+  CreateServicePackageData as CreateServicePackageInput,
+  UpdateServicePackageData as UpdateServicePackageInput,
+  ChangeServicePackageStatusData as ChangeServicePackageStatusInput,
+  ServicePackageWriteInput,
+  PackageDiscountType,
+  ServicePackageDeliveryUnit,
+} from '../../service-packages/index.js';
+export type { ServicePackageStatus } from '../../service-packages/index.js';

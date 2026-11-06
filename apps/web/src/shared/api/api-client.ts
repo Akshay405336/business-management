@@ -155,8 +155,10 @@ async function send(path: string, options: ApiRequestOptions): Promise<Response>
 }
 
 async function parse<T>(response: Response): Promise<T> {
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  if (response.status === 204 || response.status === 205) return undefined as T;
+  const text = await response.text();
+  if (!text.trim()) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {

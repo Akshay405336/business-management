@@ -152,12 +152,28 @@ export const CRM_PROJECTS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
   },
 ];
 
+export const CRM_PACKAGES_TABLE_COLUMN_CLASS = {
+  package: 'w-[17%] min-w-[8.5rem]',
+  description: 'w-[18%] min-w-[7.5rem]',
+  pageCount: 'w-[8%] min-w-[4.25rem]',
+  price: 'w-[10%] min-w-[4.75rem]',
+  delivery: 'w-[11%] min-w-[5.5rem]',
+  status: 'w-[8%] min-w-[4.5rem]',
+  actions: 'w-[12%] min-w-[8.5rem]',
+} as const;
+
 export const CRM_PACKAGES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
-  { variant: 'textWide' },
-  { variant: 'text' },
-  { variant: 'number', className: 'text-right' },
-  { variant: 'badge' },
-  { variant: 'actions', headClassName: 'w-[7.5rem] text-right' },
+  { variant: 'textWide', className: CRM_PACKAGES_TABLE_COLUMN_CLASS.package },
+  { variant: 'text', className: CRM_PACKAGES_TABLE_COLUMN_CLASS.description },
+  { variant: 'number', className: CRM_PACKAGES_TABLE_COLUMN_CLASS.pageCount },
+  { variant: 'number', className: `${CRM_PACKAGES_TABLE_COLUMN_CLASS.price} text-right` },
+  { variant: 'text', className: CRM_PACKAGES_TABLE_COLUMN_CLASS.delivery },
+  { variant: 'badge', className: CRM_PACKAGES_TABLE_COLUMN_CLASS.status },
+  {
+    variant: 'actions',
+    className: CRM_PACKAGES_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${CRM_PACKAGES_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
 ];
 
 /** Width classes for the HRM employees listing table (`table-fixed`). */
