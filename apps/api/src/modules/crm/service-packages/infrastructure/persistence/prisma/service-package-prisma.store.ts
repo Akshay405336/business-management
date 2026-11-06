@@ -11,6 +11,7 @@ import {
   ServicePackageConflictError,
   ServicePackageNotFoundError,
 } from '../../../domain/errors/service-package.errors.js';
+import { ServicePackageDeletionPolicy } from '../../../domain/policies/service-package-deletion.policy.js';
 import { ServicePackagePricingService } from '../../../domain/services/service-package-pricing.service.js';
 import { ServicePackageName } from '../../../domain/value-objects/service-package-name.vo.js';
 import {
@@ -238,6 +239,28 @@ export async function updateServicePackage(
   return toRecord(row);
 }
 
+export async function countQuotationReferencesToPackage(
+  db: Prisma.TransactionClient | { quotationLineItem: Prisma.QuotationLineItemDelegate; quotationDocument: Prisma.QuotationDocumentDelegate },
+  organizationId: string,
+  packageId: string,
+): Promise<number> {
+  const [lineItemRefs, documentRefs] = await Promise.all([
+    db.quotationLineItem.count({
+      where: {
+        sourcePackageId: packageId,
+        quotation: { organizationId },
+      },
+    }),
+    db.quotationDocument.count({
+      where: {
+        organizationId,
+        sourcePackageId: packageId,
+      },
+    }),
+  ]);
+  return lineItemRefs + documentRefs;
+}
+
 export async function deleteServicePackage(
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -245,14 +268,8 @@ export async function deleteServicePackage(
 ): Promise<void> {
   const existing = await getServicePackage(tx, organizationId, packageId);
   if (!existing) throw new ServicePackageNotFoundError('Service package');
-  // Line items keep name/pricing text; drop catalog link only (proposal_documents.source_package_id → SetNull via FK).
-  await tx.proposalLineItem.updateMany({
-    where: {
-      sourcePackageId: packageId,
-      proposal: { organizationId },
-    },
-    data: { sourcePackageId: null },
-  });
+  const referenceCount = await countQuotationReferencesToPackage(tx, organizationId, packageId);
+  ServicePackageDeletionPolicy.assertCanDelete(referenceCount);
   await tx.servicePackage.delete({ where: { id: packageId } });
 }
 

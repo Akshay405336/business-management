@@ -89,8 +89,8 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
       },
       {
         kind: 'link',
-        href: '/admin/proposals',
-        label: 'Proposals & Quotations',
+        href: '/admin/quotations',
+        label: 'Quotations',
         icon: FileText,
       },
       {

@@ -1,9 +1,7 @@
 import { Decimal } from '@prisma/client/runtime/client';
 import { Prisma } from '../../../../../../generated/prisma/client.js';
 import type { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
-import type { ProposalStatus } from '../../../../domain/crm-types.js';
-import { CrmValidationError } from '../../../../domain/errors/crm.errors.js';
-import { decimalToString } from '../../../services/proposal-money.js';
+import { decimalToString } from '../../../services/quotation-money.js';
 import type {
   ClientRecord,
   CrmAuditInput,
@@ -11,7 +9,6 @@ import type {
   LeadRecord,
   PipelineRecord,
   PipelineStageRecord,
-  ProposalRecord,
 } from '../../../../domain/repositories/crm.repository.js';
 
 export const formatReference = (prefix: string, value: number): string =>
@@ -197,79 +194,6 @@ export function toClient(row: {
   return { ...row };
 }
 
-export function toProposal(row: {
-  id: string;
-  organizationId: string;
-  documentNumber: string;
-  type: ProposalRecord['type'];
-  status: ProposalRecord['status'];
-  title: string;
-  description: string;
-  leadId: string | null;
-  clientId: string | null;
-  issueDate: Date;
-  expiryDate: Date | null;
-  currency: string;
-  subtotal: Decimal;
-  discountTotal: Decimal;
-  taxTotal: Decimal;
-  grandTotal: Decimal;
-  notes: string;
-  terms: string;
-  scopeOfWork: string;
-  paymentTerms: string;
-  deliveryTimeline: string;
-  clientName: string;
-  companyName: string;
-  clientPhone: string;
-  clientEmail: string;
-  billingAddress: string;
-  clientGstin: string;
-  version: number;
-  sourcePackageId: string | null;
-  packageSnapshot: unknown;
-  createdByAdminId: string;
-  createdAt: Date;
-  updatedAt: Date;
-  lineItems?: Array<{
-    id: string;
-    proposalId: string;
-    name: string;
-    category: string;
-    sourcePackageId: string | null;
-    description: string;
-    quantity: Decimal;
-    unit: string;
-    unitPrice: Decimal;
-    discount: Decimal;
-    taxRate: Decimal;
-    lineTotal: Decimal;
-    sortOrder: number;
-    createdAt: Date;
-    updatedAt: Date;
-  }>;
-}): ProposalRecord {
-  return {
-    ...row,
-    sourcePackageId: row.sourcePackageId ?? null,
-    packageSnapshot: row.packageSnapshot ?? null,
-    subtotal: decimalToString(row.subtotal),
-    discountTotal: decimalToString(row.discountTotal),
-    taxTotal: decimalToString(row.taxTotal),
-    grandTotal: decimalToString(row.grandTotal),
-    lineItems: row.lineItems?.map((item) => ({
-      ...item,
-      category: item.category ?? '',
-      sourcePackageId: item.sourcePackageId ?? null,
-      quantity: item.quantity.toFixed(4),
-      unitPrice: decimalToString(item.unitPrice),
-      discount: decimalToString(item.discount),
-      taxRate: item.taxRate.toFixed(4),
-      lineTotal: decimalToString(item.lineTotal),
-    })),
-  };
-}
-
 export async function listStageLeadIds(
   prisma: Pick<PrismaService, 'lead'>,
   organizationId: string,
@@ -330,19 +254,4 @@ export type CrmPersistenceHost = {
   getPipeline(organizationId: string, pipelineId: string): Promise<PipelineRecord | null>;
   getLead(organizationId: string, leadId: string): Promise<LeadRecord | null>;
   getClient(organizationId: string, clientId: string): Promise<ClientRecord | null>;
-  getProposal(organizationId: string, proposalId: string): Promise<ProposalRecord | null>;
 };
-
-export function assertProposalStatusTransition(from: ProposalStatus, to: ProposalStatus): void {
-  const allowed: Record<ProposalStatus, readonly ProposalStatus[]> = {
-    DRAFT: ['SENT', 'CANCELLED'],
-    SENT: ['ACCEPTED', 'REJECTED', 'EXPIRED', 'CANCELLED'],
-    ACCEPTED: [],
-    REJECTED: [],
-    EXPIRED: [],
-    CANCELLED: [],
-  };
-  if (!allowed[from].includes(to)) {
-    throw new CrmValidationError(`Cannot change proposal status from ${from} to ${to}.`);
-  }
-}

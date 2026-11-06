@@ -1,9 +1,11 @@
-/**
- * Catalog packages may be deleted when referenced by proposals: line items keep copied
- * fields; `sourcePackageId` is cleared and proposal documents use `onDelete: SetNull`.
- */
+import { ServicePackageConflictError } from '../errors/service-package.errors.js';
+
 export class ServicePackageDeletionPolicy {
-  static assertCanDelete(_proposalReferenceCount: number): void {
-    // Deletion is allowed; references are detached at persistence layer.
+  static assertCanDelete(quotationReferenceCount: number): void {
+    if (quotationReferenceCount > 0) {
+      throw new ServicePackageConflictError(
+        'This service package cannot be deleted while it is referenced by quotations.',
+      );
+    }
   }
 }

@@ -128,6 +128,26 @@ export const envSchema = z
      * Recommended true for multi-replica production when workers are enabled.
      */
     DISTRIBUTED_LOCK_STRICT: booleanFlag.default(false),
+
+    /** Outbound email for CRM quotation delivery and similar workflows. */
+    EMAIL_ENABLED: booleanFlag.default(true),
+    /** `log` records messages without sending; `smtp` uses SMTP_* settings. */
+    EMAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
+    SMTP_HOST: optionalUnlessBlank(z.string().min(1)),
+    SMTP_PORT: z.coerce.number().int().min(1).max(65_535).default(587),
+    SMTP_SECURE: booleanFlag.default(false),
+    SMTP_USER: optionalUnlessBlank(z.string().min(1)),
+    SMTP_PASS: optionalUnlessBlank(z.string().min(1)),
+    SMTP_FROM: optionalUnlessBlank(z.string().email()),
+
+    QUOTATION_EXPIRATION_WORKER_ENABLED: booleanFlag.default(true),
+    QUOTATION_EXPIRATION_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .max(3_600_000)
+      .default(300_000),
+    QUOTATION_EXPIRATION_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === 'production' && env.JWT_ACCESS_SECRET.length < 48) {
@@ -223,6 +243,22 @@ export const envSchema = z
           code: 'custom',
           path: ['TOTP_ENCRYPTION_KEY'],
           message: 'must not be the placeholder value from .env.example in production',
+        });
+      }
+    }
+    if (env.EMAIL_TRANSPORT === 'smtp') {
+      if (!env.SMTP_HOST) {
+        context.addIssue({
+          code: 'custom',
+          path: ['SMTP_HOST'],
+          message: 'is required when EMAIL_TRANSPORT is smtp',
+        });
+      }
+      if (!env.SMTP_FROM) {
+        context.addIssue({
+          code: 'custom',
+          path: ['SMTP_FROM'],
+          message: 'is required when EMAIL_TRANSPORT is smtp',
         });
       }
     }

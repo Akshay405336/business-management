@@ -2,13 +2,11 @@ import type { ApiResponseSchemaHost } from '@nestjs/swagger';
 import { API_ERROR_CODES } from '@techwin/contracts';
 import {
   changeLeadStageRequestSchema,
-  changeProposalStatusRequestSchema,
   createClientRequestSchema,
   createLeadActivityRequestSchema,
   createLeadRequestSchema,
   createPipelineRequestSchema,
   createPipelineStageRequestSchema,
-  createProposalRequestSchema,
   deletePipelineStageRequestSchema,
   leadListQuerySchema,
   reorderPipelineStagesRequestSchema,
@@ -16,7 +14,6 @@ import {
   updateLeadRequestSchema,
   updatePipelineRequestSchema,
   updatePipelineStageRequestSchema,
-  updateProposalRequestSchema,
   changeServicePackageStatusRequestSchema,
   createServicePackageRequestSchema,
   updateServicePackageRequestSchema,
@@ -37,9 +34,6 @@ export const changeLeadStageBodySchema = changeLeadStageRequestSchema;
 export const createLeadActivityBodySchema = createLeadActivityRequestSchema;
 export const createClientBodySchema = createClientRequestSchema;
 export const updateClientBodySchema = updateClientRequestSchema;
-export const createProposalBodySchema = createProposalRequestSchema;
-export const updateProposalBodySchema = updateProposalRequestSchema;
-export const changeProposalStatusBodySchema = changeProposalStatusRequestSchema;
 export const createServicePackageBodySchema = createServicePackageRequestSchema;
 export const updateServicePackageBodySchema = updateServicePackageRequestSchema;
 export const changeServicePackageStatusBodySchema = changeServicePackageStatusRequestSchema;
@@ -178,7 +172,7 @@ export const crmClientResponseSchema = z.object({
   updatedAt: isoDateTime,
 });
 
-export const crmProposalLineItemResponseSchema = z.object({
+export const crmQuotationLineItemResponseSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   category: z.string(),
@@ -193,7 +187,7 @@ export const crmProposalLineItemResponseSchema = z.object({
   sortOrder: z.number().int(),
 });
 
-export const crmProposalResponseSchema = z.object({
+export const crmQuotationResponseSchema = z.object({
   id: z.uuid(),
   documentNumber: z.string(),
   type: z.enum(['PROPOSAL', 'QUOTATION']),
@@ -223,9 +217,16 @@ export const crmProposalResponseSchema = z.object({
   version: z.number().int(),
   sourcePackageId: z.uuid().nullable(),
   packageSnapshot: z.unknown().nullable(),
-  lineItems: z.array(crmProposalLineItemResponseSchema),
+  lineItems: z.array(crmQuotationLineItemResponseSchema),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
+});
+
+export const crmQuotationListResponseSchema = z.object({
+  items: z.array(crmQuotationResponseSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  pageSize: z.number().int(),
 });
 
 const catalogSelectionResponseSchema = catalogSelectionSchema;

@@ -140,7 +140,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       description: row.description,
       clientPhone: row.clientPhone,
       clientEmail: row.clientEmail,
-      proposalId: row.proposalId,
+      proposalId: row.quotationId,
       quotationNumber: row.quotationNumberSnapshot,
       quotationTitle: row.quotationTitleSnapshot,
       acceptedCommercialValue: row.acceptedCommercialValue?.toString() ?? null,
@@ -178,7 +178,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     proposalId: string | null | undefined,
   ) {
     if (!proposalId) return null;
-    const proposal = await this.prisma.proposalDocument.findFirst({
+    const proposal = await this.prisma.quotationDocument.findFirst({
       where: {
         id: proposalId,
         organizationId,
@@ -416,7 +416,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     clientId: string,
   ): Promise<readonly ClientQuotationRecord[]> {
     const client = await this.loadClient(organizationId, clientId);
-    const rows = await this.prisma.proposalDocument.findMany({
+    const rows = await this.prisma.quotationDocument.findMany({
       where: { organizationId, clientId: client.id, type: 'QUOTATION' },
       orderBy: [{ createdAt: 'desc' }],
       select: {
@@ -483,7 +483,7 @@ export class PrismaProjectRepository implements ProjectRepository {
           executionLifecycle: 'NOT_PLANNED',
           currentPhase: 'PLANNING',
           clientId: client.id,
-          proposalId: proposal?.id ?? null,
+          quotationId: proposal?.id ?? null,
           projectManagerAdminId: input.projectManagerAdminId ?? null,
           startDate: parseDateOnly(input.startDate),
           expectedEndDate: parseDateOnly(input.expectedEndDate),
@@ -539,7 +539,7 @@ export class PrismaProjectRepository implements ProjectRepository {
     if (input.clientId && input.clientId !== existing.clientId && input.proposalId === undefined) {
       const stillValid =
         existing.proposalId &&
-        (await this.prisma.proposalDocument.findFirst({
+        (await this.prisma.quotationDocument.findFirst({
           where: {
             id: existing.proposalId,
             organizationId,
@@ -589,7 +589,7 @@ export class PrismaProjectRepository implements ProjectRepository {
           input.clientId !== undefined ||
           effectiveProposalId !== existing.proposalId
             ? {
-                proposalId: proposal?.id ?? null,
+                quotationId: proposal?.id ?? null,
                 quotationNumberSnapshot: quoteSnap.quotationNumberSnapshot,
                 quotationTitleSnapshot: quoteSnap.quotationTitleSnapshot,
                 acceptedCommercialValue:

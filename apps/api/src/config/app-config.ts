@@ -44,6 +44,23 @@ export interface AppConfig {
     };
   };
   readonly distributedLock: { readonly strict: boolean };
+  readonly email: {
+    readonly enabled: boolean;
+    readonly transport: 'log' | 'smtp';
+    readonly from: string | null;
+    readonly smtp: {
+      readonly host: string | null;
+      readonly port: number;
+      readonly secure: boolean;
+      readonly user: string | null;
+      readonly pass: string | null;
+    };
+  };
+  readonly quotations: {
+    readonly expirationWorkerEnabled: boolean;
+    readonly expirationIntervalMs: number;
+    readonly expirationBatchSize: number;
+  };
   readonly whatsapp: {
     readonly metaAppId: string | null;
     readonly metaAppSecret: string | null;
@@ -120,6 +137,23 @@ export function loadAppConfig(source: NodeJS.ProcessEnv = process.env): AppConfi
     rateLimit: { globalPerMinute: env.RATE_LIMIT_GLOBAL_PER_MINUTE },
     logging: { level: env.LOG_LEVEL, pretty: env.LOG_PRETTY },
     distributedLock: { strict: env.DISTRIBUTED_LOCK_STRICT },
+    email: {
+      enabled: env.EMAIL_ENABLED,
+      transport: env.EMAIL_TRANSPORT,
+      from: env.SMTP_FROM ?? null,
+      smtp: {
+        host: env.SMTP_HOST ?? null,
+        port: env.SMTP_PORT,
+        secure: env.SMTP_SECURE,
+        user: env.SMTP_USER ?? null,
+        pass: env.SMTP_PASS ?? null,
+      },
+    },
+    quotations: {
+      expirationWorkerEnabled: env.QUOTATION_EXPIRATION_WORKER_ENABLED,
+      expirationIntervalMs: env.QUOTATION_EXPIRATION_INTERVAL_MS,
+      expirationBatchSize: env.QUOTATION_EXPIRATION_BATCH_SIZE,
+    },
     storage: {
       provider:
         env.STORAGE_PROVIDER ?? (env.NODE_ENV === 'production' ? 's3' : ('local' as const)),

@@ -30,15 +30,17 @@ export const CRM_ROUTES = {
   client: (id: string) => `${API_PREFIX}/crm/clients/${id}`,
   clientFromLead: (leadId: string) => `${API_PREFIX}/crm/clients/from-lead/${leadId}`,
   clientReferencePreview: `${API_PREFIX}/crm/clients/reference-preview`,
-  proposals: `${API_PREFIX}/crm/proposals`,
+  quotations: `${API_PREFIX}/crm/quotations`,
+  quotation: (id: string) => `${API_PREFIX}/crm/quotations/${id}`,
+  quotationStatus: (id: string) => `${API_PREFIX}/crm/quotations/${id}/status`,
+  quotationPrint: (id: string) => `${API_PREFIX}/crm/quotations/${id}/print`,
+  quotationPrintPdf: (id: string) => `${API_PREFIX}/crm/quotations/${id}/print/pdf`,
+  quotationSend: (id: string) => `${API_PREFIX}/crm/quotations/${id}/send`,
+  quotationCodePreview: `${API_PREFIX}/crm/quotations/code-preview`,
   servicePackages: `${API_PREFIX}/crm/service-packages`,
   servicePackage: (id: string) => `${API_PREFIX}/crm/service-packages/${id}`,
   servicePackageStatus: (id: string) => `${API_PREFIX}/crm/service-packages/${id}/status`,
   servicePackageCodePreview: `${API_PREFIX}/crm/service-packages/code-preview`,
-  proposal: (id: string) => `${API_PREFIX}/crm/proposals/${id}`,
-  proposalStatus: (id: string) => `${API_PREFIX}/crm/proposals/${id}/status`,
-  proposalPrint: (id: string) => `${API_PREFIX}/crm/proposals/${id}/print`,
-  proposalCodePreview: `${API_PREFIX}/crm/proposals/code-preview`,
 } as const;
 
 export type PipelineStatus = 'ACTIVE' | 'INACTIVE';
@@ -59,8 +61,8 @@ export type LeadActivityType =
   | 'LEAD_CONVERTED';
 export type ClientType = 'INDIVIDUAL' | 'COMPANY';
 export type ClientStatus = 'ACTIVE' | 'INACTIVE';
-export type ProposalDocumentType = 'PROPOSAL' | 'QUOTATION';
-export type ProposalStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
+export type QuotationDocumentType = 'PROPOSAL' | 'QUOTATION';
+export type QuotationStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
 
 export interface CrmPipelineStage {
   readonly id: string;
@@ -283,7 +285,7 @@ export interface ClientReferencePreviewResponse {
   readonly isPreview: true;
 }
 
-export interface CrmProposalLineItem {
+export interface CrmQuotationLineItem {
   readonly id: string;
   readonly name: string;
   readonly category: string;
@@ -298,11 +300,11 @@ export interface CrmProposalLineItem {
   readonly sortOrder: number;
 }
 
-export interface CrmProposal {
+export interface CrmQuotation {
   readonly id: string;
   readonly documentNumber: string;
-  readonly type: ProposalDocumentType;
-  readonly status: ProposalStatus;
+  readonly type: QuotationDocumentType;
+  readonly status: QuotationStatus;
   readonly title: string;
   readonly description: string;
   readonly leadId: string | null;
@@ -328,25 +330,25 @@ export interface CrmProposal {
   readonly version: number;
   readonly sourcePackageId: string | null;
   readonly packageSnapshot: ServicePackageSnapshot | null;
-  readonly lineItems: readonly CrmProposalLineItem[];
+  readonly lineItems: readonly CrmQuotationLineItem[];
+  readonly sentAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 
-
-export interface CrmProposalListResponse {
-  readonly items: readonly CrmProposal[];
+export interface CrmQuotationListResponse {
+  readonly items: readonly CrmQuotation[];
   readonly total: number;
   readonly page: number;
   readonly pageSize: number;
 }
 
-export interface ProposalDocumentCodePreviewResponse {
+export interface QuotationDocumentCodePreviewResponse {
   readonly documentNumber: string;
-  readonly type: ProposalDocumentType;
+  readonly type: QuotationDocumentType;
   readonly isPreview: true;
 }
 
-export interface CrmProposalPrintResponse extends CrmProposal {
+export interface CrmQuotationPrintResponse extends CrmQuotation {
   readonly organizationName: string;
 }

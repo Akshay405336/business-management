@@ -13,6 +13,7 @@ export const PROJECT_MANAGER_ROUTE_PERMISSIONS: Readonly<Record<string, readonly
     '/project-manager/pipeline': ['leads.read'],
     '/project-manager/leads': ['leads.read'],
     '/project-manager/packages': ['settings.read'],
+    '/project-manager/quotations': ['leads.read'],
     '/project-manager/proposals': ['leads.read'],
     '/project-manager/clients': ['clients.read'],
     '/project-manager/employees': ['employees.read'],

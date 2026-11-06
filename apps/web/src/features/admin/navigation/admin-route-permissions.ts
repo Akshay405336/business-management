@@ -39,6 +39,7 @@ export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, readonly Permissio
   '/admin/pipeline': ['leads.read'],
   '/admin/leads': ['leads.read'],
   '/admin/packages': ['settings.read'],
+  '/admin/quotations': ['leads.read'],
   '/admin/proposals': ['leads.read'],
   '/admin/clients': ['clients.read'],
   '/admin/projects': ['projects.read'],

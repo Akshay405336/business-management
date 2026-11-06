@@ -1,0 +1,8 @@
+export const QUOTATION_DOMAIN_EVENT_TYPES = [
+  'QUOTATION_CREATED',
+  'QUOTATION_UPDATED',
+  'QUOTATION_STATUS_CHANGED',
+  'QUOTATION_DELETED',
+] as const;
+
+export type QuotationDomainEventType = (typeof QUOTATION_DOMAIN_EVENT_TYPES)[number];

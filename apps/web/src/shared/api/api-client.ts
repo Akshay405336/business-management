@@ -161,6 +161,38 @@ async function parse<T>(response: Response): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+export async function apiBinaryRequest(path: string, options: ApiRequestOptions = {}): Promise<Blob> {
+  if (options.auth && !accessTokenStore.get() && sessionRuntime().refresher) {
+    const outcome = await refreshAccessToken();
+    if (outcome === 'unauthenticated') {
+      throw new ApiError('http', 'Your session has ended.', 401, API_ERROR_CODES.SESSION_EXPIRED);
+    }
+  }
+
+  const response = await send(path, { ...options, method: options.method ?? 'GET' });
+  if (response.ok) return response.blob();
+
+  const error = await ApiError.fromResponse(response);
+  if (!(options.auth && response.status === 401 && REFRESHABLE_CODES.has(error.code))) {
+    if (options.auth && shouldNotifySessionEnded(error)) notifySessionEnded();
+    if (options.auth) notifyAccessDenied(error);
+    throw error;
+  }
+
+  const outcome = await refreshAccessToken();
+  if (outcome === 'unauthenticated') {
+    if (shouldNotifySessionEnded(error)) notifySessionEnded();
+    throw error;
+  }
+
+  const retried = await send(path, { ...options, method: options.method ?? 'GET' });
+  if (retried.ok) return retried.blob();
+  const retryError = await ApiError.fromResponse(retried);
+  if (retried.status === 401 && shouldNotifySessionEnded(retryError)) notifySessionEnded();
+  notifyAccessDenied(retryError);
+  throw retryError;
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   // No token in memory (e.g. after a reload): restore it before the first call.
   if (options.auth && !accessTokenStore.get() && sessionRuntime().refresher) {

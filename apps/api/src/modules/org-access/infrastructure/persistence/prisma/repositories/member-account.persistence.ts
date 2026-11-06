@@ -99,7 +99,7 @@ async function countRetainedHistory(
     tx.lead.count({ where: { createdByAdminId: adminId } }),
     tx.leadActivity.count({ where: { createdByAdminId: adminId } }),
     tx.client.count({ where: { createdByAdminId: adminId } }),
-    tx.proposalDocument.count({ where: { createdByAdminId: adminId } }),
+    tx.quotationDocument.count({ where: { createdByAdminId: adminId } }),
     tx.servicePackage.count({ where: { createdByAdminId: adminId } }),
     tx.project.count({ where: { createdByAdminId: adminId } }),
     tx.dailyTask.count({ where: { createdByAdminId: adminId } }),

@@ -4,9 +4,6 @@ import type {
   CrmLeadActivity,
   CrmPipeline,
   CrmPipelineStage,
-  CrmProposal,
-  CrmProposalLineItem,
-  CrmProposalPrintResponse,
   CrmServicePackage,
   CatalogSelection,
 } from '@techwin/contracts';
@@ -16,7 +13,6 @@ import type {
   LeadRecord,
   PipelineRecord,
   PipelineStageRecord,
-  ProposalRecord,
   ServicePackageRecord,
 } from '../../../domain/repositories/crm.repository.js';
 
@@ -120,65 +116,6 @@ export const toCrmClient = (client: ClientRecord): CrmClient => ({
   archivedAt: client.archivedAt ? iso(client.archivedAt) : null,
   createdAt: iso(client.createdAt),
   updatedAt: iso(client.updatedAt),
-});
-
-const toCrmProposalLineItem = (
-  item: NonNullable<ProposalRecord['lineItems']>[number],
-): CrmProposalLineItem => ({
-  id: item.id,
-  name: item.name,
-  category: item.category,
-  sourcePackageId: item.sourcePackageId ?? null,
-  description: item.description,
-  quantity: qty(item.quantity),
-  unit: item.unit,
-  unitPrice: money(item.unitPrice),
-  discount: money(item.discount),
-  taxRate: qty(item.taxRate),
-  lineTotal: money(item.lineTotal),
-  sortOrder: item.sortOrder,
-});
-
-export const toCrmProposal = (proposal: ProposalRecord): CrmProposal => ({
-  id: proposal.id,
-  documentNumber: proposal.documentNumber,
-  type: proposal.type,
-  status: proposal.status,
-  title: proposal.title,
-  description: proposal.description,
-  leadId: proposal.leadId,
-  clientId: proposal.clientId,
-  issueDate: dateOnly(proposal.issueDate),
-  expiryDate: proposal.expiryDate ? dateOnly(proposal.expiryDate) : null,
-  currency: proposal.currency,
-  subtotal: money(proposal.subtotal),
-  discountTotal: money(proposal.discountTotal),
-  taxTotal: money(proposal.taxTotal),
-  grandTotal: money(proposal.grandTotal),
-  notes: proposal.notes,
-  terms: proposal.terms,
-  scopeOfWork: proposal.scopeOfWork,
-  paymentTerms: proposal.paymentTerms,
-  deliveryTimeline: proposal.deliveryTimeline,
-  clientName: proposal.clientName,
-  companyName: proposal.companyName,
-  clientPhone: proposal.clientPhone,
-  clientEmail: proposal.clientEmail,
-  billingAddress: proposal.billingAddress,
-  clientGstin: proposal.clientGstin,
-  version: proposal.version,
-  sourcePackageId: proposal.sourcePackageId,
-  packageSnapshot: (proposal.packageSnapshot as CrmProposal['packageSnapshot']) ?? null,
-  lineItems: (proposal.lineItems ?? []).map(toCrmProposalLineItem),
-  createdAt: iso(proposal.createdAt),
-  updatedAt: iso(proposal.updatedAt),
-});
-
-export const toCrmProposalPrint = (
-  proposal: ProposalRecord & { organizationName: string },
-): CrmProposalPrintResponse => ({
-  ...toCrmProposal(proposal),
-  organizationName: proposal.organizationName,
 });
 
 const asSelections = (value: unknown): readonly CatalogSelection[] =>

@@ -1,7 +1,7 @@
 import { normalizeGstRatePercent } from '@techwin/validation';
 import type { Decimal } from '@prisma/client/runtime/client';
 import type { ServicePackageReadModel } from '../../../../domain/types/service-package-read-model.js';
-import { decimalToString } from '../../../../../infrastructure/services/proposal-money.js';
+import { decimalToString } from '../../../../../infrastructure/services/quotation-money.js';
 
 export type ServicePackagePrismaRow = {
   id: string;

@@ -7,8 +7,6 @@ import type {
   LeadSource,
   PipelineStageOutcome,
   PipelineStatus,
-  ProposalDocumentType,
-  ProposalStatus,
 } from '../crm-types.js';
 
 export const CRM_REPOSITORY = Symbol('CRM_REPOSITORY');
@@ -127,61 +125,6 @@ export interface ClientRecord {
   readonly archivedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
-}
-
-export interface ProposalLineItemRecord {
-  readonly id: string;
-  readonly proposalId: string;
-  readonly name: string;
-  readonly category: string;
-  readonly sourcePackageId: string | null;
-  readonly description: string;
-  readonly quantity: string;
-  readonly unit: string;
-  readonly unitPrice: string;
-  readonly discount: string;
-  readonly taxRate: string;
-  readonly lineTotal: string;
-  readonly sortOrder: number;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
-
-export interface ProposalRecord {
-  readonly id: string;
-  readonly organizationId: string;
-  readonly documentNumber: string;
-  readonly type: ProposalDocumentType;
-  readonly status: ProposalStatus;
-  readonly title: string;
-  readonly description: string;
-  readonly leadId: string | null;
-  readonly clientId: string | null;
-  readonly issueDate: Date;
-  readonly expiryDate: Date | null;
-  readonly currency: string;
-  readonly subtotal: string;
-  readonly discountTotal: string;
-  readonly taxTotal: string;
-  readonly grandTotal: string;
-  readonly notes: string;
-  readonly terms: string;
-  readonly scopeOfWork: string;
-  readonly paymentTerms: string;
-  readonly deliveryTimeline: string;
-  readonly clientName: string;
-  readonly companyName: string;
-  readonly clientPhone: string;
-  readonly clientEmail: string;
-  readonly billingAddress: string;
-  readonly clientGstin: string;
-  readonly version: number;
-  readonly sourcePackageId: string | null;
-  readonly packageSnapshot: unknown;
-  readonly createdByAdminId: string;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-  readonly lineItems?: readonly ProposalLineItemRecord[];
 }
 
 export interface PaginatedLeads {
@@ -326,84 +269,6 @@ export interface UpdateClientInput {
   readonly archivedAt?: Date | null;
 }
 
-export interface ProposalLineItemWriteInput {
-  readonly id?: string;
-  readonly name: string;
-  readonly description?: string;
-  readonly category?: string;
-  readonly sourcePackageId?: string | null;
-  readonly quantity: string | number;
-  readonly unit?: string;
-  readonly unitPrice: string | number;
-  readonly discount?: string | number;
-  readonly taxRate?: string | number;
-  readonly sortOrder?: number;
-}
-
-export interface ProposalListFilters {
-  readonly page: number;
-  readonly pageSize: number;
-  readonly search?: string;
-  readonly type?: ProposalDocumentType;
-  readonly status?: ProposalStatus;
-  readonly issueFrom?: string;
-  readonly issueTo?: string;
-}
-
-export interface PaginatedProposals {
-  readonly items: readonly ProposalRecord[];
-  readonly total: number;
-  readonly page: number;
-  readonly pageSize: number;
-}
-
-export interface CreateProposalInput {
-  readonly type: ProposalDocumentType;
-  readonly title: string;
-  readonly description?: string;
-  readonly scopeOfWork?: string;
-  readonly leadId?: string | null;
-  readonly clientId?: string | null;
-  readonly clientName: string;
-  readonly companyName?: string;
-  readonly clientPhone: string;
-  readonly clientEmail: string;
-  readonly billingAddress: string;
-  readonly clientGstin?: string;
-  readonly issueDate: Date;
-  readonly expiryDate?: Date | null;
-  readonly currency?: string;
-  readonly notes?: string;
-  readonly terms?: string;
-  readonly paymentTerms?: string;
-  readonly deliveryTimeline?: string;
-  readonly lineItems?: readonly ProposalLineItemWriteInput[];
-  readonly sourcePackageId?: string | null;
-  readonly createdByAdminId: string;
-}
-
-export interface UpdateProposalInput {
-  readonly title?: string;
-  readonly description?: string;
-  readonly scopeOfWork?: string;
-  readonly leadId?: string | null;
-  readonly clientId?: string | null;
-  readonly clientName?: string;
-  readonly companyName?: string;
-  readonly clientPhone?: string;
-  readonly clientEmail?: string;
-  readonly billingAddress?: string;
-  readonly clientGstin?: string;
-  readonly issueDate?: Date;
-  readonly expiryDate?: Date | null;
-  readonly currency?: string;
-  readonly notes?: string;
-  readonly terms?: string;
-  readonly paymentTerms?: string;
-  readonly deliveryTimeline?: string;
-  readonly lineItems?: readonly ProposalLineItemWriteInput[];
-}
-
 export interface CrmRepository {
   ensureOrganizationForAdmin(adminId: string): Promise<{ readonly organizationId: string }>;
 
@@ -532,38 +397,6 @@ export interface CrmRepository {
   ): Promise<ClientRecord>;
   previewClientReference(organizationId: string): Promise<string>;
   deleteClient(organizationId: string, clientId: string, audit: CrmAuditInput): Promise<void>;
-
-  listProposals(organizationId: string, filters: ProposalListFilters): Promise<PaginatedProposals>;
-  previewProposalDocumentNumber(
-    organizationId: string,
-    type: ProposalDocumentType,
-  ): Promise<string>;
-  getProposal(organizationId: string, proposalId: string): Promise<ProposalRecord | null>;
-  deleteProposal(organizationId: string, proposalId: string, audit: CrmAuditInput): Promise<void>;
-  createProposal(
-    organizationId: string,
-    input: CreateProposalInput,
-    audit: CrmAuditInput,
-  ): Promise<ProposalRecord>;
-  updateProposal(
-    organizationId: string,
-    proposalId: string,
-    input: UpdateProposalInput,
-    audit: CrmAuditInput,
-  ): Promise<ProposalRecord>;
-  changeProposalStatus(
-    organizationId: string,
-    proposalId: string,
-    toStatus: ProposalStatus,
-    note: string,
-    adminId: string,
-    audit: CrmAuditInput,
-  ): Promise<ProposalRecord>;
-  getProposalPrintData(
-    organizationId: string,
-    proposalId: string,
-  ): Promise<ProposalRecord & { readonly organizationName: string }>;
-
 }
 
 export type {

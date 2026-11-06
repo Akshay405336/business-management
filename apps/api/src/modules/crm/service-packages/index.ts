@@ -25,4 +25,4 @@ export { ServicePackageController } from './presentation/controllers/service-pac
 export { PrismaServicePackageRepository } from './infrastructure/persistence/prisma/repositories/prisma-service-package.repository.js';
 
 export { getServicePackage as getServicePackageRow } from './infrastructure/persistence/prisma/service-package-prisma.store.js';
-export { ServicePackageProposalIntegration } from './application/proposal-integration/service-package-proposal.integration.js';
+export { ServicePackageQuotationIntegration } from './application/quotation-integration/service-package-quotation.integration.js';

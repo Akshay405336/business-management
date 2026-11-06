@@ -16,8 +16,8 @@ export type LeadActivityType =
   | 'LEAD_CONVERTED';
 export type ClientType = 'INDIVIDUAL' | 'COMPANY';
 export type ClientStatus = 'ACTIVE' | 'INACTIVE';
-export type ProposalDocumentType = 'PROPOSAL' | 'QUOTATION';
-export type ProposalStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
+export type QuotationDocumentType = 'PROPOSAL' | 'QUOTATION';
+export type QuotationStatus = 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
 export type CrmAuditEventType =
   | 'PIPELINE_CREATED'
   | 'PIPELINE_UPDATED'
@@ -41,6 +41,13 @@ export type CrmAuditEventType =
   | 'PROPOSAL_CREATED'
   | 'PROPOSAL_UPDATED'
   | 'PROPOSAL_STATUS_CHANGED'
+  | 'QUOTATION_CREATED'
+  | 'QUOTATION_UPDATED'
+  | 'QUOTATION_STATUS_CHANGED'
+  | 'QUOTATION_DELETED'
+  | 'QUOTATION_SENT'
+  | 'QUOTATION_SEND_FAILED'
+  | 'QUOTATION_EXPIRED'
   | 'SERVICE_PACKAGE_CREATED'
   | 'SERVICE_PACKAGE_UPDATED'
   | 'SERVICE_PACKAGE_DELETED'

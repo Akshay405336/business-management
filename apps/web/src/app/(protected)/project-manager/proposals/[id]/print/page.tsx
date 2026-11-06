@@ -1,10 +1,10 @@
-import { ProposalPrintPage } from '@/features/admin/crm/components/proposal-print-page';
+import { redirect } from 'next/navigation';
 
-export default async function ProjectManagerProposalPrintPage({
+export default async function ProjectManagerProposalPrintRedirectPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <ProposalPrintPage proposalId={id} />;
+  redirect(`/project-manager/quotations/${id}/print`);
 }

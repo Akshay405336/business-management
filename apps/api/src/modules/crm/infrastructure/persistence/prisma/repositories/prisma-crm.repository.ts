@@ -1,12 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ProposalStatus } from '../../../../domain/crm-types.js';
 import type {
   ClientRecord,
   CreateClientInput,
   CreateLeadActivityInput,
   CreateLeadInput,
   CreatePipelineInput,
-  CreateProposalInput,
   CreateStageInput,
   CrmAuditInput,
   CrmRepository,
@@ -14,16 +12,12 @@ import type {
   LeadListFilters,
   LeadRecord,
   PaginatedLeads,
-  PaginatedProposals,
   PipelineListFilters,
   PipelineRecord,
   PipelineStageRecord,
-  ProposalListFilters,
-  ProposalRecord,
   UpdateClientInput,
   UpdateLeadInput,
   UpdatePipelineInput,
-  UpdateProposalInput,
   UpdateStageInput,
 } from '../../../../domain/repositories/crm.repository.js';
 import { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
@@ -31,7 +25,6 @@ import { CrmClientPersistence } from './crm-client.persistence.js';
 import { CrmLeadPersistence } from './crm-lead.persistence.js';
 import { CrmOrganizationPersistence } from './crm-organization.persistence.js';
 import { CrmPipelinePersistence } from './crm-pipeline.persistence.js';
-import { CrmProposalPersistence } from './crm-proposal.persistence.js';
 import type { CrmPersistenceHost } from './crm-persistence.shared.js';
 
 @Injectable()
@@ -40,14 +33,11 @@ export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
   private readonly pipelinePersistence: CrmPipelinePersistence;
   private readonly leadPersistence: CrmLeadPersistence;
   private readonly clientPersistence: CrmClientPersistence;
-  private readonly proposalPersistence: CrmProposalPersistence;
-
   constructor(@Inject(PrismaService) readonly prisma: PrismaService) {
     this.organizationPersistence = new CrmOrganizationPersistence(prisma);
     this.pipelinePersistence = new CrmPipelinePersistence(this);
     this.clientPersistence = new CrmClientPersistence(this);
     this.leadPersistence = new CrmLeadPersistence(this);
-    this.proposalPersistence = new CrmProposalPersistence(this);
   }
 
   ensureOrganizationForAdmin(adminId: string): Promise<{ organizationId: string }> {
@@ -72,10 +62,6 @@ export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
 
   getClient(organizationId: string, clientId: string): Promise<ClientRecord | null> {
     return this.clientPersistence.getClient(organizationId, clientId);
-  }
-
-  getProposal(organizationId: string, proposalId: string): Promise<ProposalRecord | null> {
-    return this.proposalPersistence.getProposal(organizationId, proposalId);
   }
 
   listPipelines(
@@ -294,62 +280,5 @@ export class PrismaCrmRepository implements CrmRepository, CrmPersistenceHost {
 
   deleteClient(organizationId: string, clientId: string, audit: CrmAuditInput): Promise<void> {
     return this.clientPersistence.deleteClient(organizationId, clientId, audit);
-  }
-
-  listProposals(organizationId: string, filters: ProposalListFilters): Promise<PaginatedProposals> {
-    return this.proposalPersistence.listProposals(organizationId, filters);
-  }
-
-  previewProposalDocumentNumber(
-    organizationId: string,
-    type: ProposalRecord['type'],
-  ): Promise<string> {
-    return this.proposalPersistence.previewProposalDocumentNumber(organizationId, type);
-  }
-
-  deleteProposal(organizationId: string, proposalId: string, audit: CrmAuditInput): Promise<void> {
-    return this.proposalPersistence.deleteProposal(organizationId, proposalId, audit);
-  }
-
-  createProposal(
-    organizationId: string,
-    input: CreateProposalInput,
-    audit: CrmAuditInput,
-  ): Promise<ProposalRecord> {
-    return this.proposalPersistence.createProposal(organizationId, input, audit);
-  }
-
-  updateProposal(
-    organizationId: string,
-    proposalId: string,
-    input: UpdateProposalInput,
-    audit: CrmAuditInput,
-  ): Promise<ProposalRecord> {
-    return this.proposalPersistence.updateProposal(organizationId, proposalId, input, audit);
-  }
-
-  changeProposalStatus(
-    organizationId: string,
-    proposalId: string,
-    toStatus: ProposalStatus,
-    note: string,
-    adminId: string,
-    audit: CrmAuditInput,
-  ): Promise<ProposalRecord> {
-    return this.proposalPersistence.changeProposalStatus(
-      organizationId,
-      proposalId,
-      toStatus,
-      note,
-      adminId,
-      audit,
-    );
-  }
-
-  getProposalPrintData(
-    organizationId: string,
-    proposalId: string,
-  ): Promise<ProposalRecord & { organizationName: string }> {
-    return this.proposalPersistence.getProposalPrintData(organizationId, proposalId);
   }
 }

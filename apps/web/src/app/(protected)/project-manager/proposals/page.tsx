@@ -1,5 +1,5 @@
-import { ProposalsPage } from '@/features/admin/crm/components/proposals-page';
+import { redirect } from 'next/navigation';
 
-export default function ProjectManagerProposalsPage() {
-  return <ProposalsPage />;
+export default function ProjectManagerProposalsRedirectPage() {
+  redirect('/project-manager/quotations');
 }

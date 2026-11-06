@@ -69,7 +69,7 @@ model PlatformAdmin {
   assignedLeads    Lead[]             @relation("LeadAssignee")
   createdLeads     Lead[]             @relation("LeadCreator")
   leadActivities   LeadActivity[]
-  createdProposals      ProposalDocument[]
+  createdQuotations     QuotationDocument[]
   createdServicePackages ServicePackage[]
   createdClients        Client[]
   convertedLeads   Lead[]             @relation("LeadConvertedBy")
@@ -183,7 +183,7 @@ model Organization {
   leadTags    LeadTag[]
   activities  LeadActivity[]
   clients     Client[]
-  proposals       ProposalDocument[]
+  quotations      QuotationDocument[]
   servicePackages ServicePackage[]
   projects        Project[]
   projectPhases              ProjectPhase[]
@@ -355,7 +355,7 @@ model Lead {
   clientFromSource Client?            @relation("ClientSourceLead")
   convertedBy      PlatformAdmin?     @relation("LeadConvertedBy", fields: [convertedByAdminId], references: [id], onDelete: SetNull)
   activities       LeadActivity[]
-  proposals        ProposalDocument[]
+  quotations       QuotationDocument[]
   whatsappContacts WhatsAppContact[]
   tagAssignments   LeadTagAssignment[]
 
@@ -476,7 +476,7 @@ model Client {
   createdBy         PlatformAdmin      @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
   sourceLead        Lead?              @relation("ClientSourceLead", fields: [sourceLeadId], references: [id], onDelete: SetNull)
   convertedFromLead Lead?              @relation("LeadConvertedClient")
-  proposals         ProposalDocument[]
+  quotations        QuotationDocument[]
   projects          Project[]
   whatsappContacts  WhatsAppContact[]
 
@@ -485,26 +485,30 @@ model Client {
   @@map("clients")
 }
 
-enum ProposalDocumentType {
+enum QuotationDocumentType {
   PROPOSAL
   QUOTATION
+
+  @@map("ProposalDocumentType")
 }
 
-enum ProposalStatus {
+enum QuotationStatus {
   DRAFT
   SENT
   ACCEPTED
   REJECTED
   EXPIRED
   CANCELLED
+
+  @@map("ProposalStatus")
 }
 
-model ProposalDocument {
+model QuotationDocument {
   id               String               @id @db.Uuid
   organizationId   String               @map("organization_id") @db.Uuid
   documentNumber   String               @map("document_number") @db.VarChar(32)
-  type             ProposalDocumentType
-  status           ProposalStatus       @default(DRAFT)
+  type             QuotationDocumentType
+  status           QuotationStatus      @default(DRAFT)
   title            String               @db.VarChar(200)
   description      String               @default("") @db.VarChar(4000)
   leadId           String?              @map("lead_id") @db.Uuid
@@ -530,6 +534,7 @@ model ProposalDocument {
   version          Int                  @default(1)
   sourcePackageId  String?              @map("source_package_id") @db.Uuid
   packageSnapshot  Json?                @map("package_snapshot")
+  sentAt           DateTime?            @map("sent_at") @db.Timestamptz(3)
   createdByAdminId String               @map("created_by_admin_id") @db.Uuid
   createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -539,8 +544,8 @@ model ProposalDocument {
   client        Client?                 @relation(fields: [clientId], references: [id], onDelete: SetNull)
   sourcePackage ServicePackage?         @relation(fields: [sourcePackageId], references: [id], onDelete: SetNull)
   createdBy     PlatformAdmin           @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
-  lineItems     ProposalLineItem[]
-  statusHistory ProposalStatusHistory[]
+  lineItems     QuotationLineItem[]
+  statusHistory QuotationStatusHistory[]
   projects      Project[]
 
   @@unique([organizationId, documentNumber])
@@ -601,16 +606,16 @@ model ServicePackage {
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    PlatformAdmin      @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
-  proposals    ProposalDocument[]
+  quotations   QuotationDocument[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
   @@map("service_packages")
 }
 
-model ProposalLineItem {
+model QuotationLineItem {
   id          String   @id @db.Uuid
-  proposalId  String   @map("proposal_id") @db.Uuid
+  quotationId String   @map("proposal_id") @db.Uuid
   name        String   @db.VarChar(200)
   category    String   @default("") @db.VarChar(120)
   sourcePackageId String? @map("source_package_id") @db.Uuid
@@ -625,24 +630,24 @@ model ProposalLineItem {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  proposal ProposalDocument @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  quotation QuotationDocument @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([proposalId, sortOrder])
+  @@index([quotationId, sortOrder])
   @@map("proposal_line_items")
 }
 
-model ProposalStatusHistory {
-  id               String          @id @default(uuid()) @db.Uuid
-  proposalId       String          @map("proposal_id") @db.Uuid
-  fromStatus       ProposalStatus? @map("from_status")
-  toStatus         ProposalStatus  @map("to_status")
+model QuotationStatusHistory {
+  id               String           @id @default(uuid()) @db.Uuid
+  quotationId      String           @map("proposal_id") @db.Uuid
+  fromStatus       QuotationStatus? @map("from_status")
+  toStatus         QuotationStatus  @map("to_status")
   note             String          @default("") @db.VarChar(1000)
   changedByAdminId String          @map("changed_by_admin_id") @db.Uuid
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  proposal ProposalDocument @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  quotation QuotationDocument @relation(fields: [quotationId], references: [id], onDelete: Cascade)
 
-  @@index([proposalId, createdAt])
+  @@index([quotationId, createdAt])
   @@map("proposal_status_history")
 }
 
@@ -697,7 +702,7 @@ model Project {
   actualCompletedAt       DateTime?                   @map("actual_completed_at") @db.Timestamptz(3)
   currentPhase            ProjectLifecyclePhase       @default(PLANNING) @map("current_phase")
   clientId                String                @map("client_id") @db.Uuid
-  proposalId              String?               @map("proposal_id") @db.Uuid
+  quotationId             String?               @map("proposal_id") @db.Uuid
   projectManagerAdminId   String?               @map("project_manager_admin_id") @db.Uuid
   startDate               DateTime              @map("start_date") @db.Date
   expectedEndDate         DateTime              @map("expected_end_date") @db.Date
@@ -719,7 +724,7 @@ model Project {
 
   organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   client          Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  proposal        ProposalDocument? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  quotation       QuotationDocument? @relation(fields: [quotationId], references: [id], onDelete: SetNull)
   projectManager  PlatformAdmin?    @relation("ProjectManager", fields: [projectManagerAdminId], references: [id], onDelete: SetNull)
   createdBy       PlatformAdmin     @relation("ProjectCreator", fields: [createdByAdminId], references: [id], onDelete: Restrict)
   phases          ProjectPhase[]
@@ -867,6 +872,13 @@ enum CrmAuditEventType {
   PROPOSAL_CREATED
   PROPOSAL_UPDATED
   PROPOSAL_STATUS_CHANGED
+  QUOTATION_CREATED
+  QUOTATION_UPDATED
+  QUOTATION_STATUS_CHANGED
+  QUOTATION_DELETED
+  QUOTATION_SENT
+  QUOTATION_SEND_FAILED
+  QUOTATION_EXPIRED
   SERVICE_PACKAGE_CREATED
   SERVICE_PACKAGE_UPDATED
   SERVICE_PACKAGE_DELETED

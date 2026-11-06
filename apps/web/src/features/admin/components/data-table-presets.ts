@@ -125,6 +125,36 @@ export const CRM_PROPOSALS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = 
   { variant: 'actions', headClassName: 'w-[7.5rem] text-right' },
 ];
 
+/** @deprecated Use CRM_QUOTATIONS_TABLE_SKELETON */
+export const CRM_QUOTATIONS_TABLE_COLUMN_CLASS = {
+  number: 'w-[12%] min-w-[7rem]',
+  title: 'w-[18%] min-w-[9rem]',
+  client: 'w-[14%] min-w-[7rem]',
+  issueDate: 'w-[10%] min-w-[6.5rem]',
+  expiryDate: 'w-[10%] min-w-[6.5rem]',
+  status: 'w-[9%] min-w-[5.5rem]',
+  total: 'w-[10%] min-w-[6rem] pr-2',
+  actions: 'w-[14%] min-w-[10rem]',
+} as const;
+
+export const CRM_QUOTATIONS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
+  { variant: 'text', className: CRM_QUOTATIONS_TABLE_COLUMN_CLASS.number },
+  { variant: 'textWide', className: CRM_QUOTATIONS_TABLE_COLUMN_CLASS.title },
+  { variant: 'text', className: CRM_QUOTATIONS_TABLE_COLUMN_CLASS.client },
+  { variant: 'text', className: CRM_QUOTATIONS_TABLE_COLUMN_CLASS.issueDate },
+  { variant: 'text', className: CRM_QUOTATIONS_TABLE_COLUMN_CLASS.expiryDate },
+  {
+    variant: 'number',
+    className: `${CRM_QUOTATIONS_TABLE_COLUMN_CLASS.total} text-right`,
+  },
+  { variant: 'badge', className: CRM_QUOTATIONS_TABLE_COLUMN_CLASS.status },
+  {
+    variant: 'actions',
+    className: CRM_QUOTATIONS_TABLE_COLUMN_CLASS.actions,
+    headClassName: `${CRM_QUOTATIONS_TABLE_COLUMN_CLASS.actions} text-right`,
+  },
+];
+
 /** Width classes for the CRM projects listing table (`table-fixed`). */
 export const CRM_PROJECTS_TABLE_COLUMN_CLASS = {
   project: 'w-[18%] min-w-[9rem]',

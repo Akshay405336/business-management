@@ -5,7 +5,7 @@ import {
 } from './field-schemas.js';
 import { leadEmailSchema, leadPhoneSchema, optionalLeadEmailSchema } from './lead-contact.js';
 import { MONEY_PARSE_ERROR, normalizeMoneyInput } from './money.js';
-import { normalizeProposalTaxRateFraction } from './proposal-pricing.js';
+import { normalizeQuotationTaxRateFraction } from './quotation-pricing.js';
 
 const uuid = z.uuid({ error: 'Invalid identifier.' });
 
@@ -36,8 +36,8 @@ export const leadActivityTypeSchema = z.enum([
 ]);
 export const clientTypeSchema = z.enum(['INDIVIDUAL', 'COMPANY']);
 export const clientStatusSchema = z.enum(['ACTIVE', 'INACTIVE']);
-export const proposalDocumentTypeSchema = z.enum(['PROPOSAL', 'QUOTATION']);
-export const proposalStatusSchema = z.enum([
+export const quotationDocumentTypeSchema = z.enum(['PROPOSAL', 'QUOTATION']);
+export const quotationStatusSchema = z.enum([
   'DRAFT',
   'SENT',
   'ACCEPTED',
@@ -72,7 +72,7 @@ const quantityString = z
   .or(z.number());
 
 /** GST/tax input: percent (18) or decimal fraction (0.18). Stored server-side as fraction. */
-export const proposalTaxRateInputSchema = z.union([
+export const quotationTaxRateInputSchema = z.union([
   z.number(),
   z.string().trim().min(1, 'Enter a valid tax rate.'),
 ]).transform((raw, ctx) => {
@@ -81,7 +81,7 @@ export const proposalTaxRateInputSchema = z.union([
     ctx.addIssue({ code: 'custom', message: 'Enter a tax rate between 0 and 100.' });
     return z.NEVER;
   }
-  return String(normalizeProposalTaxRateFraction(raw));
+  return String(normalizeQuotationTaxRateFraction(raw));
 });
 
 const optionalGstinSchema = z.preprocess(
@@ -312,7 +312,7 @@ export const updateClientRequestSchema = createClientRequestSchema
   .extend({ archived: z.boolean().optional() })
   .strict();
 
-export const proposalLineItemSchema = z
+export const quotationLineItemSchema = z
   .object({
     id: uuid.optional(),
     name: z.string().trim().min(1).max(200),
@@ -323,12 +323,12 @@ export const proposalLineItemSchema = z
     unit: z.string().max(32).optional(),
     unitPrice: moneyString,
     discount: moneyString.optional(),
-    taxRate: proposalTaxRateInputSchema.optional(),
+    taxRate: quotationTaxRateInputSchema.optional(),
     sortOrder: z.number().int().optional(),
   })
   .strict();
 
-const proposalClientFieldsSchema = z.object({
+const quotationClientFieldsSchema = z.object({
   clientId: uuid.nullable().optional(),
   clientName: z.string().trim().min(1, 'Enter the client name.').max(160),
   companyName: z.string().max(160).optional(),
@@ -341,9 +341,8 @@ const proposalClientFieldsSchema = z.object({
   clientGstin: optionalGstinSchema,
 });
 
-export const createProposalRequestSchema = proposalClientFieldsSchema
+const quotationBodyFieldsSchema = quotationClientFieldsSchema
   .extend({
-    type: proposalDocumentTypeSchema,
     title: z.string().trim().min(1).max(200),
     description: z.string().max(4000).optional(),
     scopeOfWork: z.string().max(8000).optional(),
@@ -356,43 +355,78 @@ export const createProposalRequestSchema = proposalClientFieldsSchema
     terms: z.string().max(4000).optional(),
     paymentTerms: z.string().max(4000).optional(),
     deliveryTimeline: z.string().max(500).optional(),
-    lineItems: z.array(proposalLineItemSchema).min(1, 'Add at least one line item.'),
+    lineItems: z.array(quotationLineItemSchema).min(1, 'Add at least one line item.'),
   })
   .strict();
 
-const proposalListQueryShape = {
+const refineQuotationIssueExpiryRange = (
+  value: { readonly issueDate?: string; readonly expiryDate?: string | null },
+  ctx: z.RefinementCtx,
+): void => {
+  if (value.issueDate && value.expiryDate && value.expiryDate < value.issueDate) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['expiryDate'],
+      message: 'Valid-until date cannot be earlier than the issue date.',
+    });
+  }
+};
+
+export const createQuotationRequestSchema = quotationBodyFieldsSchema
+  .extend({
+    type: quotationDocumentTypeSchema,
+  })
+  .superRefine(refineQuotationIssueExpiryRange);
+
+export const updateQuotationRequestSchema = quotationBodyFieldsSchema
+  .partial()
+  .strict()
+  .superRefine(refineQuotationIssueExpiryRange);
+
+const quotationListQueryShape = {
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(10),
   search: z.string().trim().max(120).optional(),
-  type: proposalDocumentTypeSchema.optional(),
-  status: proposalStatusSchema.optional(),
+  type: quotationDocumentTypeSchema.optional(),
+  status: quotationStatusSchema.optional(),
   issueFrom: dateOnly.optional(),
   issueTo: dateOnly.optional(),
 } as const;
 
-export const proposalListQuerySchema = z.object(proposalListQueryShape).strict();
+export const quotationListQuerySchema = z.object(quotationListQueryShape).strict();
 
-const proposalListQueryKeys = Object.keys(proposalListQueryShape) as (keyof typeof proposalListQueryShape)[];
+const quotationListQueryKeys = Object.keys(
+  quotationListQueryShape,
+) as (keyof typeof quotationListQueryShape)[];
 
-export function parseProposalListQuery(input: unknown): z.infer<typeof proposalListQuerySchema> {
+export function parseQuotationListQuery(input: unknown): z.infer<typeof quotationListQuerySchema> {
   const record =
     input !== null && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const picked: Record<string, unknown> = {};
-  for (const key of proposalListQueryKeys) {
+  for (const key of quotationListQueryKeys) {
     if (key in record) picked[key] = record[key];
   }
-  return proposalListQuerySchema.parse(picked);
+  return quotationListQuerySchema.parse(picked);
 }
 
-export const updateProposalRequestSchema = createProposalRequestSchema
-  .omit({ type: true })
-  .partial()
+export const changeQuotationStatusRequestSchema = z
+  .object({
+    status: quotationStatusSchema,
+    note: z.string().max(1000).optional(),
+  })
   .strict();
 
-export const changeProposalStatusRequestSchema = z
+const emailListSchema = z
+  .array(z.string().trim().email('Enter a valid email address.'))
+  .max(20);
+
+export const sendQuotationRequestSchema = z
   .object({
-    status: proposalStatusSchema,
-    note: z.string().max(1000).optional(),
+    to: emailListSchema.min(1, 'At least one recipient is required.'),
+    cc: emailListSchema.optional(),
+    bcc: emailListSchema.optional(),
+    subject: z.string().trim().min(1, 'Subject is required.').max(500),
+    bodyText: z.string().trim().min(1, 'Email body is required.').max(20_000),
   })
   .strict();
 
@@ -408,7 +442,8 @@ export type ChangeLeadStageRequest = z.infer<typeof changeLeadStageRequestSchema
 export type CreateLeadActivityRequest = z.infer<typeof createLeadActivityRequestSchema>;
 export type CreateClientRequest = z.infer<typeof createClientRequestSchema>;
 export type UpdateClientRequest = z.infer<typeof updateClientRequestSchema>;
-export type CreateProposalRequest = z.infer<typeof createProposalRequestSchema>;
-export type UpdateProposalRequest = z.infer<typeof updateProposalRequestSchema>;
-export type ChangeProposalStatusRequest = z.infer<typeof changeProposalStatusRequestSchema>;
-export type ProposalListQuery = z.infer<typeof proposalListQuerySchema>;
+export type CreateQuotationRequest = z.infer<typeof createQuotationRequestSchema>;
+export type UpdateQuotationRequest = z.infer<typeof updateQuotationRequestSchema>;
+export type ChangeQuotationStatusRequest = z.infer<typeof changeQuotationStatusRequestSchema>;
+export type SendQuotationRequest = z.infer<typeof sendQuotationRequestSchema>;
+export type QuotationListQuery = z.infer<typeof quotationListQuerySchema>;

@@ -59,7 +59,7 @@ export const PROJECT_MANAGER_NAV_GROUPS: readonly ProjectManagerNavGroup[] = [
       { kind: 'link', href: '/project-manager/pipeline', label: 'Pipeline', icon: GitBranch },
       { kind: 'link', href: '/project-manager/leads', label: 'Leads', icon: Users },
       { kind: 'link', href: '/project-manager/packages', label: 'Service Packages', icon: Package },
-      { kind: 'link', href: '/project-manager/proposals', label: 'Proposals & Quotations', icon: FileText },
+      { kind: 'link', href: '/project-manager/quotations', label: 'Quotations', icon: FileText },
       { kind: 'link', href: '/project-manager/clients', label: 'Clients', icon: UserCircle2 },
     ],
   },
