@@ -57,7 +57,6 @@ export const toCrmPipeline = (pipeline: PipelineRecord): CrmPipeline => ({
 export const toCrmLead = (lead: LeadRecord): CrmLead => ({
   id: lead.id,
   referenceNumber: lead.referenceNumber,
-  subject: lead.subject,
   fullName: lead.fullName,
   companyName: lead.companyName,
   email: lead.email,
@@ -74,6 +73,12 @@ export const toCrmLead = (lead: LeadRecord): CrmLead => ({
   nextFollowUpDate: lead.nextFollowUpDate ? iso(lead.nextFollowUpDate) : null,
   description: lead.description,
   tags: lead.tags,
+  leadTags: lead.tags.map((name) => ({
+    id: name,
+    name,
+    slug: name.toLowerCase(),
+    color: '#64748b',
+  })),
   convertedClientId: lead.convertedClientId,
   convertedAt: lead.convertedAt ? iso(lead.convertedAt) : null,
   archivedAt: lead.archivedAt ? iso(lead.archivedAt) : null,

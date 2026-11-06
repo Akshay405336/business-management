@@ -14,7 +14,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import type { CrmClient, CrmClientListResponse, CrmLeadConvertResponse } from '@techwin/contracts';
 import type { CreateClientRequest, UpdateClientRequest } from '@techwin/validation';
 import { z } from 'zod';
-import { ConvertLeadHandler } from '../../../application/convert-lead/convert-lead.handler.js';
+import { ConvertLeadHandler } from '../../../leads/index.js';
 import { CreateClientHandler } from '../../../application/create-client/create-client.handler.js';
 import { DeleteClientHandler } from '../../../application/delete-client/delete-client.handler.js';
 import { GetClientHandler } from '../../../application/get-client/get-client.handler.js';

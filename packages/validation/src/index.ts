@@ -1,4 +1,6 @@
 export * from './crm.schemas.js';
+export * from './lead-tags.js';
+export * from './lead-import.js';
 export * from './service-package.schemas.js';
 export * from './lead-contact.js';
 export * from './field-schemas.js';

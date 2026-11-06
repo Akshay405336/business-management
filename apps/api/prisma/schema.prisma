@@ -180,6 +180,7 @@ model Organization {
   pipelines   Pipeline[]
   stages      PipelineStage[]
   leads       Lead[]
+  leadTags    LeadTag[]
   activities  LeadActivity[]
   clients     Client[]
   proposals       ProposalDocument[]
@@ -319,7 +320,6 @@ model Lead {
   id                 String       @id @db.Uuid
   organizationId     String       @map("organization_id") @db.Uuid
   referenceNumber    String       @map("reference_number") @db.VarChar(32)
-  subject            String       @default("") @db.VarChar(200)
   fullName           String       @map("full_name") @db.VarChar(160)
   companyName        String       @default("") @map("company_name") @db.VarChar(160)
   email              String?      @db.VarChar(254)
@@ -357,6 +357,7 @@ model Lead {
   activities       LeadActivity[]
   proposals        ProposalDocument[]
   whatsappContacts WhatsAppContact[]
+  tagAssignments   LeadTagAssignment[]
 
   @@unique([organizationId, referenceNumber])
   @@index([organizationId, archivedAt, createdAt])
@@ -401,6 +402,44 @@ model LeadActivity {
 
   @@index([organizationId, leadId, occurredAt])
   @@map("lead_activities")
+}
+
+enum LeadTagStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model LeadTag {
+  id             String         @id @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  name           String         @db.VarChar(64)
+  slug           String         @db.VarChar(64)
+  description    String         @default("") @db.VarChar(255)
+  color          String         @default("#64748b") @db.VarChar(7)
+  status         LeadTagStatus  @default(ACTIVE)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments  LeadTagAssignment[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, name])
+  @@index([organizationId, status])
+  @@map("lead_tags")
+}
+
+model LeadTagAssignment {
+  leadId    String   @map("lead_id") @db.Uuid
+  tagId     String   @map("tag_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  lead Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tag  LeadTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([leadId, tagId])
+  @@index([tagId])
+  @@map("lead_tag_assignments")
 }
 
 enum ClientType {
@@ -820,6 +859,9 @@ enum CrmAuditEventType {
   LEAD_DELETED
   LEAD_STAGE_CHANGED
   LEAD_CONVERTED
+  LEAD_TAG_CREATED
+  LEAD_TAG_UPDATED
+  LEAD_TAG_DELETED
   CLIENT_CREATED
   CLIENT_UPDATED
   PROPOSAL_CREATED

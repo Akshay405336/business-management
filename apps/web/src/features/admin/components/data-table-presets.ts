@@ -1,26 +1,35 @@
 import type { DataTableSkeletonColumn } from './data-table-skeleton';
 
-/** Width classes for the CRM leads listing table (`table-fixed`). */
+/**
+ * CRM leads table (`table-fixed`): fixed widths on data columns; email absorbs extra width.
+ * Keeps Lead and Phone adjacent without a wide empty band between them.
+ */
 export const CRM_LEADS_TABLE_COLUMN_CLASS = {
-  lead: 'w-[22%] min-w-[10rem]',
-  contact: 'w-[18%] min-w-[8rem]',
-  stage: 'w-[12%] min-w-[6.5rem]',
-  priority: 'w-[10%] min-w-[5.5rem]',
-  value: 'w-[10%] min-w-[5rem] pr-4',
-  activity: 'w-[14%] min-w-[7rem]',
-  actions: 'w-[14%] min-w-[9rem]',
+  select: 'w-[2.75rem] min-w-[2.75rem] max-w-[2.75rem] px-2',
+  lead: 'w-[13rem] min-w-[10rem] max-w-[14rem] !whitespace-normal pr-1',
+  phone: 'w-[11rem] min-w-[11rem] max-w-[12rem]',
+  email: 'min-w-[9rem] w-auto !whitespace-normal',
+  stage: 'w-[7.75rem] min-w-[7.25rem]',
+  priority: 'w-[6.75rem] min-w-[6.25rem]',
+  value: 'w-[6.5rem] min-w-[6rem] pr-2',
+  actions: 'w-[8.75rem] min-w-[8.5rem]',
 } as const;
 
 export const CRM_LEADS_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
+  {
+    variant: 'icon',
+    className: CRM_LEADS_TABLE_COLUMN_CLASS.select,
+    headClassName: CRM_LEADS_TABLE_COLUMN_CLASS.select,
+  },
   { variant: 'textWide', className: CRM_LEADS_TABLE_COLUMN_CLASS.lead },
-  { variant: 'text', className: CRM_LEADS_TABLE_COLUMN_CLASS.contact },
+  { variant: 'text', className: CRM_LEADS_TABLE_COLUMN_CLASS.phone },
+  { variant: 'text', className: CRM_LEADS_TABLE_COLUMN_CLASS.email },
   { variant: 'badge', className: CRM_LEADS_TABLE_COLUMN_CLASS.stage },
   { variant: 'badge', className: CRM_LEADS_TABLE_COLUMN_CLASS.priority },
   {
     variant: 'number',
     className: `${CRM_LEADS_TABLE_COLUMN_CLASS.value} text-right`,
   },
-  { variant: 'text', className: CRM_LEADS_TABLE_COLUMN_CLASS.activity },
   {
     variant: 'actions',
     className: CRM_LEADS_TABLE_COLUMN_CLASS.actions,

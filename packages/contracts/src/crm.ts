@@ -17,6 +17,11 @@ export const CRM_ROUTES = {
   pipelineBulkStatus: `${API_PREFIX}/crm/pipelines/bulk/status`,
   pipelineBulkDelete: `${API_PREFIX}/crm/pipelines/bulk/delete`,
   leads: `${API_PREFIX}/crm/leads`,
+  leadTags: `${API_PREFIX}/crm/leads/tags`,
+  leadTag: (tagId: string) => `${API_PREFIX}/crm/leads/tags/${tagId}`,
+  leadImportValidate: `${API_PREFIX}/crm/leads/import/validate`,
+  leadImport: `${API_PREFIX}/crm/leads/import`,
+  leadBulkDelete: `${API_PREFIX}/crm/leads/bulk/delete`,
   lead: (id: string) => `${API_PREFIX}/crm/leads/${id}`,
   leadStage: (id: string) => `${API_PREFIX}/crm/leads/${id}/stage`,
   leadActivities: (id: string) => `${API_PREFIX}/crm/leads/${id}/activities`,
@@ -98,10 +103,38 @@ export interface CrmPipelineBulkActionResponse {
   readonly failures: readonly CrmPipelineBulkActionFailure[];
 }
 
+export type CrmLeadTagStatus = 'ACTIVE' | 'INACTIVE';
+
+export interface CrmLeadTag {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly color: string;
+  readonly status?: CrmLeadTagStatus;
+}
+
+export interface CrmTag {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly description: string;
+  readonly color: string;
+  readonly status: CrmLeadTagStatus;
+  readonly leadCount: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CrmTagListResponse {
+  readonly items: readonly CrmTag[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
+}
+
 export interface CrmLead {
   readonly id: string;
   readonly referenceNumber: string;
-  readonly subject: string;
   readonly fullName: string;
   readonly companyName: string;
   readonly email: string | null;
@@ -117,7 +150,9 @@ export interface CrmLead {
   readonly expectedCloseDate: string | null;
   readonly nextFollowUpDate: string | null;
   readonly description: string;
+  /** @deprecated Prefer `leadTags`; kept for backward compatibility. */
   readonly tags: readonly string[];
+  readonly leadTags: readonly CrmLeadTag[];
   readonly convertedClientId: string | null;
   readonly convertedAt: string | null;
   readonly archivedAt: string | null;
@@ -132,6 +167,68 @@ export interface CrmLeadListResponse {
   readonly total: number;
   readonly page: number;
   readonly pageSize: number;
+}
+
+export interface CrmLeadBulkActionFailure {
+  readonly leadId: string;
+  readonly message: string;
+}
+
+export interface CrmLeadBulkActionResponse {
+  readonly succeededIds: readonly string[];
+  readonly failures: readonly CrmLeadBulkActionFailure[];
+}
+
+/** @deprecated Use {@link CrmTagListResponse}. */
+export interface CrmLeadTagListResponse {
+  readonly items: readonly CrmLeadTag[];
+}
+
+export type CrmLeadImportRowStatus =
+  | 'NEW'
+  | 'EXISTING'
+  | 'DUPLICATE_IN_FILE'
+  | 'INVALID';
+
+export interface CrmLeadImportPreviewRow {
+  readonly rowNumber: number;
+  readonly fullName: string;
+  readonly phone: string | null;
+  readonly email: string | null;
+  readonly stage: string | null;
+  readonly priority: LeadPriority | null;
+  readonly tags: readonly string[];
+  readonly status: CrmLeadImportRowStatus;
+  readonly message: string;
+  readonly existingLeadId: string | null;
+  readonly existingLeadName: string | null;
+  readonly existingPipelineId: string | null;
+  readonly existingStageId: string | null;
+}
+
+export interface CrmLeadImportPreviewResponse {
+  readonly totalRows: number;
+  readonly validNewCount: number;
+  readonly existingCount: number;
+  readonly duplicateInFileCount: number;
+  readonly invalidCount: number;
+  readonly readyToImportCount: number;
+  readonly rows: readonly CrmLeadImportPreviewRow[];
+}
+
+export interface CrmLeadImportRowError {
+  readonly rowNumber: number;
+  readonly message: string;
+}
+
+export interface CrmLeadImportResponse {
+  readonly totalRows: number;
+  readonly importedCount: number;
+  readonly existingCount: number;
+  readonly duplicateCount: number;
+  readonly failedCount: number;
+  readonly importedLeadIds: readonly string[];
+  readonly rowErrors: readonly CrmLeadImportRowError[];
 }
 
 export interface CrmLeadActivity {

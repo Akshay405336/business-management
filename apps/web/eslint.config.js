@@ -9,6 +9,7 @@ const config = [
   },
   {
     files: [
+      'src/features/crm/**/*.tsx',
       'src/features/admin/crm/**/*.tsx',
       'src/features/admin/projects/**/*.tsx',
       'src/features/admin/daily-tasks/**/*.tsx',

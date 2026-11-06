@@ -91,10 +91,19 @@ export const crmPipelineBulkActionResponseSchema = z.object({
   ),
 });
 
+export const crmLeadBulkActionResponseSchema = z.object({
+  succeededIds: z.array(z.uuid()),
+  failures: z.array(
+    z.object({
+      leadId: z.uuid(),
+      message: z.string(),
+    }),
+  ),
+});
+
 export const crmLeadResponseSchema = z.object({
   id: z.uuid(),
   referenceNumber: z.string(),
-  subject: z.string(),
   fullName: z.string(),
   companyName: z.string(),
   email: z.string().nullable(),
@@ -111,6 +120,14 @@ export const crmLeadResponseSchema = z.object({
   nextFollowUpDate: isoDateTime.nullable(),
   description: z.string(),
   tags: z.array(z.string()),
+  leadTags: z.array(
+    z.object({
+      id: z.uuid(),
+      name: z.string(),
+      slug: z.string(),
+      color: z.string(),
+    }),
+  ),
   convertedClientId: z.uuid().nullable(),
   convertedAt: isoDateTime.nullable(),
   archivedAt: isoDateTime.nullable(),

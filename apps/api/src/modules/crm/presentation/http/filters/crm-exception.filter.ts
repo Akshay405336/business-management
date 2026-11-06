@@ -5,6 +5,7 @@ import { sendApiError } from '../../../../../common/filters/api-error.response.j
 import {
   CrmError,
   CrmPipelineHasDependentLeadsError,
+  CrmTagInUseError,
   CrmValidationError,
   type CrmErrorCode,
 } from '../../../domain/errors/crm.errors.js';
@@ -22,6 +23,10 @@ const HTTP_MAPPING: Record<CrmErrorCode, { status: number; code: ApiErrorCode }>
   PIPELINE_HAS_DEPENDENT_LEADS: {
     status: HttpStatus.CONFLICT,
     code: API_ERROR_CODES.PIPELINE_HAS_DEPENDENT_LEADS,
+  },
+  TAG_IN_USE: {
+    status: HttpStatus.CONFLICT,
+    code: API_ERROR_CODES.TAG_IN_USE,
   },
 };
 
@@ -41,7 +46,9 @@ export class CrmExceptionFilter implements ExceptionFilter<CrmError> {
           ? error.details
           : error instanceof CrmPipelineHasDependentLeadsError
             ? [{ path: 'leadCount', message: String(error.leadCount) }]
-            : undefined,
+            : error instanceof CrmTagInUseError
+              ? [{ path: 'leadCount', message: String(error.leadCount) }]
+              : undefined,
     });
   }
 }

@@ -123,7 +123,6 @@ export function toLead(row: {
   id: string;
   organizationId: string;
   referenceNumber: string;
-  subject: string;
   fullName: string;
   companyName: string;
   email: string | null;

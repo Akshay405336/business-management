@@ -16,12 +16,36 @@ export function normalizeIndianMobileInput(input: string): string {
   return digits;
 }
 
+/** Required email (org invitations, etc.). Not used for Lead create/update payloads. */
 export const leadEmailSchema = z
   .string()
   .trim()
   .min(1, LEAD_EMAIL_REQUIRED)
   .pipe(z.email({ error: LEAD_EMAIL_INVALID }))
   .pipe(z.string().max(254).toLowerCase());
+
+export function coalesceOptionalEmailField(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  return value;
+}
+
+/** Lead/API optional email: omit, null, or valid address. Blank strings become null. */
+export const optionalLeadEmailSchema = z.preprocess(
+  coalesceOptionalEmailField,
+  z
+    .union([
+      z.null(),
+      z
+        .string()
+        .trim()
+        .min(1)
+        .pipe(z.email({ error: LEAD_EMAIL_INVALID }))
+        .pipe(z.string().max(254).toLowerCase()),
+    ])
+    .optional(),
+);
 
 export const leadPhoneSchema = z
   .string()

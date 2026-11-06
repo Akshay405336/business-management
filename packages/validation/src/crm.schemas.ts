@@ -3,7 +3,7 @@ import {
   pipelineStageColorFieldSchema,
   pipelineStageNameFieldSchema,
 } from './field-schemas.js';
-import { leadEmailSchema, leadPhoneSchema } from './lead-contact.js';
+import { leadEmailSchema, leadPhoneSchema, optionalLeadEmailSchema } from './lead-contact.js';
 import { MONEY_PARSE_ERROR, normalizeMoneyInput } from './money.js';
 import { normalizeProposalTaxRateFraction } from './proposal-pricing.js';
 
@@ -169,6 +169,15 @@ export const bulkPipelineStatusRequestSchema = bulkPipelineIdsRequestSchema
   })
   .strict();
 
+export const bulkLeadIdsRequestSchema = z
+  .object({
+    leadIds: z
+      .array(z.string().uuid())
+      .min(1, 'Select at least one lead.')
+      .max(50),
+  })
+  .strict();
+
 export const createPipelineStageRequestSchema = z
   .object({
     name: z.string().trim().min(1, 'Enter a stage name.').max(120),
@@ -203,6 +212,18 @@ const leadListQueryShape = {
   priority: leadPrioritySchema.optional(),
   source: leadSourceSchema.optional(),
   search: z.string().max(200).optional(),
+  tagIds: z
+    .preprocess((value) => {
+      if (value === undefined || value === null || value === '') return undefined;
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        return value
+          .split(',')
+          .map((part) => part.trim())
+          .filter(Boolean);
+      }
+      return value;
+    }, z.array(uuid).max(16).optional()),
   includeArchived: z.coerce.boolean().optional(),
   page: z.coerce.number().int().min(1).optional(),
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
@@ -226,10 +247,9 @@ export function parseLeadListQuery(input: unknown): z.infer<typeof leadListQuery
 
 export const createLeadRequestSchema = z
   .object({
-    subject: z.string().trim().min(1, 'Enter a lead subject.').max(200),
     fullName: z.string().trim().min(1, 'Enter a name.').max(160),
     companyName: z.string().max(160).optional(),
-    email: leadEmailSchema,
+    email: optionalLeadEmailSchema,
     phone: leadPhoneSchema,
     website: z.string().max(512).nullable().optional(),
     source: leadSourceSchema.optional(),
@@ -243,6 +263,7 @@ export const createLeadRequestSchema = z
     nextFollowUpDate: dateTime.nullable().optional(),
     description: z.string().max(4000).optional(),
     tags: z.array(z.string().max(64)).max(32).optional(),
+    tagIds: z.array(uuid).max(32).optional(),
   })
   .strict();
 
