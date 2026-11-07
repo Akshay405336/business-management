@@ -18,7 +18,9 @@ import { useAdminSession, useAuthenticatedAdmin } from '../hooks/use-admin-sessi
 
 export function AdminDashboard() {
   const { admin, session } = useAuthenticatedAdmin();
-  const { membershipRoleLabel } = usePermissions();
+  const { membershipRoleLabel, roles } = usePermissions();
+  const roleDetails =
+    roles.length > 1 ? roles.map((role) => role.name).filter(Boolean).join(', ') : membershipRoleLabel;
   const { signOutEverywhere, isSigningOut } = useAdminSession();
 
   return (
@@ -33,13 +35,13 @@ export function AdminDashboard() {
 
       <Card className="min-w-0">
         <CardHeader>
-          <CardTitle>Administrator</CardTitle>
-          <CardDescription>Identity confirmed by the API for this session.</CardDescription>
+          <CardTitle>Account</CardTitle>
+          <CardDescription>Organization membership and session details from the API.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Info label="Name" value={admin.displayName} />
           <Info label="Email" value={admin.email} />
-          <Info label="Role" value={membershipRoleLabel} />
+          <Info label="Role" value={roleDetails || 'No organization role assigned'} />
           <Info label="Last sign-in" value={formatDateTime(admin.lastLoginAt)} />
           <Info label="This session" value={session.id} />
           <Info label="Session expires" value={formatDateTime(session.expiresAt)} />

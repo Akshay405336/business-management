@@ -2,9 +2,11 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { WorkspaceShellSkeleton } from '@/components/loading/skeletons';
+import { isAbortError } from '@/shared/lib/abort-error';
 import {
   accessTokenStore,
   hasCsrfCookie,
@@ -88,7 +90,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
           session: current.session,
         });
       } catch (error) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || isAbortError(error)) return;
         if (isApiError(error) && error.isTransient) {
           if (hadBootstrap) return;
           setState({ status: 'error', error });
@@ -190,18 +192,7 @@ export function AdminSessionProvider({ children }: { children: ReactNode }) {
 }
 
 function SessionLoadingState() {
-  return (
-    <div className="bg-background flex min-h-dvh items-center justify-center px-4">
-      <p
-        className="text-muted-foreground flex items-center gap-2 text-sm"
-        role="status"
-        aria-live="polite"
-      >
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        Restoring your session...
-      </p>
-    </div>
-  );
+  return <WorkspaceShellSkeleton />;
 }
 
 function SessionErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {

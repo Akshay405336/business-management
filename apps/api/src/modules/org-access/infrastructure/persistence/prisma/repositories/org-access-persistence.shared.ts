@@ -535,13 +535,25 @@ export async function resolveActiveMembershipRolesFromDb(
   });
   if (!membership) return [];
 
-  return membership.roleLinks
+  const activeRoles = membership.roleLinks
     .filter((link) => link.role.status === 'ACTIVE')
     .map((link) => ({
       id: link.role.id,
       key: link.role.key,
       name: link.role.name,
     }));
+
+  if (activeRoles.length === 0 && membership.isOwner) {
+    return [
+      {
+        id: SYSTEM_ROLE_KEYS.owner,
+        key: SYSTEM_ROLE_KEYS.owner,
+        name: 'Owner',
+      },
+    ];
+  }
+
+  return activeRoles;
 }
 
 export async function resolvePermissionsFromDb(

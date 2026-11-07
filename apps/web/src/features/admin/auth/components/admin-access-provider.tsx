@@ -1,7 +1,7 @@
 'use client';
 
 import type { PermissionKey } from '@techwin/contracts';
-import { Loader2 } from 'lucide-react';
+import { WorkspaceShellSkeleton } from '@/components/loading/skeletons';
 import { useRouter, usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { filterAdminNav, type AdminNavGroupWithAccess } from '@/features/admin/navigation/filter-admin-nav';
@@ -60,14 +60,7 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
   }, [redirectTarget, router]);
 
   if (redirectTarget) {
-    return (
-      <div className="bg-background flex min-h-dvh items-center justify-center px-4">
-        <p className="text-muted-foreground flex items-center gap-2 text-sm" role="status" aria-live="polite">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          Redirecting…
-        </p>
-      </div>
-    );
+    return <WorkspaceShellSkeleton />;
   }
 
   return <AdminAccessContext.Provider value={value}>{children}</AdminAccessContext.Provider>;

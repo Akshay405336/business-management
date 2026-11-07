@@ -66,7 +66,7 @@ export const ADMIN_NAV_GROUPS: readonly AdminNavGroup[] = [
       {
         kind: 'link',
         href: '/employee/dashboard',
-        label: 'My dashboard',
+        label: 'My workspace',
         icon: LayoutDashboard,
       },
     ],
@@ -354,11 +354,22 @@ export function isNavGroupActive(pathname: string, group: AdminNavGroup): boolea
   return group.items.some((item) => item.kind === 'link' && isNavItemActive(pathname, item));
 }
 
+/**
+ * Page heading for the shared shell header. Never returns a role name such as "Admin" —
+ * that confused role identity with the `/admin` URL prefix.
+ */
 export function adminPageTitle(pathname: string): string {
   for (const group of ADMIN_NAV_GROUPS) {
     for (const item of group.items) {
       if (item.kind === 'link' && isNavItemActive(pathname, item)) return item.label;
     }
   }
-  return 'Admin';
+  const segment = pathname.split('/').filter(Boolean).pop();
+  if (!segment || segment === 'admin' || segment === 'employee' || segment === 'project-manager') {
+    return 'Workspace';
+  }
+  return segment
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }

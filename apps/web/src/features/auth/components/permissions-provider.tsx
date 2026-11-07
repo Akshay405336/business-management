@@ -1,7 +1,11 @@
 'use client';
 
-import type { MyOrganizationRole, MySessionEmployeeSummary, PermissionKey } from '@techwin/contracts';
-import { Loader2 } from 'lucide-react';
+import {
+  API_ERROR_CODES,
+  type MyOrganizationRole,
+  type MySessionEmployeeSummary,
+  type PermissionKey,
+} from '@techwin/contracts';
 import {
   createContext,
   useCallback,
@@ -14,6 +18,7 @@ import {
 } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { WorkspaceShellSkeleton } from '@/components/loading/skeletons';
 import { getMyPermissions } from '@/features/admin/org-access/api/org-access';
 import { describeOrgAccessError } from '@/features/admin/org-access/utils/errors';
 import { invalidateMyPermissionsCache } from '@/features/admin/org-access/my-permissions-cache';
@@ -21,7 +26,9 @@ import { useAuthenticatedAdmin } from '@/features/admin/auth/hooks/use-admin-ses
 import { readPostAuthBootstrap } from '@/features/admin/auth/utils/post-auth-bootstrap';
 import { loginPath } from '@/features/admin/auth/utils/auth-errors';
 import { onAccessDenied } from '@/shared/api/api-client';
+import { isApiError } from '@/shared/api/api-error';
 import { useRouter } from 'next/navigation';
+import { isAbortError } from '@/shared/lib/abort-error';
 import {
   formatMembershipRoleLabel,
   membershipAccessContext,
@@ -69,12 +76,8 @@ function readBootstrapSnapshot(): AccessSnapshot | null {
   };
 }
 
-function createInitialSnapshot(): AccessSnapshot | null {
-  return readBootstrapSnapshot();
-}
-
-function createInitialLoading(): boolean {
-  return readBootstrapSnapshot() === null;
+function hasUsableAccess(snapshot: AccessSnapshot | null): boolean {
+  return snapshot !== null && snapshot.permissions.length > 0 && snapshot.roles.length > 0;
 }
 
 export function usePermissions(): PermissionsContextValue {
@@ -88,28 +91,79 @@ export function usePermissions(): PermissionsContextValue {
 export function PermissionsProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { admin } = useAuthenticatedAdmin();
-  const [snapshot, setSnapshot] = useState<AccessSnapshot | null>(createInitialSnapshot);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(createInitialLoading);
-  const skipInitialLoad = useRef(createInitialSnapshot() !== null);
+  const initialSnapshot = useMemo(() => readBootstrapSnapshot(), []);
+  const [snapshot, setSnapshot] = useState<AccessSnapshot | null>(initialSnapshot);
+  const [fatalError, setFatalError] = useState<string | null>(null);
+  const [initializing, setInitializing] = useState(() => !hasUsableAccess(initialSnapshot));
+  const loadGenerationRef = useRef(0);
+  const hadBootstrapRef = useRef(hasUsableAccess(initialSnapshot));
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getMyPermissions(signal);
-      setSnapshot({
-        permissions: response.permissions,
-        roles: response.roles ?? [],
-        sessionEmployee: response.sessionEmployee ?? null,
-      });
-    } catch (failure) {
-      setSnapshot({ permissions: [], roles: [], sessionEmployee: null });
-      setError(describeOrgAccessError(failure));
-    } finally {
-      setLoading(false);
-    }
+  const applySnapshot = useCallback((next: AccessSnapshot) => {
+    setSnapshot(next);
+    setFatalError(null);
   }, []);
+
+  const runPermissionLoad = useCallback(
+    async (options: {
+      readonly signal?: AbortSignal;
+      readonly generation: number;
+      readonly silent?: boolean;
+    }) => {
+      const { signal, generation, silent = false } = options;
+      if (!silent) {
+        setInitializing(true);
+      }
+      setFatalError(null);
+
+      try {
+        const response = await getMyPermissions(signal);
+        if (generation !== loadGenerationRef.current) return;
+        if (signal?.aborted) return;
+
+        const roles = response.roles ?? [];
+        if (response.permissions.length > 0 && roles.length === 0) {
+          if (generation !== loadGenerationRef.current) return;
+          setFatalError(
+            'No organization role is assigned to your account. Contact an administrator to assign a role.',
+          );
+          setInitializing(false);
+          return;
+        }
+        applySnapshot({
+          permissions: response.permissions,
+          roles,
+          sessionEmployee: response.sessionEmployee ?? null,
+        });
+      } catch (failure) {
+        if (signal?.aborted || isAbortError(failure)) return;
+        if (generation !== loadGenerationRef.current) return;
+
+        if (
+          isApiError(failure) &&
+          (failure.code === API_ERROR_CODES.UNAUTHENTICATED ||
+            failure.code === API_ERROR_CODES.ACCESS_TOKEN_INVALID ||
+            failure.code === API_ERROR_CODES.SESSION_EXPIRED)
+        ) {
+          router.replace(loginPath('session_expired'));
+          return;
+        }
+
+        setSnapshot((previous) => {
+          if (previous && previous.permissions.length > 0) {
+            return previous;
+          }
+          return { permissions: [], roles: [], sessionEmployee: null };
+        });
+
+        setFatalError(describeOrgAccessError(failure));
+      } finally {
+        if (generation === loadGenerationRef.current) {
+          setInitializing(false);
+        }
+      }
+    },
+    [applySnapshot, router],
+  );
 
   const lastSilentRefreshAt = useRef(0);
 
@@ -118,27 +172,27 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
       if (now - lastSilentRefreshAt.current < ACCESS_DENIED_REFRESH_INTERVAL_MS) return;
       lastSilentRefreshAt.current = now;
-      getMyPermissions()
-        .then((response) =>
-          setSnapshot({
-            permissions: response.permissions,
-            roles: response.roles ?? [],
-            sessionEmployee: response.sessionEmployee ?? null,
-          }),
-        )
-        .catch(() => undefined);
+      const generation = ++loadGenerationRef.current;
+      void runPermissionLoad({ generation, silent: true });
     });
-  }, []);
+  }, [runPermissionLoad]);
 
   useEffect(() => {
-    if (skipInitialLoad.current) {
-      skipInitialLoad.current = false;
-      return;
-    }
     const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+    const generation = ++loadGenerationRef.current;
+    const silent = hadBootstrapRef.current;
+
+    void runPermissionLoad({
+      signal: controller.signal,
+      generation,
+      silent,
+    });
+
+    return () => {
+      loadGenerationRef.current += 1;
+      controller.abort();
+    };
+  }, [runPermissionLoad]);
 
   const value = useMemo((): PermissionsContextValue | null => {
     if (!snapshot) return null;
@@ -164,37 +218,34 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       defaultDashboard: defaultDashboardPath(portal, permissions, { admin, roles }),
       refresh: async () => {
         invalidateMyPermissionsCache();
-        await load();
+        const generation = ++loadGenerationRef.current;
+        await runPermissionLoad({ generation });
       },
     };
-  }, [admin, load, snapshot]);
+  }, [admin, runPermissionLoad, snapshot]);
 
-  if (loading || !value) {
-    return <PermissionsLoadingState />;
+  if (initializing && !hasUsableAccess(snapshot)) {
+    return <WorkspaceShellSkeleton />;
   }
 
-  if (error && snapshot?.permissions.length === 0) {
+  if (fatalError && !hasUsableAccess(snapshot)) {
     return (
       <PermissionsErrorState
-        message={error}
-        onRetry={() => void load()}
+        message={fatalError}
+        onRetry={() => {
+          const generation = ++loadGenerationRef.current;
+          void runPermissionLoad({ generation });
+        }}
         onSignIn={() => router.replace(loginPath('session_expired'))}
       />
     );
   }
 
-  return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;
-}
+  if (!value) {
+    return <WorkspaceShellSkeleton />;
+  }
 
-function PermissionsLoadingState() {
-  return (
-    <div className="bg-background flex min-h-dvh items-center justify-center px-4">
-      <p className="text-muted-foreground flex items-center gap-2 text-sm" role="status" aria-live="polite">
-        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-        Loading your access…
-      </p>
-    </div>
-  );
+  return <PermissionsContext.Provider value={value}>{children}</PermissionsContext.Provider>;
 }
 
 function PermissionsErrorState({

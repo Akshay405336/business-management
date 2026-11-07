@@ -1,6 +1,13 @@
 import type { MyOrganizationRole, PermissionKey, PlatformAdminProfile } from '@techwin/contracts';
-import { filterAdminNav } from '@/features/admin/navigation/filter-admin-nav';
-import { membershipAccessContext } from '../membership/membership-access';
+import {
+  filterAdminNav,
+  type AdminNavGroupWithAccess,
+} from '@/features/admin/navigation/filter-admin-nav';
+import type { AdminNavLink } from '@/features/admin/navigation/admin-nav-config';
+import {
+  canAccessWorkspaceDashboard,
+  membershipAccessContext,
+} from '../membership/membership-access';
 import { canAccessAppPath } from '@/shared/navigation/app-route-permissions';
 import { resolvePortalKind, type PortalKind } from './portal-policy';
 
@@ -8,6 +15,13 @@ export type { PortalKind };
 
 export { resolvePortalKind };
 
+function navLinks(groups: readonly AdminNavGroupWithAccess[]): AdminNavLink[] {
+  return groups.flatMap((group) =>
+    group.items.filter((item): item is AdminNavLink => item.kind === 'link'),
+  );
+}
+
+/** Picks the best post-login landing page from permission-filtered navigation (not portal kind). */
 export function defaultDashboardPath(
   _portal: PortalKind,
   permissions: readonly PermissionKey[],
@@ -17,11 +31,25 @@ export function defaultDashboardPath(
   },
 ): string {
   const access = membershipAccessContext(input.admin, input.roles);
-  const navGroups = filterAdminNav(permissions, access);
-  const firstLink = navGroups
-    .flatMap((group) => group.items)
-    .find((item) => item.kind === 'link');
-  return firstLink?.href ?? '/admin/dashboard';
+  const links = navLinks(filterAdminNav(permissions, access));
+
+  if (canAccessWorkspaceDashboard(access)) {
+    const adminDashboard = links.find((item) => item.href === '/admin/dashboard');
+    if (adminDashboard) return adminDashboard.href;
+  }
+
+  const adminModule = links.find(
+    (item) => item.href.startsWith('/admin/') && item.href !== '/admin/dashboard',
+  );
+  if (adminModule) return adminModule.href;
+
+  const employeeModule = links.find(
+    (item) => item.href.startsWith('/employee/') && item.href !== '/employee/dashboard',
+  );
+  if (employeeModule) return employeeModule.href;
+
+  const fallback = links.find((item) => item.href.endsWith('/dashboard'));
+  return fallback?.href ?? links[0]?.href ?? '/employee/dashboard';
 }
 
 export function sanitizeReturnPath(

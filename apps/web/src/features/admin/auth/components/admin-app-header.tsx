@@ -74,10 +74,9 @@ export function AdminAppHeader({
   membershipRoleLabel?: string;
 }) {
   const { signOut, isSigningOut } = useAdminSession();
-  const roleLabel =
-    membershipRoleLabel?.trim() ||
-    (admin.role === 'SUPER_ADMIN' ? 'Super Admin' : admin.role.replaceAll('_', ' '));
-  const showRoleSubtitle = normalizeLabel(roleLabel) !== normalizeLabel(admin.displayName);
+  const roleLabel = membershipRoleLabel?.trim() ?? '';
+  const showRoleSubtitle =
+    roleLabel.length > 0 && normalizeLabel(roleLabel) !== normalizeLabel(admin.displayName);
 
   return (
     <header
@@ -141,7 +140,11 @@ export function AdminAppHeader({
                   {admin.displayName}
                 </span>
                 {showRoleSubtitle ? (
-                  <span className="text-muted-foreground truncate text-xs uppercase tracking-wide">
+                  <span
+                    className="text-muted-foreground truncate text-xs"
+                    data-testid="membership-role-label"
+                    title={roleLabel}
+                  >
                     {roleLabel}
                   </span>
                 ) : null}
@@ -153,6 +156,9 @@ export function AdminAppHeader({
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col gap-0.5">
                 <span className="text-sm font-medium">{admin.displayName}</span>
+                {roleLabel ? (
+                  <span className="text-muted-foreground text-xs">{roleLabel}</span>
+                ) : null}
                 <span className="text-muted-foreground text-xs">{admin.email}</span>
               </div>
             </DropdownMenuLabel>

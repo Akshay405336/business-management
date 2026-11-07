@@ -4,6 +4,10 @@ import {
   type PlatformAdminProfile,
   type PlatformAdminRole,
 } from '@techwin/contracts';
+import {
+  formatOrganizationRoleLabel,
+  formatPrimaryOrganizationRoleLabel,
+} from './organization-role-label';
 
 export type MembershipAccessContext = {
   readonly platformRole: PlatformAdminRole;
@@ -20,13 +24,31 @@ export function canAccessWorkspaceDashboard(context: MembershipAccessContext): b
   return context.membershipRoles.some((role) => WORKSPACE_OVERVIEW_ROLE_KEYS.has(role.key));
 }
 
+/**
+ * Header / compact identity label from organization membership roles only.
+ * Never invents Admin, Member, or Employee when the API returns no roles.
+ */
 export function formatMembershipRoleLabel(
   admin: PlatformAdminProfile,
   roles: readonly MyOrganizationRole[],
 ): string {
-  if (admin.role === 'SUPER_ADMIN' && roles.length === 0) return 'Super Admin';
-  if (roles.length === 0) return 'Member';
-  return roles.map((role) => role.name).join(', ');
+  if (roles.length > 0) {
+    return formatPrimaryOrganizationRoleLabel(roles);
+  }
+  if (admin.role === 'SUPER_ADMIN') return 'Super Admin';
+  return '';
+}
+
+/** Full membership role list for profile/dashboard details. */
+export function formatMembershipRoleDetails(
+  admin: PlatformAdminProfile,
+  roles: readonly MyOrganizationRole[],
+): string {
+  if (roles.length > 0) {
+    return formatOrganizationRoleLabel(roles);
+  }
+  if (admin.role === 'SUPER_ADMIN') return 'Super Admin';
+  return 'No organization role assigned';
 }
 
 export function membershipAccessContext(

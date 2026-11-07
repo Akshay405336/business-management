@@ -135,6 +135,47 @@ export function ImageSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return <Skeleton className={cn('aspect-video w-full', className)} {...props} />;
 }
 
+/** Application chrome + content placeholder while session or permissions initialize. */
+export function WorkspaceShellSkeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        'bg-background relative flex h-dvh max-h-dvh min-w-0 overflow-hidden',
+        className,
+      )}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading workspace"
+    >
+      <aside className="admin-sidebar-shell hidden h-full w-[var(--workspace-sidebar-width)] max-w-[var(--workspace-sidebar-width)] shrink-0 bg-white lg:block print:hidden">
+        <div className="flex h-full min-h-0 flex-col gap-3 px-3 pt-4 pb-2">
+          <Skeleton className="mx-0.5 h-8 w-36" />
+          <div className="mt-2 grid gap-1.5">
+            {Array.from({ length: 10 }, (_, index) => (
+              <Skeleton key={index} className="h-9 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </aside>
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-border bg-white px-4 sm:px-5">
+          <div className="flex h-[var(--workspace-header-height)] items-center justify-between gap-3">
+            <Skeleton className="h-6 w-44 max-w-[50vw]" />
+            <div className="flex items-center gap-2">
+              <Skeleton className="size-9 rounded-lg" />
+              <Skeleton className="size-9 rounded-full" />
+            </div>
+          </div>
+        </div>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+          <PageSkeleton className="max-w-[1400px] p-0" />
+        </main>
+      </div>
+    </div>
+  );
+}
+
 /** Stable page shell used by route `loading.tsx` files so navigation never flashes blank. */
 export function PageSkeleton({ className }: { className?: string }) {
   return (

@@ -184,7 +184,7 @@ function SidebarNav({
   if (collapsed) {
     return (
       <nav
-        aria-label="Admin"
+        aria-label="Main navigation"
         className={cn(
           'scrollbar-hide overflow-x-hidden overflow-y-auto px-1.5 pb-2',
           className,
@@ -215,7 +215,7 @@ function SidebarNav({
 
   return (
     <nav
-      aria-label="Admin"
+      aria-label="Main navigation"
       className={cn(
         'scrollbar-hide overflow-x-hidden overflow-y-auto px-2 pb-2',
         className,

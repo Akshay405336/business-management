@@ -50,7 +50,12 @@ export const APP_ROUTE_PERMISSIONS: Readonly<Record<string, readonly PermissionK
   '/admin/whatsapp/broadcasts': ['whatsapp.broadcasts.manage'],
   '/admin/whatsapp/reports': ['whatsapp.view_all', 'whatsapp.channels.manage'],
   '/employee': [],
-  '/employee/dashboard': [],
+  '/employee/dashboard': [
+    'attendance.view_own',
+    'leave.requests.read_own',
+    'leave.balances.read_own',
+    'leave.requests.create',
+  ],
   '/employee/daily-tasks': ['tasks.read'],
   '/employee/task-calendar': ['tasks.read'],
   '/employee/attendance': ['attendance.view_own'],
