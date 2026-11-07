@@ -3,7 +3,7 @@
 import type { AttendanceRecordItem } from '@techwin/contracts';
 import { Eye, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
 import {
   formatAttendanceDate,

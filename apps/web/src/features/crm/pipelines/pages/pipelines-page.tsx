@@ -53,7 +53,11 @@ import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import { cn } from '@/shared/lib/utils';
-import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
+import {
+  CRM_PIPELINE_DESTRUCTIVE_ACTION_CLASS,
+  CRM_PIPELINE_SEARCH_INPUT_CLASS,
+  CRM_PIPELINE_STATUS_ACTION_CLASS,
+} from '@/features/admin/crm/constants';
 import type { CrmPipeline, CrmPipelineBulkActionResponse } from '../types/pipeline.types';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import {
@@ -798,9 +802,7 @@ export function PipelinesPage() {
             <AlertDialogAction
               disabled={!statusTarget || pending}
               className={
-                statusChangeIsDeactivate
-                  ? 'bg-neutral-900 text-white hover:bg-neutral-800'
-                  : undefined
+                statusChangeIsDeactivate ? CRM_PIPELINE_STATUS_ACTION_CLASS : undefined
               }
               onClick={(event) => {
                 event.preventDefault();
@@ -845,7 +847,7 @@ export function PipelinesPage() {
               disabled={!bulkStatusTarget || pending}
               className={
                 bulkStatusTarget === 'INACTIVE'
-                  ? 'bg-neutral-900 text-white hover:bg-neutral-800'
+                  ? CRM_PIPELINE_STATUS_ACTION_CLASS
                   : undefined
               }
               onClick={(event) => {
@@ -880,7 +882,7 @@ export function PipelinesPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={selectedCount === 0 || pending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={CRM_PIPELINE_DESTRUCTIVE_ACTION_CLASS}
               onClick={(event) => {
                 event.preventDefault();
                 void confirmBulkDelete();
@@ -937,7 +939,7 @@ export function PipelinesPage() {
             {deleteTarget?.isDefault ? null : (
               <AlertDialogAction
                 disabled={!deleteTarget || pending}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                className={CRM_PIPELINE_DESTRUCTIVE_ACTION_CLASS}
                 onClick={(event) => {
                   event.preventDefault();
                   void confirmDelete();

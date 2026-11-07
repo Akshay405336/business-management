@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { Employee } from '../../domain/entities/employee.entity.js';
 import { EmployeeNotFoundError } from '../../domain/errors/employee.errors.js';
 import {
   EMPLOYEE_REPOSITORY,
@@ -17,6 +18,6 @@ export class GetEmployeeHandler {
       query.employeeId,
     );
     if (!employee) throw new EmployeeNotFoundError();
-    return employee;
+    return Employee.reconstitute(employee).toRecord();
   }
 }

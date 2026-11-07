@@ -8,7 +8,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import { useSessionEmployee } from '@/features/auth/hooks/use-session-employee';
 import { cn } from '@/shared/lib/utils';
 

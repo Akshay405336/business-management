@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/shared/lib/utils';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import type { EmployeeWorkloadRow } from '../utils/task-metrics';
 
 export function DailyTaskCalendarWorkload({

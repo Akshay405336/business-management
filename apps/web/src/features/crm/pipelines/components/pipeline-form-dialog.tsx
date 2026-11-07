@@ -26,9 +26,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { cn } from '@/shared/lib/utils';
 import {
-  CRM_PIPELINE_FORM_DIALOG_CLASS,
+  CRM_PIPELINE_DIALOG_BODY_CLASS,
+  CRM_PIPELINE_DIALOG_FOOTER_CLASS,
+  CRM_PIPELINE_DIALOG_HEADER_CLASS,
+  CRM_PIPELINE_DIALOG_SHELL_CLASS,
+  CRM_PIPELINE_DIALOG_TITLE_CLASS,
   CRM_PIPELINE_FORM_FIELD_CLASS,
   CRM_PIPELINE_FORM_TEXTAREA_CLASS,
+  CRM_PIPELINE_PRIMARY_BUTTON_CLASS,
+  CRM_PIPELINE_SECONDARY_BUTTON_CLASS,
 } from '@/features/admin/crm/constants';
 import { CRM_FORM_PLACEHOLDERS } from '@/features/admin/crm/constants/form-placeholders';
 import type { CreatePipelineRequest } from '../types/pipeline.types';
@@ -47,17 +53,6 @@ import {
 } from '../utils/pipeline.utils';
 import { CrmFieldLabel, CrmInlineFieldError } from '@/features/admin/crm/components/crm-feedback';
 import { PipelineStagesEditor } from './pipeline-stages-editor';
-
-const PIPELINE_FORM_SECONDARY_BTN =
-  'h-11 shrink-0 rounded-lg border border-input bg-card px-3.5 text-sm font-medium text-foreground shadow-none hover:bg-muted/50';
-
-const PIPELINE_FORM_PRIMARY_BTN =
-  'border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900';
-
-const PIPELINE_DIALOG_SHELL_CLASS = cn(
-  CRM_PIPELINE_FORM_DIALOG_CLASS,
-  '[&>button]:text-foreground [&>button]:top-5 [&>button]:right-5 [&>button]:size-9 [&>button]:rounded-lg [&>button]:border [&>button]:border-input [&>button]:bg-card [&>button]:shadow-none [&>button]:hover:bg-muted/50',
-);
 
 function emptyCreatePipelineForm(): PipelineFormState {
   return { name: '', description: '', stages: [] };
@@ -180,14 +175,14 @@ export function PipelineFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={PIPELINE_DIALOG_SHELL_CLASS}>
-        <DialogHeader className="shrink-0 space-y-0 px-6 pt-6 pb-2 text-left">
-          <DialogTitle className="text-foreground pr-10 text-xl font-semibold tracking-tight">
+      <DialogContent className={CRM_PIPELINE_DIALOG_SHELL_CLASS}>
+        <DialogHeader className={CRM_PIPELINE_DIALOG_HEADER_CLASS}>
+          <DialogTitle className={CRM_PIPELINE_DIALOG_TITLE_CLASS}>
             {isCreate ? 'Create pipeline' : 'Edit pipeline'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">
+        <div className={CRM_PIPELINE_DIALOG_BODY_CLASS}>
           {loadingPipeline ? (
             <div className="text-muted-foreground flex items-center justify-center gap-2 py-16 text-sm">
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
@@ -222,7 +217,7 @@ export function PipelineFormDialog({
                     <Button
                       type="button"
                       variant="outline"
-                      className={PIPELINE_FORM_SECONDARY_BTN}
+                      className={CRM_PIPELINE_SECONDARY_BUTTON_CLASS}
                       disabled={pending}
                       onClick={() => setShowDescription(true)}
                     >
@@ -262,7 +257,7 @@ export function PipelineFormDialog({
                     <Button
                       type="button"
                       variant="outline"
-                      className={PIPELINE_FORM_SECONDARY_BTN}
+                      className={CRM_PIPELINE_SECONDARY_BUTTON_CLASS}
                       disabled={pending}
                       onClick={revealStages}
                     >
@@ -293,11 +288,11 @@ export function PipelineFormDialog({
           )}
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+        <DialogFooter className={CRM_PIPELINE_DIALOG_FOOTER_CLASS}>
           <Button
             type="button"
             variant="outline"
-            className={PIPELINE_FORM_SECONDARY_BTN}
+            className={CRM_PIPELINE_SECONDARY_BUTTON_CLASS}
             disabled={pending}
             onClick={() => onOpenChange(false)}
           >
@@ -305,7 +300,7 @@ export function PipelineFormDialog({
           </Button>
           <Button
             type="button"
-            className={cn('h-11 px-5', PIPELINE_FORM_PRIMARY_BTN)}
+            className={cn('h-11 px-5', CRM_PIPELINE_PRIMARY_BUTTON_CLASS)}
             disabled={pending || loadingPipeline}
             onClick={() => void onSubmit()}
           >

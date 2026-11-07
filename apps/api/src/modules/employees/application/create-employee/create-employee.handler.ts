@@ -2,17 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { MemberAccountService, PermissionCheckerService } from '../../../org-access/index.js';
 import { StoredFileService } from '../../../media/index.js';
+import { Employee } from '../../domain/entities/employee.entity.js';
 import {
   EMPLOYEE_REPOSITORY,
-  type CreateEmployeeInput,
   type EmployeeRecord,
   type EmployeeRepository,
 } from '../../domain/repositories/employee.repository.js';
-import { assertCanManageEmployeeCompensation } from '../services/employee-compensation-access.js';
-import {
-  assertEmployeeContactAvailable,
-  normalizeEmployeeContact,
-} from '../shared/employee-contact-uniqueness.js';
+import { assertCanManageEmployeeCompensation } from '../access/employee-compensation-access.js';
+import { assertEmployeeContactAvailable } from '../shared/employee-contact-uniqueness.js';
 import { validateProfileImageAssignment } from '../shared/employee-profile-image.js';
 import type { CreateEmployeeCommand } from './create-employee.command.js';
 
@@ -30,36 +27,28 @@ export class CreateEmployeeHandler {
     if (command.input.salaryStructure) {
       await assertCanManageEmployeeCompensation(this.permissionChecker, command.accessActor);
     }
-    const normalized = normalizeEmployeeContact(command.input);
-    const workEmail = normalized.workEmail ?? command.input.workEmail;
-    const baseInput: CreateEmployeeInput = {
-      ...command.input,
-      workEmail,
-      phone: normalized.phone ?? command.input.phone,
-      ...(normalized.alternatePhone !== undefined
-        ? { alternatePhone: normalized.alternatePhone }
-        : {}),
-    };
-    await assertEmployeeContactAvailable(this.repository, organizationId, baseInput);
+    const draft = Employee.validateCreate(command.input);
+    await assertEmployeeContactAvailable(this.repository, organizationId, draft);
 
     const platformAdminId = await this.memberAccounts.findLinkableMemberAdminId(
       organizationId,
-      workEmail,
+      draft.workEmail,
     );
 
     const employeeId = randomUUID();
     await validateProfileImageAssignment(
       this.storedFiles,
       organizationId,
-      baseInput.profileImageStoredObjectId,
+      draft.profileImageStoredObjectId,
       employeeId,
     );
-    return this.repository.createEmployee(
+    const created = await this.repository.createEmployee(
       organizationId,
       employeeId,
-      { ...baseInput, platformAdminId },
+      { ...draft, platformAdminId },
       command.actor.adminId,
       null,
     );
+    return created;
   }
 }

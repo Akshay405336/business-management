@@ -4,7 +4,7 @@ import type { AttendanceRecordDetail } from '@techwin/contracts';
 import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
 import {
   formatAttendanceDate,

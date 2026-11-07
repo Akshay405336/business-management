@@ -8,7 +8,7 @@ import { CrmIconFilterDropdown, type CrmFilterOption } from '@/components/shared
 import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
 import { useAdminToast } from '@/features/admin/components/toast';
-import { listAssignableEmployees } from '@/features/admin/employees/api/employees';
+import { listAssignableEmployees } from '@/features/employees/api/employee.api';
 import { listProjects } from '@/features/admin/projects/api/projects';
 import { listAllDailyTasksInRange } from '../api/list-all-daily-tasks';
 import {

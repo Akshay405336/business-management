@@ -13,7 +13,7 @@ import {
 import type { DataTableEmptyStateContent } from '@/features/admin/components/data-table-states';
 import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
 import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
 import {

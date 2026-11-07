@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { EmployeesPage } from '@/features/admin/employees/components/employees-page';
+import { EmployeesPage } from '@/features/employees/pages/employees-page';
 
 export default function AdminEmployeesPage() {
   return (

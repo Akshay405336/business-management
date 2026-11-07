@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { useAdminToast } from '@/features/admin/components/toast';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import { getProject } from '@/features/admin/projects/api/projects';
 import type { ProjectPhase } from '@/features/admin/projects/types';
 import {

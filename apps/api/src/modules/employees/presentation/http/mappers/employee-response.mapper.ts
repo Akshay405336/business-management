@@ -4,7 +4,7 @@ import type {
   EmployeeListItem,
   EmployeeSalaryStructure,
 } from '@techwin/contracts';
-import { computeEmployeeSalaryTotals } from '@techwin/validation';
+import { EmployeeCompensationService } from '../../../domain/services/employee-compensation.service.js';
 import type {
   AssignableEmployeeRecord,
   EmployeeRecord,
@@ -14,7 +14,7 @@ function toSalaryStructure(
   record: EmployeeRecord['salaryStructure'],
 ): EmployeeSalaryStructure | null {
   if (!record) return null;
-  const totals = computeEmployeeSalaryTotals(record);
+  const totals = EmployeeCompensationService.totals(record);
   return { ...record, ...totals };
 }
 

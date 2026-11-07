@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { CRM_PIPELINE_FORM_FIELD_CLASS } from '@/features/admin/crm/constants';
-import { listEmployees } from '@/features/admin/employees/api/employees';
+import { listEmployees } from '@/features/employees/api/employee.api';
 import { formControlStateClass } from '@/shared/form/form-control-state';
 import { cn } from '@/shared/lib/utils';
 

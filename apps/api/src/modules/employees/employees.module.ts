@@ -7,6 +7,7 @@ import { MediaModule } from '../media/index.js';
 import { ChangeEmployeeStatusHandler } from './application/change-employee-status/change-employee-status.handler.js';
 import { CreateEmployeeHandler } from './application/create-employee/create-employee.handler.js';
 import { DeleteEmployeeHandler } from './application/delete-employee/delete-employee.handler.js';
+import { GetEmployeeDeletionImpactHandler } from './application/get-employee-deletion-impact/get-employee-deletion-impact.handler.js';
 import { GetEmployeeHandler } from './application/get-employee/get-employee.handler.js';
 import { ListAssignableEmployeesHandler } from './application/list-assignable-employees/list-assignable-employees.handler.js';
 import { ListEmployeesHandler } from './application/list-employees/list-employees.handler.js';
@@ -16,18 +17,25 @@ import { StreamLegacyProfileImageHandler } from './application/stream-legacy-pro
 import { UpdateEmployeeHandler } from './application/update-employee/update-employee.handler.js';
 import { UploadEmployeeProfileImageHandler } from './application/upload-employee-profile-image/upload-employee-profile-image.handler.js';
 import { EMPLOYEE_REPOSITORY } from './domain/repositories/employee.repository.js';
+import { LEGACY_EMPLOYEE_PROFILE_IMAGE_READER } from './domain/repositories/legacy-employee-profile-image.reader.js';
+import { FilesystemLegacyEmployeeProfileImageStore } from './infrastructure/integrations/filesystem-legacy-employee-profile-image.store.js';
 import { PrismaEmployeeRepository } from './infrastructure/persistence/prisma/repositories/prisma-employee.repository.js';
 import { EmployeesController } from './presentation/http/controllers/employees.controller.js';
 import { EmployeeExceptionFilter } from './presentation/http/filters/employee-exception.filter.js';
 
 export const employeePersistenceProviders: Provider[] = [
   { provide: EMPLOYEE_REPOSITORY, useClass: PrismaEmployeeRepository },
+  {
+    provide: LEGACY_EMPLOYEE_PROFILE_IMAGE_READER,
+    useClass: FilesystemLegacyEmployeeProfileImageStore,
+  },
 ];
 
 const employeeUseCaseHandlers = [
   ChangeEmployeeStatusHandler,
   CreateEmployeeHandler,
   DeleteEmployeeHandler,
+  GetEmployeeDeletionImpactHandler,
   GetEmployeeHandler,
   ListAssignableEmployeesHandler,
   ListEmployeesHandler,

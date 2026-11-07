@@ -1010,7 +1010,8 @@ export class DailyTaskPrismaStore {
     row: {
       id: string;
       dailyTaskId: string;
-      employeeId: string;
+      employeeId: string | null;
+      historicalDisplayName: string;
       authorAdminId: string;
       text: string;
       acknowledgementStatus: 'UNREAD' | 'ACKNOWLEDGED';
@@ -1021,18 +1022,18 @@ export class DailyTaskPrismaStore {
         displayName: string;
         profileImageUrl: string | null;
         profileImageStoredObjectId: string | null;
-      };
+      } | null;
       acknowledgedBy: { displayName: string } | null;
     },
   ): DailyTaskNoteItem {
     return {
       id: row.id,
       dailyTaskId: row.dailyTaskId,
-      employeeId: row.employeeId,
-      employeeDisplayName: row.employee.displayName,
-      employeeProfileImageUrl: row.employee.profileImageStoredObjectId
+      employeeId: row.employeeId ?? '',
+      employeeDisplayName: row.employee?.displayName || row.historicalDisplayName || 'Former employee',
+      employeeProfileImageUrl: row.employee?.profileImageStoredObjectId
         ? EMPLOYEE_ROUTES.employeeStoredProfileImageContent(row.employee.profileImageStoredObjectId)
-        : row.employee.profileImageUrl,
+        : (row.employee?.profileImageUrl ?? null),
       authorAdminId: row.authorAdminId,
       text: row.text,
       acknowledgementStatus: row.acknowledgementStatus,
@@ -1163,7 +1164,7 @@ export class DailyTaskPrismaStore {
       },
       select: { employeeId: true },
     });
-    if (!assignment) {
+    if (!assignment?.employeeId) {
       throw new DailyTaskValidationError('You can only add notes to tasks assigned to you.');
     }
 

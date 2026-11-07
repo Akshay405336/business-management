@@ -65,14 +65,15 @@ export function toDailyTaskListItem(row: DailyTaskListRow, clientToday?: string)
     isOverdue,
     assignees: row.assignees.map((assignee) => ({
       id: assignee.id,
-      employeeId: assignee.employeeId,
-      displayName: assignee.employee.displayName,
-      jobTitle: assignee.employee.jobTitle,
-      profileImageUrl: assignee.employee.profileImageStoredObjectId
+      employeeId: assignee.employeeId ?? '',
+      displayName:
+        assignee.employee?.displayName || assignee.historicalDisplayName || 'Former employee',
+      jobTitle: assignee.employee?.jobTitle ?? '',
+      profileImageUrl: assignee.employee?.profileImageStoredObjectId
         ? EMPLOYEE_ROUTES.employeeStoredProfileImageContent(
             assignee.employee.profileImageStoredObjectId,
           )
-        : assignee.employee.profileImageUrl,
+        : (assignee.employee?.profileImageUrl ?? null),
       startedAt: assignee.startedAt?.toISOString() ?? null,
       completedAt: assignee.completedAt?.toISOString() ?? null,
     })),

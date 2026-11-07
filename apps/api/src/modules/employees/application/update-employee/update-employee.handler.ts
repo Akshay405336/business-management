@@ -2,17 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PermissionCheckerService } from '../../../org-access/index.js';
 import { StoredFileService } from '../../../media/index.js';
 import { EmployeeNotFoundError } from '../../domain/errors/employee.errors.js';
+import { EmployeeUpdatePolicy } from '../../domain/policies/employee-update.policy.js';
 import {
   EMPLOYEE_REPOSITORY,
   type EmployeeRecord,
   type EmployeeRepository,
-  type UpdateEmployeeInput,
 } from '../../domain/repositories/employee.repository.js';
-import { assertCanManageEmployeeCompensation } from '../services/employee-compensation-access.js';
-import {
-  assertEmployeeContactAvailable,
-  normalizeEmployeeContact,
-} from '../shared/employee-contact-uniqueness.js';
+import { assertCanManageEmployeeCompensation } from '../access/employee-compensation-access.js';
+import { assertEmployeeContactAvailable } from '../shared/employee-contact-uniqueness.js';
 import { validateProfileImageAssignment } from '../shared/employee-profile-image.js';
 import type { UpdateEmployeeCommand } from './update-employee.command.js';
 
@@ -31,17 +28,7 @@ export class UpdateEmployeeHandler {
     if (command.input.salaryStructure !== undefined) {
       await assertCanManageEmployeeCompensation(this.permissionChecker, command.accessActor);
     }
-    const normalized = normalizeEmployeeContact(command.input);
-    const input: UpdateEmployeeInput = {
-      ...command.input,
-      ...(normalized.workEmail !== undefined && normalized.workEmail !== null
-        ? { workEmail: normalized.workEmail }
-        : {}),
-      ...(normalized.phone !== undefined && normalized.phone !== null
-        ? { phone: normalized.phone }
-        : {}),
-      ...(normalized.alternatePhone !== undefined ? { alternatePhone: normalized.alternatePhone } : {}),
-    };
+    const input = EmployeeUpdatePolicy.validate(command.input);
     await assertEmployeeContactAvailable(this.repository, organizationId, input, {
       excludeEmployeeId: command.employeeId,
     });

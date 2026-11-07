@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { EmployeeAvatar } from '@/features/admin/employees/components/employee-avatar';
+import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { usePermissions } from '@/features/auth/components/permissions-provider';
 import { hasDailyTaskNoteAcknowledgePermission, hasDailyTaskNoteCreatePermission } from '@techwin/contracts';

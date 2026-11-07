@@ -1,3 +1,5 @@
+import { cn } from '@/shared/lib/utils';
+
 export const DEFAULT_LEAD_CURRENCY = 'INR' as const;
 
 /** Shared centered lead create/edit dialog sizing */
@@ -11,6 +13,38 @@ export const CRM_PROPOSAL_FORM_DIALOG_CLASS =
 /** Pipeline create/edit dialog with inline stage editor */
 export const CRM_PIPELINE_FORM_DIALOG_CLASS =
   'flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-[720px] flex-col gap-0 overflow-hidden p-0 sm:w-[min(720px,calc(100vw-2rem))]';
+
+/** Close control on the shared dialog content, as used by the pipeline form. */
+export const CRM_PIPELINE_DIALOG_CLOSE_CLASS =
+  '[&>button]:text-foreground [&>button]:top-5 [&>button]:right-5 [&>button]:size-9 [&>button]:rounded-lg [&>button]:border [&>button]:border-input [&>button]:bg-card [&>button]:shadow-none [&>button]:hover:bg-muted/50';
+
+export const CRM_PIPELINE_DIALOG_SHELL_CLASS = cn(
+  CRM_PIPELINE_FORM_DIALOG_CLASS,
+  CRM_PIPELINE_DIALOG_CLOSE_CLASS,
+);
+
+export const CRM_PIPELINE_DIALOG_HEADER_CLASS = 'shrink-0 space-y-0 px-6 pt-6 pb-2 text-left';
+
+export const CRM_PIPELINE_DIALOG_TITLE_CLASS =
+  'text-foreground pr-10 text-xl font-semibold tracking-tight';
+
+export const CRM_PIPELINE_DIALOG_BODY_CLASS = 'min-h-0 flex-1 overflow-y-auto px-6 py-2';
+
+export const CRM_PIPELINE_DIALOG_FOOTER_CLASS =
+  'shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end';
+
+export const CRM_PIPELINE_SECONDARY_BUTTON_CLASS =
+  'h-11 shrink-0 rounded-lg border border-input bg-card px-3.5 text-sm font-medium text-foreground shadow-none hover:bg-muted/50';
+
+export const CRM_PIPELINE_PRIMARY_BUTTON_CLASS =
+  'border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900';
+
+/** Deactivate confirmation in the pipelines list. */
+export const CRM_PIPELINE_STATUS_ACTION_CLASS = 'bg-neutral-900 text-white hover:bg-neutral-800';
+
+/** Delete confirmation in the pipelines list. */
+export const CRM_PIPELINE_DESTRUCTIVE_ACTION_CLASS =
+  'bg-destructive text-destructive-foreground hover:bg-destructive/90';
 
 /** Light bluish fields in pipeline create/edit dialog */
 export const CRM_PIPELINE_FORM_FIELD_CLASS =

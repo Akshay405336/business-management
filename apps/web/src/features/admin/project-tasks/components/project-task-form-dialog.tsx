@@ -33,7 +33,7 @@ import { CrmFieldLabel, CrmInlineFieldError } from '@/features/admin/crm/compone
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { formatProjectDateOnly } from '../utils/format-project-date';
-import { EmployeeAssigneeSelect } from '@/features/admin/employees/components/employee-assignee-select';
+import { EmployeeAssigneeSelect } from '@/features/employees/components/employee-assignee-select';
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { zodIssuesToFieldMap } from '@/shared/form/zod-field-error';
 import { cn } from '@/shared/lib/utils';

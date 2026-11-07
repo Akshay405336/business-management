@@ -5,7 +5,7 @@ import type {
 
 type SalaryRow = Prisma.EmployeeSalaryStructureGetPayload<object>;
 
-export function decimalToNumber(value: Prisma.Decimal): number {
+function decimalToNumber(value: Prisma.Decimal): number {
   return Number(value.toString());
 }
 

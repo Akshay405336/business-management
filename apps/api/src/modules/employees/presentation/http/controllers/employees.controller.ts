@@ -22,6 +22,7 @@ import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swa
 import type {
   AssignableEmployeeListResponse,
   DeleteEmployeeResponse,
+  EmployeeDeletionImpact,
   EmployeeCodePreviewResponse,
   EmployeeDetail,
   EmployeeListResponse,
@@ -48,6 +49,7 @@ import {
 import { ChangeEmployeeStatusHandler } from '../../../application/change-employee-status/change-employee-status.handler.js';
 import { CreateEmployeeHandler } from '../../../application/create-employee/create-employee.handler.js';
 import { DeleteEmployeeHandler } from '../../../application/delete-employee/delete-employee.handler.js';
+import { GetEmployeeDeletionImpactHandler } from '../../../application/get-employee-deletion-impact/get-employee-deletion-impact.handler.js';
 import { GetEmployeeHandler } from '../../../application/get-employee/get-employee.handler.js';
 import { ListAssignableEmployeesHandler } from '../../../application/list-assignable-employees/list-assignable-employees.handler.js';
 import { ListEmployeesHandler } from '../../../application/list-employees/list-employees.handler.js';
@@ -56,7 +58,7 @@ import { PreviewEmployeeCodeHandler } from '../../../application/preview-employe
 import { StreamLegacyProfileImageHandler } from '../../../application/stream-legacy-profile-image/stream-legacy-profile-image.handler.js';
 import { UpdateEmployeeHandler } from '../../../application/update-employee/update-employee.handler.js';
 import { UploadEmployeeProfileImageHandler } from '../../../application/upload-employee-profile-image/upload-employee-profile-image.handler.js';
-import { canReadEmployeeCompensation } from '../../../application/services/employee-compensation-access.js';
+import { canReadEmployeeCompensation } from '../../../application/access/employee-compensation-access.js';
 import { MediaExceptionFilter } from '../../../../media/index.js';
 import {
   assignableEmployeeListResponseSchema,
@@ -94,6 +96,8 @@ export class EmployeesController {
     @Inject(ListAssignableEmployeesHandler)
     private readonly listAssignableEmployees: ListAssignableEmployeesHandler,
     @Inject(GetEmployeeHandler) private readonly getEmployee: GetEmployeeHandler,
+    @Inject(GetEmployeeDeletionImpactHandler)
+    private readonly getEmployeeDeletionImpact: GetEmployeeDeletionImpactHandler,
     @Inject(CreateEmployeeHandler) private readonly createEmployee: CreateEmployeeHandler,
     @Inject(UpdateEmployeeHandler) private readonly updateEmployee: UpdateEmployeeHandler,
     @Inject(ChangeEmployeeStatusHandler)
@@ -216,6 +220,19 @@ export class EmployeesController {
     }
     const stream = createReadStream(result.absolutePath);
     stream.pipe(response);
+  }
+
+  @Get(':id/deletion-impact')
+  @RequirePermissions('employees.update')
+  @ApiOperation({ summary: 'Daily task assignments that affect employee deletion' })
+  async deletionImpact(
+    @CrmContext() ctx: CrmRequestContext,
+    @Param('id') id: string,
+  ): Promise<EmployeeDeletionImpact> {
+    return this.getEmployeeDeletionImpact.execute({
+      organizationId: ctx.organizationId,
+      employeeId: id,
+    });
   }
 
   @Get(':id')

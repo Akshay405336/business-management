@@ -1,5 +1,6 @@
 import { Prisma } from '../../../../../../generated/prisma/client.js';
 import { EmployeeValidationError } from '../../../../domain/errors/employee.errors.js';
+import { EmployeeContactUniquenessPolicy } from '../../../../domain/policies/employee-contact-uniqueness.policy.js';
 
 export function rethrowEmployeeUniqueViolation(error: unknown): never {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
@@ -16,13 +17,13 @@ export function rethrowEmployeeUniqueViolation(error: unknown): never {
   if (text.includes('work_email') || text.includes('email')) {
     conflicts.push({
       path: 'workEmail',
-      message: 'An employee with this work email already exists.',
+      message: EmployeeContactUniquenessPolicy.duplicateEmailMessage(),
     });
   }
   if (text.includes('phone')) {
     conflicts.push({
       path: 'phone',
-      message: 'An employee with this phone number already exists.',
+      message: EmployeeContactUniquenessPolicy.duplicatePhoneMessage(),
     });
   }
   if (conflicts.length > 0) {

@@ -4,6 +4,7 @@ export const EMPLOYEE_ROUTES = {
   employees: `${API_PREFIX}/employees`,
   employee: (id: string) => `${API_PREFIX}/employees/${id}`,
   employeeStatus: (id: string) => `${API_PREFIX}/employees/${id}/status`,
+  employeeDeletionImpact: (id: string) => `${API_PREFIX}/employees/${id}/deletion-impact`,
   employeeCodePreview: `${API_PREFIX}/employees/code-preview`,
   assignableEmployees: `${API_PREFIX}/employees/assignable`,
   employeeProfileImageUpload: `${API_PREFIX}/employees/profile-image`,
@@ -99,6 +100,19 @@ export type EmployeeDeletionLoginOutcome =
 
 export interface DeleteEmployeeResponse {
   readonly loginAccount: EmployeeDeletionLoginOutcome;
+}
+
+/** Daily-task stage key. Completion is the stage's completed flag, not this label. */
+export interface EmployeePendingDailyTask {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+}
+
+export interface EmployeeDeletionImpact {
+  readonly pendingTaskCount: number;
+  readonly completedTaskCount: number;
+  readonly tasks: readonly EmployeePendingDailyTask[];
 }
 
 export interface EmployeeDetail extends EmployeeListItem {

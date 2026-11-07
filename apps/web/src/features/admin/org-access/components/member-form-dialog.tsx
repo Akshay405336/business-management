@@ -43,7 +43,7 @@ import { humanizeOrgAccessFieldError, mapOrgAccessZodFieldErrors, orgAccessZodHa
 import { ORG_ACCESS_CREATE_ACCOUNT_GENERIC_ERROR } from '../utils/org-access-form-errors';
 import { labelMembershipStatus } from '../utils/labels';
 import { MEMBERSHIP_STATUSES } from '../constants';
-import { listAccountLinkableEmployees } from '@/features/admin/employees/api/employees';
+import { listAccountLinkableEmployees } from '@/features/employees/api/employee.api';
 import { roleSelectionIsEmployeeRole } from '../utils/employee-role-selection';
 import { PASSWORD_REQUIREMENTS, PasswordToggle } from './password-toggle';
 

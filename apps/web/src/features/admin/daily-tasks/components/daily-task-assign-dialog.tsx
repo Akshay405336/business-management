@@ -29,7 +29,7 @@ import {
 } from '@/features/admin/crm/constants';
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
-import { listAssignableEmployees } from '@/features/admin/employees/api/employees';
+import { listAssignableEmployees } from '@/features/employees/api/employee.api';
 import { getProject, listProjects } from '@/features/admin/projects/api/projects';
 import type { ProjectPhase } from '@/features/admin/projects/types';
 import { cn } from '@/shared/lib/utils';

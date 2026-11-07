@@ -6,6 +6,7 @@ import {
   StoredFileService,
 } from '../../../media/index.js';
 import { EmployeeValidationError } from '../../domain/errors/employee.errors.js';
+import { EmployeeProfileImagePolicy } from '../../domain/policies/employee-profile-image.policy.js';
 import type { UploadEmployeeProfileImageCommand } from './upload-employee-profile-image.command.js';
 
 @Injectable()
@@ -16,9 +17,7 @@ export class UploadEmployeeProfileImageHandler {
     command: UploadEmployeeProfileImageCommand,
   ): Promise<EmployeeProfileImageUploadResponse> {
     const file = command.file;
-    if (!file?.buffer?.length) {
-      throw new EmployeeValidationError('Select a profile image to upload.');
-    }
+    EmployeeProfileImagePolicy.assertUploadBytes(file?.buffer?.length ?? 0);
     let uploaded;
     try {
       uploaded = await this.storedFiles.upload({
