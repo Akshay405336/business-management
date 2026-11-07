@@ -1,6 +1,6 @@
 'use client';
 
-import { CalendarDays, ListFilter, Loader2, Search } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, ListFilter, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
 import { cn } from '@/shared/lib/utils';
 import {
@@ -46,7 +47,7 @@ export function AttendancePageToolbar({
       {showFilters ? (
         <>
           <form
-            className="min-w-0 w-full flex-[1_1_14rem] lg:min-w-[10rem]"
+            className="min-w-0 w-full max-w-full flex-[1_1_100%] sm:flex-[1_1_42%] sm:max-w-[45%] lg:max-w-[42%]"
             onSubmit={(event) => event.preventDefault()}
           >
             <InputGroup leading={<Search className="size-4" aria-hidden="true" />} className="min-w-0 w-full">
@@ -64,22 +65,40 @@ export function AttendancePageToolbar({
             </InputGroup>
           </form>
 
-          <InputGroup
-            leading={<CalendarDays className="size-4" aria-hidden="true" />}
-            className="w-full shrink-0 sm:w-[10.75rem]"
-          >
-            <Input
-              type="date"
-              value={records.datePickerValue}
-              onChange={(event) => records.setDateFilter(event.target.value)}
-              className={cn(
-                CRM_PIPELINE_SEARCH_INPUT_CLASS,
-                'h-9 w-full min-w-0 shadow-xs',
-                inputGroupPaddingClass({ leading: true }),
-              )}
-              aria-label="Attendance date"
-            />
-          </InputGroup>
+          <div className="flex min-w-0 w-full shrink-0 items-center gap-1 sm:w-auto">
+            <TableIconButton
+              label="Previous day"
+              className="size-9 shrink-0 border border-input bg-card shadow-xs hover:bg-muted/50"
+              disabled={!records.datePickerValue}
+              onClick={() => records.shiftDateByDays(-1)}
+            >
+              <ChevronLeft className="size-4" />
+            </TableIconButton>
+            <InputGroup
+              leading={<CalendarDays className="size-4" aria-hidden="true" />}
+              className="min-w-0 w-full sm:w-[10.75rem]"
+            >
+              <Input
+                type="date"
+                value={records.datePickerValue}
+                onChange={(event) => records.setDateFilter(event.target.value)}
+                className={cn(
+                  CRM_PIPELINE_SEARCH_INPUT_CLASS,
+                  'h-9 w-full min-w-0 shadow-xs',
+                  inputGroupPaddingClass({ leading: true }),
+                )}
+                aria-label="Attendance date"
+              />
+            </InputGroup>
+            <TableIconButton
+              label="Next day"
+              className="size-9 shrink-0 border border-input bg-card shadow-xs hover:bg-muted/50"
+              disabled={!records.datePickerValue}
+              onClick={() => records.shiftDateByDays(1)}
+            >
+              <ChevronRight className="size-4" />
+            </TableIconButton>
+          </div>
 
           <InputGroup
             leading={<ListFilter className="size-4 shrink-0" aria-hidden="true" />}

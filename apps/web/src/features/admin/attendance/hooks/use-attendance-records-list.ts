@@ -10,6 +10,7 @@ import {
 } from '@/features/attendance/api/attendance';
 import { isAbortError } from '@/shared/lib/abort-error';
 import { subscribeOrgCalendarSync } from '@/features/admin/org-calendar/lib/org-calendar-sync';
+import { addDaysToDateKey } from '@/features/attendance/utils/time';
 import { localTodayKey, todayKeyInTimeZone } from '../utils/calendar-month';
 import type { AttendanceStatusFilter } from '../constants/attendance-status-filter-options';
 
@@ -152,6 +153,17 @@ export function useAttendanceRecordsList(active: boolean) {
     }
   }, []);
 
+  const shiftDateByDays = useCallback(
+    (deltaDays: number) => {
+      const current = queryDate;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(current)) return;
+      const next = addDaysToDateKey(current, deltaDays);
+      if (next === current) return;
+      setDateFilter(next);
+    },
+    [queryDate, setDateFilter],
+  );
+
   const setStatusFilterAndResetPage = useCallback((value: AttendanceStatusFilter) => {
     setStatusFilter(value);
     setPage(1);
@@ -220,6 +232,7 @@ export function useAttendanceRecordsList(active: boolean) {
     datePickerValue: queryDate,
     orgTodayKey,
     setDateFilter,
+    shiftDateByDays,
     statusFilter,
     setStatusFilter: setStatusFilterAndResetPage,
     filtersActive,
