@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DailyTasksWorkspace } from '@/features/admin/daily-tasks/components/daily-tasks-workspace';
+import { AdminDailyTasksWorkspace } from '@/features/admin/daily-tasks/components/admin-daily-tasks-workspace';
 
 export default function AdminDailyTasksPage() {
   return (
@@ -12,7 +12,7 @@ export default function AdminDailyTasksPage() {
         </div>
       }
     >
-      <DailyTasksWorkspace />
+      <AdminDailyTasksWorkspace />
     </Suspense>
   );
 }

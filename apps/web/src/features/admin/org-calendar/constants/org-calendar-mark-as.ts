@@ -23,7 +23,7 @@ export const ORG_CALENDAR_MARK_AS_OPTIONS: readonly {
 
 /** Options shown in the date-type dropdown (schedule-driven types are excluded). */
 export const ORG_CALENDAR_MARK_AS_DROPDOWN_OPTIONS = ORG_CALENDAR_MARK_AS_OPTIONS.filter(
-  (opt) => opt.value !== 'WEEKLY_OFF' && opt.value !== 'SPECIAL_WORKING_DAY',
+  (opt) => opt.value !== 'SPECIAL_WORKING_DAY',
 );
 
 export function isOrgCalendarMarkAsDropdownValue(markAs: OrgCalendarMarkAs): boolean {

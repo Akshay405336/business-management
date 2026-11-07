@@ -17,6 +17,8 @@ export const LEAVE_ROUTES = {
     `${API_PREFIX}/leave/year-configurations/${id}/status`,
   yearConfigurationGenerateBalances: (id: string) =>
     `${API_PREFIX}/leave/year-configurations/${id}/generate-balances`,
+  yearConfigurationEmployeeLeaveRecords: (id: string) =>
+    `${API_PREFIX}/leave/year-configurations/${id}/employee-leave-records`,
   allocations: `${API_PREFIX}/leave/allocations`,
   allocation: (id: string) => `${API_PREFIX}/leave/allocations/${id}`,
   employeeBalances: `${API_PREFIX}/leave/employee-balances`,
@@ -152,6 +154,37 @@ export interface EmployeeLeaveBalanceListResponse {
   readonly page: number;
   readonly pageSize: number;
   readonly availability?: EmployeeLeaveBalanceAvailability;
+}
+
+export interface EmployeeLeaveRecordLeaveTypeBalance {
+  readonly leaveTypeId: string;
+  readonly leaveTypeName: string;
+  readonly allocatedDays: string;
+  readonly usedDays: string;
+  readonly availableDays: string;
+}
+
+export interface EmployeeLeaveRecordRow {
+  readonly employeeId: string;
+  readonly employeeDisplayName: string;
+  readonly employeeCode: string;
+  readonly profileImageUrl: string | null;
+  readonly leaveTypes: readonly EmployeeLeaveRecordLeaveTypeBalance[];
+  readonly totalAllocatedDays: string;
+  readonly totalUsedDays: string;
+  readonly totalAvailableDays: string;
+}
+
+export interface EmployeeLeaveRecordsResponse {
+  readonly configuration: LeaveYearConfigurationItem;
+  readonly leaveTypeColumns: readonly {
+    readonly leaveTypeId: string;
+    readonly leaveTypeName: string;
+  }[];
+  readonly items: readonly EmployeeLeaveRecordRow[];
+  readonly total: number;
+  readonly page: number;
+  readonly pageSize: number;
 }
 
 export interface LeaveRequestItem {

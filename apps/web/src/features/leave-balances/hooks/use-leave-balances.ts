@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { LeaveYearConfigurationItem } from '@techwin/contracts';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { isAbortError } from '@/shared/lib/abort-error';
+import { subscribeLeaveDataChanged } from '@/features/leave/lib/leave-data-sync';
 import { listLeaveYearConfigurations } from '../api/leave-balances.api';
 
 export function useLeaveBalances() {
@@ -28,7 +29,13 @@ export function useLeaveBalances() {
   useEffect(() => {
     const controller = new AbortController();
     void refetch(controller.signal);
-    return () => controller.abort();
+    const unsubscribe = subscribeLeaveDataChanged(() => {
+      void refetch();
+    });
+    return () => {
+      controller.abort();
+      unsubscribe();
+    };
   }, [refetch]);
 
   return { leaveBalances: items, loading, error, refetch: () => void refetch() };

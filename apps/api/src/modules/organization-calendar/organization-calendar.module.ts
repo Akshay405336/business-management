@@ -15,6 +15,7 @@ import {
   ListOrgCalendarEventsHandler,
   ListOrgCalendarHolidaysHandler,
   UpdateOrgCalendarEventHandler,
+  ReplaceOrgCalendarDateClassificationHandler,
 } from './application/org-calendar.handlers.js';
 import { OrgCalendarAuthorizationService } from './application/services/org-calendar-authorization.service.js';
 import { OrgCalendarAttendanceReconcileService } from './application/services/org-calendar-attendance-reconcile.service.js';
@@ -41,6 +42,7 @@ const orgCalendarHandlers = [
   DuplicateOrgCalendarHolidaysHandler,
   ExportOrgCalendarHandler,
   ClassifyOrgCalendarDateHandler,
+  ReplaceOrgCalendarDateClassificationHandler,
 ] as const;
 
 @Module({

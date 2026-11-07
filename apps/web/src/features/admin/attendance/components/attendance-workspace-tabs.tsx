@@ -10,10 +10,16 @@ const TAB_TRIGGER_CLASS =
 export function AttendanceWorkspaceTabs({
   value,
   onValueChange,
+  showSettings = true,
+  showRecords = true,
 }: {
   value: AttendanceWorkspaceTab;
   onValueChange: (tab: AttendanceWorkspaceTab) => void;
+  showSettings?: boolean;
+  showRecords?: boolean;
 }) {
+  if (!showRecords && !showSettings) return null;
+
   return (
     <Tabs
       value={value}
@@ -21,12 +27,16 @@ export function AttendanceWorkspaceTabs({
       className="shrink-0"
     >
       <TabsList className="h-9 shrink-0 border border-[#E8E8EF] bg-[#F8F9FC] p-0.5">
-        <TabsTrigger value="records" className={TAB_TRIGGER_CLASS}>
-          Records
-        </TabsTrigger>
-        <TabsTrigger value="settings" className={TAB_TRIGGER_CLASS}>
-          Settings
-        </TabsTrigger>
+        {showRecords ? (
+          <TabsTrigger value="records" className={TAB_TRIGGER_CLASS}>
+            Records
+          </TabsTrigger>
+        ) : null}
+        {showSettings ? (
+          <TabsTrigger value="settings" className={TAB_TRIGGER_CLASS}>
+            Settings
+          </TabsTrigger>
+        ) : null}
       </TabsList>
     </Tabs>
   );

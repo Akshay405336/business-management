@@ -20,6 +20,7 @@ import {
   listMyLeaveRequests,
   previewLeaveDays,
 } from '@/features/leave/api/leave-api';
+import { notifyLeaveDataChanged, subscribeLeaveDataChanged } from '@/features/leave/lib/leave-data-sync';
 import { isAbortError } from '@/shared/lib/abort-error';
 import { isApiError } from '@/shared/api/api-error';
 import {
@@ -32,6 +33,7 @@ import {
   hasLeaveBalanceAvailable,
   parseLeaveDayAmount,
 } from '../constants/employee-leave-ui';
+import { expandInclusiveCalendarRange } from '../constants/leave-calendar-date';
 
 export type EmployeeLeaveHistoryTab = 'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL';
 
@@ -56,7 +58,9 @@ export function useEmployeeLeavePage() {
   const [historyPageSize, setHistoryPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const [leaveTypeId, setLeaveTypeId] = useState('');
-  const [selectedLeaveDates, setSelectedLeaveDates] = useState<string[]>([]);
+  const [leaveDateRange, setLeaveDateRange] = useState<{ startDate: string; endDate: string } | null>(
+    null,
+  );
   const [isHalfDay, setIsHalfDay] = useState(false);
   const [halfDayDate, setHalfDayDate] = useState('');
   const [halfDaySession, setHalfDaySession] = useState<'FIRST_HALF' | 'SECOND_HALF' | ''>('');
@@ -64,7 +68,6 @@ export function useEmployeeLeavePage() {
   const [notes, setNotes] = useState('');
   const [previewDays, setPreviewDays] = useState<string | null>(null);
   const [previewHasWorkingDays, setPreviewHasWorkingDays] = useState(true);
-  const [previewEarliestStartDate, setPreviewEarliestStartDate] = useState<string | null>(null);
   const [policyYearStartDate, setPolicyYearStartDate] = useState<string | null>(null);
   const [policyYearEndDate, setPolicyYearEndDate] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -145,28 +148,63 @@ export function useEmployeeLeavePage() {
   }, [loadHistory]);
 
   useEffect(() => {
+    return subscribeLeaveDataChanged(() => {
+      void loadBalances();
+      void loadHistory();
+    });
+  }, [loadBalances, loadHistory]);
+
+  useEffect(() => {
     setHistoryPage(1);
   }, [historyTab]);
 
-  const selectedBalance = useMemo(
-    () => balances.find((b) => b.leaveTypeId === leaveTypeId) ?? null,
-    [balances, leaveTypeId],
+  const activeBalances = useMemo(
+    () =>
+      balances.filter((balance) => {
+        const meta = leaveTypeMeta.get(balance.leaveTypeId);
+        return meta ? meta.status === 'ACTIVE' : true;
+      }),
+    [balances, leaveTypeMeta],
   );
+
+  const selectedBalance = useMemo(
+    () => activeBalances.find((b) => b.leaveTypeId === leaveTypeId) ?? null,
+    [activeBalances, leaveTypeId],
+  );
+
+  const selectedLeaveDates = useMemo(
+    () =>
+      leaveDateRange
+        ? expandInclusiveCalendarRange(leaveDateRange.startDate, leaveDateRange.endDate)
+        : [],
+    [leaveDateRange],
+  );
+
+  const setSelectedLeaveDates = useCallback((dates: readonly string[]) => {
+    const sorted = [...dates].filter(Boolean).sort();
+    if (sorted.length === 0) {
+      setLeaveDateRange(null);
+      return;
+    }
+    setLeaveDateRange({
+      startDate: sorted[0]!,
+      endDate: sorted[sorted.length - 1]!,
+    });
+  }, []);
 
   const balanceShortageMessage = useMemo(() => {
     if (!selectedBalance || previewDays === null) return null;
     const available = parseLeaveDayAmount(selectedBalance.availableDays);
     const requested = parseLeaveDayAmount(previewDays);
     if (requested <= available) return null;
-    const shortBy = (requested - available).toFixed(1).replace(/\.0$/, '');
-    return `You need ${previewDays} day(s) but only ${selectedBalance.availableDays} available (short by ${shortBy}).`;
+    return `${previewDays} working day(s) requested. Available balance: ${selectedBalance.availableDays} days.`;
   }, [selectedBalance, previewDays]);
 
   useEffect(() => {
     if (leaveTypeId) return;
-    const next = firstSelectableLeaveTypeId(balances);
+    const next = firstSelectableLeaveTypeId(activeBalances);
     if (next) setLeaveTypeId(next);
-  }, [leaveTypeId, balances]);
+  }, [leaveTypeId, activeBalances]);
 
   useEffect(() => {
     if (!isHalfDay) {
@@ -183,7 +221,7 @@ export function useEmployeeLeavePage() {
   }, [isHalfDay, selectedLeaveDates, halfDayDate]);
 
   useEffect(() => {
-    if (selectedLeaveDates.length === 0) {
+    if (!leaveDateRange) {
       setPreviewDays(null);
       setPreviewHasWorkingDays(true);
       return;
@@ -194,14 +232,14 @@ export function useEmployeeLeavePage() {
         setPreviewLoading(true);
         try {
           const result = await previewLeaveDays({
-            selectedDates: selectedLeaveDates,
+            startDate: leaveDateRange.startDate,
+            endDate: leaveDateRange.endDate,
             isHalfDay,
             halfDayDate: isHalfDay && halfDayDate ? halfDayDate : undefined,
             leaveTypeId: leaveTypeId || undefined,
           });
           setPreviewDays(result.totalDays);
           setPreviewHasWorkingDays(result.hasWorkingLeaveDays);
-          setPreviewEarliestStartDate(result.earliestEligibleStartDate);
           setPolicyYearStartDate(result.policyYearStartDate);
           setPolicyYearEndDate(result.policyYearEndDate);
         } catch {
@@ -215,32 +253,27 @@ export function useEmployeeLeavePage() {
     return () => {
       if (previewTimer.current) clearTimeout(previewTimer.current);
     };
-  }, [selectedLeaveDates, isHalfDay, halfDayDate, leaveTypeId]);
-
-  const refreshEarliestStartDate = useCallback(async (typeId: string) => {
-    try {
-      const result = await previewLeaveDays({
-        startDate: '2000-01-01',
-        endDate: '2000-01-01',
-        isHalfDay: false,
-        leaveTypeId: typeId || undefined,
-        skipDuration: true,
-      });
-      setPreviewEarliestStartDate(result.earliestEligibleStartDate);
-      setPolicyYearStartDate(result.policyYearStartDate);
-      setPolicyYearEndDate(result.policyYearEndDate);
-    } catch {
-      setPreviewEarliestStartDate(null);
-    }
-  }, []);
+  }, [leaveDateRange, isHalfDay, halfDayDate, leaveTypeId]);
 
   useEffect(() => {
-    if (!leaveTypeId) return;
-    void refreshEarliestStartDate(leaveTypeId);
-  }, [leaveTypeId, refreshEarliestStartDate]);
+    void previewLeaveDays({
+      startDate: '2000-01-01',
+      endDate: '2000-01-01',
+      isHalfDay: false,
+      skipDuration: true,
+    })
+      .then((result) => {
+        setPolicyYearStartDate(result.policyYearStartDate);
+        setPolicyYearEndDate(result.policyYearEndDate);
+      })
+      .catch(() => {
+        setPolicyYearStartDate(null);
+        setPolicyYearEndDate(null);
+      });
+  }, []);
 
   const resetApplyForm = useCallback(() => {
-    setSelectedLeaveDates([]);
+    setLeaveDateRange(null);
     setIsHalfDay(false);
     setHalfDayDate('');
     setHalfDaySession('');
@@ -249,9 +282,9 @@ export function useEmployeeLeavePage() {
     setPreviewDays(null);
     setAttachmentFile(null);
     setApplyFieldErrors({});
-    const next = firstSelectableLeaveTypeId(balances);
+    const next = firstSelectableLeaveTypeId(activeBalances);
     setLeaveTypeId(next ?? '');
-  }, [balances]);
+  }, [activeBalances]);
 
   const applyLeave = async (): Promise<boolean> => {
     setApplyFieldErrors({});
@@ -277,7 +310,7 @@ export function useEmployeeLeavePage() {
       toast.error('Select a half-day session.');
       return false;
     }
-    const balanceRow = balances.find((b) => b.leaveTypeId === leaveTypeId);
+    const balanceRow = activeBalances.find((b) => b.leaveTypeId === leaveTypeId);
     if (!balanceRow) {
       toast.error('Select a leave type with an available balance.');
       return false;
@@ -338,7 +371,8 @@ export function useEmployeeLeavePage() {
       resetApplyForm();
       setHistoryTab('PENDING');
       setHistoryPage(1);
-      await loadBalances();
+      await Promise.all([loadBalances(), loadHistory()]);
+      notifyLeaveDataChanged();
       return true;
     } catch (failure) {
       if (isApiError(failure) && failure.details.length > 0) {
@@ -373,7 +407,7 @@ export function useEmployeeLeavePage() {
 
   return {
     calendarYear,
-    balances,
+    balances: activeBalances,
     balancesAvailability,
     balancesLoading,
     balancesError,
@@ -394,8 +428,8 @@ export function useEmployeeLeavePage() {
     notes,
     setNotes,
     previewDays,
-    previewEarliestStartDate,
     previewHasWorkingDays,
+    leaveDateRange,
     policyYearStartDate,
     policyYearEndDate,
     previewLoading,

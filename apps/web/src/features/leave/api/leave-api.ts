@@ -9,6 +9,7 @@ import {
   type LeaveYearAllocationItem,
   type LeaveYearAllocationListResponse,
   type LeaveYearConfigurationItem,
+  type EmployeeLeaveRecordsResponse,
 } from '@techwin/contracts';
 import type {
   AdjustEmployeeLeaveBalanceRequest,
@@ -19,6 +20,7 @@ import type {
   CreateLeaveYearConfigurationRequest,
   UpdateLeaveBalanceConfigurationRequest,
   EmployeeLeaveBalanceListQuery,
+  EmployeeLeaveRecordsListQuery,
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
@@ -31,6 +33,13 @@ import type {
 } from '@techwin/validation';
 import { apiRequest } from '@/shared/api/api-client';
 import { buildQueryString } from '@/features/admin/crm/utils/query-string';
+import { notifyLeaveDataChanged } from '@/features/leave/lib/leave-data-sync';
+
+async function afterLeaveMutation<T>(run: () => Promise<T>): Promise<T> {
+  const result = await run();
+  notifyLeaveDataChanged();
+  return result;
+}
 
 export {
   listLeaveTypes,
@@ -93,25 +102,31 @@ export function getLeaveYearConfiguration(
 export function createLeaveBalanceConfiguration(
   body: CreateLeaveBalanceConfigurationRequest,
 ): Promise<LeaveYearConfigurationItem> {
-  return apiRequest<LeaveYearConfigurationItem>(LEAVE_ROUTES.yearConfigurationWithAllocations, {
-    auth: true,
-    method: 'POST',
-    body,
-  });
+  return afterLeaveMutation(() =>
+    apiRequest<LeaveYearConfigurationItem>(LEAVE_ROUTES.yearConfigurationWithAllocations, {
+      auth: true,
+      method: 'POST',
+      body,
+    }),
+  );
 }
 
 export function updateLeaveBalanceConfiguration(
   id: string,
   body: UpdateLeaveBalanceConfigurationRequest,
 ): Promise<LeaveYearConfigurationItem> {
-  return apiRequest<LeaveYearConfigurationItem>(
-    LEAVE_ROUTES.yearConfigurationWithAllocationsById(id),
-    { auth: true, method: 'PATCH', body },
+  return afterLeaveMutation(() =>
+    apiRequest<LeaveYearConfigurationItem>(
+      LEAVE_ROUTES.yearConfigurationWithAllocationsById(id),
+      { auth: true, method: 'PATCH', body },
+    ),
   );
 }
 
 export function deleteLeaveYearConfiguration(id: string): Promise<void> {
-  return apiRequest<void>(LEAVE_ROUTES.yearConfiguration(id), { auth: true, method: 'DELETE' });
+  return afterLeaveMutation(() =>
+    apiRequest<void>(LEAVE_ROUTES.yearConfiguration(id), { auth: true, method: 'DELETE' }),
+  );
 }
 
 export function createLeaveYearConfiguration(
@@ -139,11 +154,13 @@ export function updateLeaveYearConfigurationStatus(
   id: string,
   body: UpdateLeaveYearConfigurationStatusRequest,
 ): Promise<LeaveYearConfigurationItem> {
-  return apiRequest<LeaveYearConfigurationItem>(LEAVE_ROUTES.yearConfigurationStatus(id), {
-    auth: true,
-    method: 'PATCH',
-    body,
-  });
+  return afterLeaveMutation(() =>
+    apiRequest<LeaveYearConfigurationItem>(LEAVE_ROUTES.yearConfigurationStatus(id), {
+      auth: true,
+      method: 'PATCH',
+      body,
+    }),
+  );
 }
 
 export function activateLeaveYearConfiguration(id: string): Promise<LeaveYearConfigurationItem> {
@@ -254,32 +271,49 @@ export function getLeaveRequest(id: string, signal?: AbortSignal): Promise<Leave
 }
 
 export function approveLeaveRequest(id: string): Promise<LeaveRequestItem> {
-  return apiRequest<LeaveRequestItem>(LEAVE_ROUTES.requestApprove(id), {
-    auth: true,
-    method: 'POST',
-  });
+  return afterLeaveMutation(() =>
+    apiRequest<LeaveRequestItem>(LEAVE_ROUTES.requestApprove(id), {
+      auth: true,
+      method: 'POST',
+    }),
+  );
 }
 
 export function rejectLeaveRequest(
   id: string,
   body: RejectLeaveRequestRequest,
 ): Promise<LeaveRequestItem> {
-  return apiRequest<LeaveRequestItem>(LEAVE_ROUTES.requestReject(id), {
-    auth: true,
-    method: 'POST',
-    body,
-  });
+  return afterLeaveMutation(() =>
+    apiRequest<LeaveRequestItem>(LEAVE_ROUTES.requestReject(id), {
+      auth: true,
+      method: 'POST',
+      body,
+    }),
+  );
 }
 
 export function cancelLeaveRequest(
   id: string,
   body?: CancelLeaveRequestRequest,
 ): Promise<LeaveRequestItem> {
-  return apiRequest<LeaveRequestItem>(LEAVE_ROUTES.requestCancel(id), {
-    auth: true,
-    method: 'POST',
-    body: body ?? { reason: '' },
-  });
+  return afterLeaveMutation(() =>
+    apiRequest<LeaveRequestItem>(LEAVE_ROUTES.requestCancel(id), {
+      auth: true,
+      method: 'POST',
+      body: body ?? { reason: '' },
+    }),
+  );
+}
+
+export function listEmployeeLeaveRecords(
+  configurationId: string,
+  query?: EmployeeLeaveRecordsListQuery,
+  signal?: AbortSignal,
+): Promise<EmployeeLeaveRecordsResponse> {
+  return apiRequest<EmployeeLeaveRecordsResponse>(
+    `${LEAVE_ROUTES.yearConfigurationEmployeeLeaveRecords(configurationId)}${buildQueryString(query ?? {})}`,
+    { auth: true, signal },
+  );
 }
 
 export function fetchMyLeaveBalances(

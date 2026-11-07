@@ -8,7 +8,7 @@ import {
   attendanceCalendarTodayRingClass,
   resolveAttendanceCalendarDayCardStyle,
 } from '@/features/admin/attendance/constants/attendance-calendar-theme';
-import { ORG_CALENDAR_DAY_KIND_LABEL } from '../constants/org-calendar-event-types';
+import { resolveOrgCalendarDayStatusLabel } from '../utils/org-calendar-day-label';
 
 const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -59,7 +59,7 @@ export function OrgCalendarMonthGrid({
             isCurrentMonth: cell.inMonth,
             orgTodayKey,
           });
-          const statusLabel = ORG_CALENDAR_DAY_KIND_LABEL[day?.dayKind ?? 'WORKING'] ?? 'Working day';
+          const statusLabel = resolveOrgCalendarDayStatusLabel(day);
           const isToday = cell.dateKey === orgTodayKey;
           const isSelected = cell.dateKey === selectedDate;
           const dayNum = Number(cell.dateKey.slice(8, 10));

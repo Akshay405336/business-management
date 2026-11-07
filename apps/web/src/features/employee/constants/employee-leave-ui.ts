@@ -41,7 +41,9 @@ export function hasLeaveBalanceAvailable(balance: EmployeeLeaveBalanceItem): boo
 }
 
 export function formatLeaveBalanceSummary(balance: EmployeeLeaveBalanceItem): string {
-  return `${balance.allocatedDays} allocated · ${balance.usedApprovedDays} used · ${balance.reservedPendingDays} pending · ${balance.availableDays} available`;
+  const days = parseLeaveDayAmount(balance.availableDays);
+  const dayWord = days === 1 ? 'day' : 'days';
+  return `${balance.availableDays} ${dayWord} available`;
 }
 
 export function formatLeaveTypeOptionLabel(balance: EmployeeLeaveBalanceItem): string {

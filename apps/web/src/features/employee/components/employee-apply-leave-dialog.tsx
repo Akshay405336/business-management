@@ -33,10 +33,7 @@ import {
   hasLeaveBalanceAvailable,
 } from '../constants/employee-leave-ui';
 import { cn } from '@/shared/lib/utils';
-import {
-  formatDateKeyShort,
-  formatSelectedDatesFormSummary,
-} from '../constants/leave-calendar-date';
+import { formatDateKeyShort } from '../constants/leave-calendar-date';
 import {
   LeaveDatesFieldTrigger,
   LeaveMultiDatePickerDialog,
@@ -76,9 +73,10 @@ export function EmployeeApplyLeaveDialog({
     formEnabled &&
     page.selectedBalance !== null &&
     hasLeaveBalanceAvailable(page.selectedBalance) &&
-    page.selectedLeaveDates.length > 0 &&
+    page.leaveDateRange !== null &&
     !page.balanceShortageMessage &&
-    page.previewHasWorkingDays;
+    page.previewHasWorkingDays &&
+    page.reason.trim().length > 0;
 
   useEffect(() => {
     if (!open) return;
@@ -89,6 +87,14 @@ export function EmployeeApplyLeaveDialog({
     const ok = await page.applyLeave();
     if (ok) onOpenChange(false);
   };
+
+  const eligibilityLine =
+    page.previewDays !== null &&
+    page.previewHasWorkingDays &&
+    page.selectedBalance &&
+    !page.balanceShortageMessage
+      ? `${page.previewDays} working day${page.previewDays === '1' ? '' : 's'} requested. Available balance: ${page.selectedBalance.availableDays} days.`
+      : null;
 
   return (
     <Dialog
@@ -191,7 +197,6 @@ export function EmployeeApplyLeaveDialog({
                 onOpenChange={setDatesPickerOpen}
                 appliedDates={page.selectedLeaveDates}
                 onApply={(dates) => page.setSelectedLeaveDates([...dates])}
-                earliestEligibleStartDate={page.previewEarliestStartDate}
                 policyYearStartDate={page.policyYearStartDate}
                 policyYearEndDate={page.policyYearEndDate}
                 isHalfDay={page.isHalfDay}
@@ -200,122 +205,83 @@ export function EmployeeApplyLeaveDialog({
               <CrmInlineFieldError message={page.applyFieldErrors.selectedDates} reserveSpace={false} />
             </div>
 
-            {page.selectedLeaveDates.length > 0 ? (
-              <div className="rounded-lg border border-[#E8E8EF] bg-[#F8F9FC] px-3 py-2.5 text-sm">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-foreground text-xs font-semibold uppercase tracking-wide">
-                      Selected leave dates
-                    </p>
-                    <p className="text-foreground mt-1 leading-snug">
-                      {formatSelectedDatesFormSummary(page.selectedLeaveDates)}
-                    </p>
-                    {page.previewDays !== null && page.previewHasWorkingDays ? (
-                      <p className="text-muted-foreground mt-1 text-xs tabular-nums">
-                        {page.previewDays} working day{page.previewDays === '1' ? '' : 's'} selected
-                      </p>
-                    ) : null}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-8 shrink-0 px-2 text-xs font-medium"
-                    disabled={!formEnabled}
-                    onClick={() => setDatesPickerOpen(true)}
-                  >
-                    Edit dates
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
             <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      id="apply-half"
-                      checked={page.isHalfDay}
-                      disabled={!formEnabled || page.selectedLeaveDates.length === 0}
-                      onCheckedChange={(v) => page.setIsHalfDay(v === true)}
-                    />
-                    <label htmlFor="apply-half" className="text-sm font-normal">
-                      Half day
-                    </label>
-                  </div>
-                  {page.isHalfDay ? (
-                    <Select
-                      value={page.halfDaySession || undefined}
-                      disabled={!formEnabled}
-                      onValueChange={(v) =>
-                        page.setHalfDaySession(v as 'FIRST_HALF' | 'SECOND_HALF')
-                      }
-                    >
-                      <SelectTrigger className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'h-11 w-[11rem]')}>
-                        <SelectValue placeholder="Session" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="FIRST_HALF">First half</SelectItem>
-                        <SelectItem value="SECOND_HALF">Second half</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  ) : null}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="apply-half"
+                    checked={page.isHalfDay}
+                    disabled={!formEnabled || page.selectedLeaveDates.length === 0}
+                    onCheckedChange={(v) => page.setIsHalfDay(v === true)}
+                  />
+                  <label htmlFor="apply-half" className="text-sm font-normal">
+                    Half day
+                  </label>
                 </div>
-                {page.isHalfDay && page.selectedLeaveDates.length > 1 ? (
-                  <div className="grid gap-1.5 sm:max-w-xs">
-                    <CrmFieldLabel htmlFor="apply-half-day-date">Half-day date</CrmFieldLabel>
-                    <Select
-                      value={page.halfDayDate || undefined}
-                      disabled={!formEnabled}
-                      onValueChange={page.setHalfDayDate}
-                    >
-                      <SelectTrigger id="apply-half-day-date" className={CRM_PIPELINE_FORM_FIELD_CLASS}>
-                        <SelectValue placeholder="Select date for half-day" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {page.selectedLeaveDates.map((dateKey) => (
-                          <SelectItem key={dateKey} value={dateKey}>
-                            {formatDateKeyShort(dateKey)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <CrmInlineFieldError message={page.applyFieldErrors.halfDayDate} reserveSpace={false} />
-                  </div>
+                {page.isHalfDay ? (
+                  <Select
+                    value={page.halfDaySession || undefined}
+                    disabled={!formEnabled}
+                    onValueChange={(v) =>
+                      page.setHalfDaySession(v as 'FIRST_HALF' | 'SECOND_HALF')
+                    }
+                  >
+                    <SelectTrigger className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'h-11 w-[11rem]')}>
+                      <SelectValue placeholder="Session" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="FIRST_HALF">First half</SelectItem>
+                      <SelectItem value="SECOND_HALF">Second half</SelectItem>
+                    </SelectContent>
+                  </Select>
                 ) : null}
               </div>
-
-            <div className="rounded-lg border border-[#E8E8EF] bg-[#F8F9FC] px-3 py-2.5 text-sm">
-              {page.previewLoading ? (
-                <span className="text-muted-foreground inline-flex items-center gap-2">
-                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                  Calculating working days…
-                </span>
-              ) : page.previewDays !== null && page.previewHasWorkingDays ? (
-                <p className="text-foreground">
-                  Leave duration:{' '}
-                  <strong className="tabular-nums">{page.previewDays}</strong> working day
-                  {page.previewDays === '1' ? '' : 's'}
-                </p>
-              ) : page.previewDays !== null && !page.previewHasWorkingDays ? (
-                <p className="text-red-700">
-                  The selected period has no working leave days according to the organization
-                  calendar.
-                </p>
-              ) : (
-                <p className="text-muted-foreground">Select dates to calculate working days.</p>
-              )}
-              {page.previewEarliestStartDate ? (
-                <p className="text-muted-foreground mt-1 text-xs">
-                  Earliest eligible start date:{' '}
-                  <span className="text-foreground font-medium">{page.previewEarliestStartDate}</span>
-                </p>
-              ) : null}
-              {page.balanceShortageMessage || page.applyFieldErrors.balance ? (
-                <p className="mt-1.5 text-xs text-red-700">
-                  {page.balanceShortageMessage ?? page.applyFieldErrors.balance}
-                </p>
+              {page.isHalfDay && page.selectedLeaveDates.length > 1 ? (
+                <div className="grid gap-1.5 sm:max-w-xs">
+                  <CrmFieldLabel htmlFor="apply-half-day-date">Half-day date</CrmFieldLabel>
+                  <Select
+                    value={page.halfDayDate || undefined}
+                    disabled={!formEnabled}
+                    onValueChange={page.setHalfDayDate}
+                  >
+                    <SelectTrigger id="apply-half-day-date" className={CRM_PIPELINE_FORM_FIELD_CLASS}>
+                      <SelectValue placeholder="Select date for half-day" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {page.selectedLeaveDates.map((dateKey) => (
+                        <SelectItem key={dateKey} value={dateKey}>
+                          {formatDateKeyShort(dateKey)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <CrmInlineFieldError message={page.applyFieldErrors.halfDayDate} reserveSpace={false} />
+                </div>
               ) : null}
             </div>
+
+            {page.leaveDateRange !== null ? (
+              <div className="min-h-[1.25rem] text-xs">
+                {page.previewLoading ? (
+                  <span className="text-muted-foreground inline-flex items-center gap-2">
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                    Calculating working days…
+                  </span>
+                ) : page.previewDays !== null && !page.previewHasWorkingDays ? (
+                  <p className="text-red-700">
+                    The selected period has no working leave days according to the organization
+                    calendar.
+                  </p>
+                ) : eligibilityLine ? (
+                  <p className="text-muted-foreground">{eligibilityLine}</p>
+                ) : null}
+                {page.balanceShortageMessage || page.applyFieldErrors.balance ? (
+                  <p className="mt-1 text-red-700">
+                    {page.balanceShortageMessage ?? page.applyFieldErrors.balance}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="grid gap-1.5">
               <CrmFieldLabel htmlFor="apply-reason" required>
@@ -331,21 +297,6 @@ export function EmployeeApplyLeaveDialog({
               />
               <CrmInlineFieldError message={page.applyFieldErrors.reason} reserveSpace={false} />
             </div>
-
-            <div className="grid gap-1.5">
-              <CrmFieldLabel htmlFor="apply-notes" optional>
-                Notes
-              </CrmFieldLabel>
-              <Textarea
-                id="apply-notes"
-                className={cn(CRM_PIPELINE_FORM_TEXTAREA_CLASS, 'min-h-[3.5rem]')}
-                placeholder="Add any additional information..."
-                value={page.notes}
-                disabled={!formEnabled}
-                onChange={(e) => page.setNotes(e.target.value)}
-              />
-            </div>
-
           </div>
         </div>
 

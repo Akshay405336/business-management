@@ -22,21 +22,24 @@ export class ListCalendarFiltersHandler {
   ) {}
 
   async execute(input: ListCalendarFiltersQuery): Promise<TaskCalendarFiltersResponse> {
-    await this.dailyTaskAuthz.assertOrganizationTaskAccess(input.accessActor);
+    const effective = await this.dailyTaskAuthz.resolveEffective(input.accessActor);
+    const orgWide = this.dailyTaskAuthz.canManageOrganizationTasks(input.accessActor, effective);
 
-    const [stages, empPage, projPage] = await Promise.all([
-      this.dailyTasks.listWorkflowStages(input.organizationId),
-      this.employees.listEmployees(input.organizationId, {
-        page: 1,
-        pageSize: 500,
-        sortBy: 'displayName',
-        sortDir: 'asc',
-      }),
-      this.projects.listProjects(input.organizationId, {
-        page: 1,
-        pageSize: 200,
-      }),
-    ]);
+    const stages = await this.dailyTasks.listWorkflowStages(input.organizationId);
+    const empPage = orgWide
+      ? await this.employees.listEmployees(input.organizationId, {
+          page: 1,
+          pageSize: 500,
+          sortBy: 'displayName',
+          sortDir: 'asc',
+        })
+      : { items: [] as const };
+    const projPage = orgWide
+      ? await this.projects.listProjects(input.organizationId, {
+          page: 1,
+          pageSize: 200,
+        })
+      : { items: [] as const };
 
     return {
       employees: empPage.items.map((e) => ({ id: e.id, label: e.displayName })),

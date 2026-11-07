@@ -10,6 +10,7 @@ import { Prisma } from '../../../../../../generated/prisma/client.js';
 import { PrismaService } from '../../../../../../infrastructure/database/prisma.service.js';
 import { OrgCalendarNotFoundError } from '../../../../domain/errors/org-calendar.errors.js';
 import { assertNoCalendarConflicts } from '../../../../domain/policies/org-calendar-conflict.policy.js';
+import { ORG_CALENDAR_CLASSIFICATION_EVENT_TYPES } from '../../../../domain/policies/org-calendar-classification-events.policy.js';
 import type { OrgCalendarRepository } from '../../../../domain/repositories/org-calendar.repository.js';
 import {
   classifyDayFromEvents,
@@ -426,6 +427,46 @@ export class PrismaOrgCalendarRepository implements OrgCalendarRepository {
     }
     expanded.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title));
     return expanded;
+  }
+
+  async replaceDateClassification(
+    organizationId: string,
+    adminId: string,
+    dateKey: string,
+    create: OrgCalendarEventWriteInput | null,
+  ): Promise<OrgCalendarMonthDay> {
+    const date = parseDateOnly(dateKey);
+    await this.prisma.$transaction(async (tx) => {
+      const overlapping = await tx.organizationCalendarEvent.findMany({
+        where: {
+          organizationId,
+          eventType: { in: [...ORG_CALENDAR_CLASSIFICATION_EVENT_TYPES] },
+          startDate: { lte: date },
+          endDate: { gte: date },
+        },
+      });
+      if (overlapping.length > 0) {
+        await tx.organizationCalendarEvent.deleteMany({
+          where: {
+            organizationId,
+            id: { in: overlapping.map((row) => row.id) },
+          },
+        });
+      }
+      if (create) {
+        const peers = await this.loadExpandedForConflict(organizationId, create.startDate, create.endDate);
+        assertNoCalendarConflicts(create, peers);
+        await tx.organizationCalendarEvent.create({
+          data: this.toCreateData(organizationId, adminId, create),
+        });
+      }
+    });
+    const days = await this.getDaysInRange(organizationId, dateKey, dateKey);
+    const day = days.find((entry) => entry.date === dateKey);
+    if (!day) {
+      throw new OrgCalendarNotFoundError();
+    }
+    return day;
   }
 
   async resolveOrganizationTodayKey(organizationId: string): Promise<string> {

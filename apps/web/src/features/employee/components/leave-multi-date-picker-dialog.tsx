@@ -1,7 +1,7 @@
 'use client';
 
 import type { OrgCalendarMonthDay } from '@techwin/contracts';
-import { CalendarDays, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +23,7 @@ import { isAbortError } from '@/shared/lib/abort-error';
 import { cn } from '@/shared/lib/utils';
 import {
   describeLeaveDateDisabledReason,
+  expandInclusiveCalendarRange,
   formatDateKeyForDisplay,
   formatSelectedDatesCompactSummary,
   isOrgDayEligibleForLeave,
@@ -56,7 +57,6 @@ export function LeaveMultiDatePickerDialog({
   onOpenChange,
   appliedDates,
   onApply,
-  earliestEligibleStartDate,
   policyYearStartDate,
   policyYearEndDate,
   isHalfDay,
@@ -66,7 +66,6 @@ export function LeaveMultiDatePickerDialog({
   onOpenChange: (open: boolean) => void;
   appliedDates: readonly string[];
   onApply: (dates: readonly string[]) => void;
-  earliestEligibleStartDate: string | null;
   policyYearStartDate: string | null;
   policyYearEndDate: string | null;
   isHalfDay: boolean;
@@ -75,7 +74,8 @@ export function LeaveMultiDatePickerDialog({
   const orgTimeZone = useAttendanceOrgTimeZone();
   const orgTodayKey = useMemo(() => todayKeyInTimeZone(orgTimeZone), [orgTimeZone]);
   const [draftDates, setDraftDates] = useState<string[]>([]);
-  const anchorKey = appliedDates[0] ?? earliestEligibleStartDate ?? orgTodayKey;
+  const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
+  const anchorKey = appliedDates[0] ?? orgTodayKey;
   const [monthKey, setMonthKey] = useState(anchorKey.slice(0, 7));
   const { year, monthIndex } = monthBounds(monthKey);
   const [daysByDate, setDaysByDate] = useState<Map<string, OrgCalendarMonthDay>>(() => new Map());
@@ -86,8 +86,9 @@ export function LeaveMultiDatePickerDialog({
   useEffect(() => {
     if (!open) return;
     setDraftDates(normalizeSelectedDateKeys(appliedDates));
-    setMonthKey((appliedDates[0] ?? earliestEligibleStartDate ?? orgTodayKey).slice(0, 7));
-  }, [open, appliedDates, earliestEligibleStartDate, orgTodayKey]);
+    setRangeAnchor(null);
+    setMonthKey((appliedDates[0] ?? orgTodayKey).slice(0, 7));
+  }, [open, appliedDates, orgTodayKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -116,14 +117,22 @@ export function LeaveMultiDatePickerDialog({
 
   const selectedSet = useMemo(() => new Set(draftDates), [draftDates]);
 
+  const rangeLabel = useMemo(() => {
+    if (draftDates.length === 0) return null;
+    const start = draftDates[0]!;
+    const end = draftDates[draftDates.length - 1]!;
+    if (start === end) return formatDateKeyForDisplay(start);
+    return `${formatDateKeyForDisplay(start)} – ${formatDateKeyForDisplay(end)}`;
+  }, [draftDates]);
+
   const canSelectDate = useCallback(
     (dateKey: string, day: OrgCalendarMonthDay | undefined) => {
+      if (dateKey < orgTodayKey) return false;
       if (policyYearStartDate && dateKey < policyYearStartDate) return false;
       if (policyYearEndDate && dateKey > policyYearEndDate) return false;
-      if (earliestEligibleStartDate && dateKey < earliestEligibleStartDate) return false;
       return isOrgDayEligibleForLeave(day, isHalfDay);
     },
-    [earliestEligibleStartDate, isHalfDay, policyYearEndDate, policyYearStartDate],
+    [isHalfDay, orgTodayKey, policyYearEndDate, policyYearStartDate],
   );
 
   const disabledDateTitle = useCallback(
@@ -131,26 +140,29 @@ export function LeaveMultiDatePickerDialog({
       describeLeaveDateDisabledReason({
         dateKey,
         day,
-        earliestEligibleStartDate,
         policyYearStartDate,
         policyYearEndDate,
-        minDateKey: null,
+        minDateKey: rangeAnchor,
+        orgTodayKey,
       }),
-    [earliestEligibleStartDate, policyYearEndDate, policyYearStartDate],
+    [orgTodayKey, policyYearEndDate, policyYearStartDate, rangeAnchor],
   );
 
-  const toggleDate = (dateKey: string) => {
-    setDraftDates((prev) => {
-      if (prev.includes(dateKey)) {
-        return prev.filter((d) => d !== dateKey);
-      }
-      const day = daysByDate.get(dateKey);
-      if (!canSelectDate(dateKey, day)) return prev;
-      return normalizeSelectedDateKeys([...prev, dateKey]);
-    });
-  };
+  const pickDate = (dateKey: string) => {
+    const day = daysByDate.get(dateKey);
+    if (!canSelectDate(dateKey, day)) return;
 
-  const workingDayCount = draftDates.length;
+    if (!rangeAnchor) {
+      setRangeAnchor(dateKey);
+      setDraftDates([dateKey]);
+      return;
+    }
+
+    const start = rangeAnchor < dateKey ? rangeAnchor : dateKey;
+    const end = rangeAnchor < dateKey ? dateKey : rangeAnchor;
+    setDraftDates(expandInclusiveCalendarRange(start, end));
+    setRangeAnchor(null);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -160,36 +172,18 @@ export function LeaveMultiDatePickerDialog({
       >
         <DialogHeader className="border-border shrink-0 space-y-0 border-b px-4 py-3 text-left">
           <DialogTitle className="text-base font-semibold">Select leave dates</DialogTitle>
+          <p className="text-muted-foreground pt-1 text-xs">
+            Choose a start date, then an end date. Weekends and holidays in the range are excluded when
+            leave is calculated.
+          </p>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-          <div className="mb-3 space-y-2">
-            <p className="text-foreground text-sm font-medium">
-              Selected dates ({workingDayCount})
-            </p>
-            {draftDates.length === 0 ? (
-              <p className="text-muted-foreground text-xs">No dates selected yet.</p>
-            ) : (
-              <ul className="flex flex-wrap gap-1.5">
-                {draftDates.map((dateKey) => (
-                  <li key={dateKey}>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-full border border-[#E8E8EF] bg-[#F8F9FC] px-2 py-0.5 text-xs font-medium text-foreground hover:bg-muted/60"
-                      onClick={() => toggleDate(dateKey)}
-                    >
-                      {formatDateKeyForDisplay(dateKey).replace(/, \d{4}$/, '')}
-                      <X className="size-3 opacity-60" aria-hidden />
-                      <span className="sr-only">Remove {dateKey}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="text-muted-foreground text-xs tabular-nums">
-              {workingDayCount} working day{workingDayCount === 1 ? '' : 's'} selected
-            </p>
-          </div>
+          {rangeLabel ? (
+            <p className="text-foreground mb-3 text-sm font-medium">{rangeLabel}</p>
+          ) : (
+            <p className="text-muted-foreground mb-3 text-xs">No date range selected yet.</p>
+          )}
 
           <div className="mb-2 flex items-center justify-between gap-2">
             <Button
@@ -227,7 +221,7 @@ export function LeaveMultiDatePickerDialog({
               orgTodayKey={orgTodayKey}
               canSelectDate={canSelectDate}
               disabledDateTitle={disabledDateTitle}
-              onToggleDate={toggleDate}
+              onToggleDate={pickDate}
             />
           )}
           <div className="mt-3">
@@ -236,7 +230,16 @@ export function LeaveMultiDatePickerDialog({
         </div>
 
         <DialogFooter className="shrink-0 flex-col gap-2 border-t border-border px-4 py-3 sm:flex-row sm:justify-between">
-          <Button type="button" variant="ghost" className="h-10 px-2 text-sm" onClick={() => setDraftDates([])}>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-10 px-2 text-sm"
+            disabled={disabled}
+            onClick={() => {
+              setDraftDates([]);
+              setRangeAnchor(null);
+            }}
+          >
             Clear selection
           </Button>
           <div className="flex flex-wrap justify-end gap-2">
@@ -287,7 +290,7 @@ export function LeaveDatesFieldTrigger({
     >
       <CalendarDays className="size-4 shrink-0 opacity-70" aria-hidden />
       <span className="truncate">
-        {value.length > 0 ? formatSelectedDatesCompactSummary(value) : 'Select leave dates'}
+        {value.length > 0 ? formatSelectedDatesCompactSummary(value) : 'Select leave date or range'}
       </span>
     </Button>
   );

@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type {
   OrgCalendarEventItem,
   OrgCalendarEventListResponse,
+  OrgCalendarMonthDay,
   OrgCalendarMonthResponse,
 } from '@techwin/contracts';
 import {
@@ -27,6 +28,7 @@ import {
   parseOrgCalendarListQuery,
   parseOrgCalendarMonthQuery,
   updateOrgCalendarEventRequestSchema,
+  replaceOrgCalendarDateClassificationSchema,
 } from '@techwin/validation';
 import { PlatformAdminGuard } from '../../../../auth/index.js';
 import {
@@ -50,6 +52,7 @@ import {
   ListOrgCalendarEventsHandler,
   ListOrgCalendarHolidaysHandler,
   UpdateOrgCalendarEventHandler,
+  ReplaceOrgCalendarDateClassificationHandler,
 } from '../../../application/org-calendar.handlers.js';
 import { OrgCalendarExceptionFilter } from '../filters/org-calendar-exception.filter.js';
 import type { OrgCalendarEventWriteInput } from '../../../domain/types/org-calendar.types.js';
@@ -101,6 +104,7 @@ export class OrganizationCalendarController {
     private readonly duplicateHolidays: DuplicateOrgCalendarHolidaysHandler,
     private readonly exportCalendar: ExportOrgCalendarHandler,
     private readonly classifyDate: ClassifyOrgCalendarDateHandler,
+    private readonly replaceDateClassification: ReplaceOrgCalendarDateClassificationHandler,
   ) {}
 
   @Get('events')
@@ -141,6 +145,23 @@ export class OrganizationCalendarController {
     @Param('id') id: string,
   ): Promise<OrgCalendarEventItem> {
     return this.getEvent.execute(actorFrom(ctx, request), id);
+  }
+
+  @Post('dates/classification')
+  @ApiOperation({ summary: 'Replace per-date classification events atomically' })
+  replaceClassification(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Body() body: unknown,
+  ): Promise<OrgCalendarMonthDay> {
+    const input = replaceOrgCalendarDateClassificationSchema.parse(body);
+    const create =
+      input.replaceEvent === null ? null : toEventWriteInput(input.replaceEvent);
+    return this.replaceDateClassification.execute(
+      actorFrom(ctx, request),
+      input.date,
+      create,
+    );
   }
 
   @Post('events')

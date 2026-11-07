@@ -1,3 +1,4 @@
+/** @deprecated Portals removed — use `AdminAccessProvider` + `canAccessAppPath` instead. */
 'use client';
 
 import { Loader2 } from 'lucide-react';

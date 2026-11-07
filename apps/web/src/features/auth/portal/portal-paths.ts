@@ -10,12 +10,27 @@ export function portalDashboardPath(portal: PortalKind): string {
   return `${PORTAL_PREFIX[portal]}/dashboard`;
 }
 
-/** Maps an `/admin/...` feature path to the same feature under the active portal prefix. */
+const EMPLOYEE_SELF_SERVICE_SUFFIXES: readonly string[] = [
+  '/dashboard',
+  '/daily-tasks',
+  '/attendance',
+  '/calendar',
+  '/leave',
+];
+
+/** Prefer self-service URLs under `/employee` when the active portal is employee-only. */
 export function adminFeaturePathToPortal(adminPath: string, portal: PortalKind): string {
-  if (portal === 'admin') return adminPath;
-  if (!adminPath.startsWith('/admin')) return adminPath;
+  if (portal !== 'employee' || !adminPath.startsWith('/admin')) return adminPath;
   const suffix = adminPath.slice('/admin'.length) || '/dashboard';
-  return `${PORTAL_PREFIX[portal]}${suffix.startsWith('/') ? suffix : `/${suffix}`}`;
+  const normalized = suffix.startsWith('/') ? suffix : `/${suffix}`;
+  if (
+    EMPLOYEE_SELF_SERVICE_SUFFIXES.some(
+      (base) => normalized === base || normalized.startsWith(`${base}/`),
+    )
+  ) {
+    return `/employee${normalized}`;
+  }
+  return adminPath;
 }
 
 export function pathBelongsToPortal(pathname: string, portal: PortalKind): boolean {

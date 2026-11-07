@@ -6,7 +6,7 @@ export default function EmployeeLeavePage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto grid max-w-[1100px] gap-3">
+        <div className="grid w-full gap-3">
           <Skeleton className="h-10 w-48" />
           <Skeleton className="h-64 w-full" />
         </div>

@@ -8,6 +8,7 @@ import type {
   CreateLeaveYearConfigurationRequest,
   UpdateLeaveBalanceConfigurationRequest,
   EmployeeLeaveBalanceListQuery,
+  EmployeeLeaveRecordsListQuery,
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
@@ -26,6 +27,7 @@ import {
 import type {
   EmployeeLeaveBalanceAvailability,
   EmployeeLeaveBalanceListResponse,
+  EmployeeLeaveRecordsResponse,
 } from '@techwin/contracts';
 import type { LeaveRepository } from '../../../../domain/repositories/leave.repository.js';
 import { resolveLeaveRequestDates } from '../../../../domain/policies/leave-request-dates.policy.js';
@@ -45,6 +47,7 @@ import {
   toLeaveYearAllocationItem,
   toLeaveYearConfigurationItem,
 } from '../mappers/leave.mapper.js';
+import { buildEmployeeLeaveRecordsResponse } from '../mappers/employee-leave-records.mapper.js';
 
 type EmployeeRow = {
   id: string;
@@ -625,6 +628,55 @@ export class PrismaLeaveRepository implements LeaveRepository {
     };
   }
 
+  async listEmployeeLeaveRecords(
+    organizationId: string,
+    leaveYearConfigurationId: string,
+    query: EmployeeLeaveRecordsListQuery,
+  ): Promise<EmployeeLeaveRecordsResponse> {
+    const configuration = await this.prisma.leaveYearConfiguration.findFirst({
+      where: { id: leaveYearConfigurationId, organizationId },
+      include: this.yearConfigurationInclude(),
+    });
+    if (!configuration) throw new LeaveNotFoundError('Leave year configuration');
+
+    const employeeWhere: Prisma.EmployeeWhereInput = {
+      organizationId,
+      employeeLeaveBalances: { some: { leaveYearConfigurationId } },
+    };
+    if (query.search?.trim()) {
+      const term = query.search.trim();
+      employeeWhere.OR = [
+        { displayName: { contains: term, mode: 'insensitive' } },
+        { employeeCode: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+
+    const skip = (query.page - 1) * query.pageSize;
+    const [total, employees] = await this.prisma.$transaction([
+      this.prisma.employee.count({ where: employeeWhere }),
+      this.prisma.employee.findMany({
+        where: employeeWhere,
+        orderBy: { displayName: 'asc' },
+        skip,
+        take: query.pageSize,
+        include: {
+          employeeLeaveBalances: {
+            where: { organizationId, leaveYearConfigurationId },
+            include: { leaveType: true },
+          },
+        },
+      }),
+    ]);
+
+    return buildEmployeeLeaveRecordsResponse({
+      configuration,
+      employees,
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    });
+  }
+
   async listMyEmployeeLeaveBalances(
     organizationId: string,
     employeeId: string,
@@ -1022,9 +1074,6 @@ export class PrismaLeaveRepository implements LeaveRepository {
         throw new LeaveValidationError('Insufficient leave balance for this request.');
       }
 
-      const beforeAvailable = available;
-      const afterAvailable = available.sub(totalDays);
-
       const request = await tx.leaveRequest.create({
         data: {
           id: randomUUID(),
@@ -1062,29 +1111,6 @@ export class PrismaLeaveRepository implements LeaveRepository {
       const requestWithDates = await tx.leaveRequest.findFirstOrThrow({
         where: { id: request.id },
         include: this.leaveRequestInclude(),
-      });
-
-      await tx.employeeLeaveBalance.update({
-        where: { id: balance.id },
-        data: { reservedPendingDays: balance.reservedPendingDays.add(totalDays) },
-      });
-
-      await tx.leaveBalanceTransaction.create({
-        data: {
-          id: randomUUID(),
-          organizationId,
-          employeeId,
-          leaveTypeId: input.leaveTypeId,
-          employeeLeaveBalanceId: balance.id,
-          calendarYear: yearConfig.calendarYear,
-          transactionType: 'LEAVE_RESERVED',
-          days: totalDays,
-          balanceBeforeDays: beforeAvailable,
-          balanceAfterDays: afterAvailable,
-          leaveRequestId: request.id,
-          reason: input.reason,
-          performedByAdminId: adminId,
-        },
       });
 
       await tx.leaveRequestStatusEvent.create({
@@ -1134,18 +1160,17 @@ export class PrismaLeaveRepository implements LeaveRepository {
       });
       if (!balance) throw new LeaveNotFoundError('Employee leave balance');
 
-      const beforeAvailable = parseLeaveDays(
-        computeAvailableDays({
-          ...balance,
-          reservedPendingDays: balance.reservedPendingDays,
-        }),
-      );
-      const afterAvailable = beforeAvailable.add(request.totalDays);
+      const legacyReserved = balance.reservedPendingDays.gte(request.totalDays);
+      let beforeAvailable = parseLeaveDays(computeAvailableDays(balance));
+      let afterAvailable = beforeAvailable;
 
-      await tx.employeeLeaveBalance.update({
-        where: { id: balance.id },
-        data: { reservedPendingDays: balance.reservedPendingDays.sub(request.totalDays) },
-      });
+      if (legacyReserved) {
+        await tx.employeeLeaveBalance.update({
+          where: { id: balance.id },
+          data: { reservedPendingDays: balance.reservedPendingDays.sub(request.totalDays) },
+        });
+        afterAvailable = beforeAvailable.add(request.totalDays);
+      }
 
       const updated = await tx.leaveRequest.update({
         where: { id: requestId },
@@ -1161,23 +1186,25 @@ export class PrismaLeaveRepository implements LeaveRepository {
         select: { calendarYear: true },
       });
 
-      await tx.leaveBalanceTransaction.create({
-        data: {
-          id: randomUUID(),
-          organizationId,
-          employeeId: request.employeeId,
-          leaveTypeId: request.leaveTypeId,
-          employeeLeaveBalanceId: balance.id,
-          calendarYear: yearRow?.calendarYear ?? request.startDate.getUTCFullYear(),
-          transactionType: 'LEAVE_CANCELLED_REVERSAL',
-          days: request.totalDays,
-          balanceBeforeDays: beforeAvailable,
-          balanceAfterDays: afterAvailable,
-          leaveRequestId: request.id,
-          reason,
-          performedByAdminId: adminId,
-        },
-      });
+      if (legacyReserved) {
+        await tx.leaveBalanceTransaction.create({
+          data: {
+            id: randomUUID(),
+            organizationId,
+            employeeId: request.employeeId,
+            leaveTypeId: request.leaveTypeId,
+            employeeLeaveBalanceId: balance.id,
+            calendarYear: yearRow?.calendarYear ?? request.startDate.getUTCFullYear(),
+            transactionType: 'LEAVE_CANCELLED_REVERSAL',
+            days: request.totalDays,
+            balanceBeforeDays: beforeAvailable,
+            balanceAfterDays: afterAvailable,
+            leaveRequestId: request.id,
+            reason,
+            performedByAdminId: adminId,
+          },
+        });
+      }
 
       await tx.leaveRequestStatusEvent.create({
         data: {
@@ -1217,11 +1244,17 @@ export class PrismaLeaveRepository implements LeaveRepository {
       if (!balance) throw new LeaveNotFoundError('Employee leave balance');
 
       const availableBefore = parseLeaveDays(computeAvailableDays(balance));
+      if (availableBefore.lessThan(request.totalDays)) {
+        throw new LeaveValidationError('Insufficient leave balance for this request.');
+      }
 
+      const legacyReserved = balance.reservedPendingDays.gte(request.totalDays);
       await tx.employeeLeaveBalance.update({
         where: { id: balance.id },
         data: {
-          reservedPendingDays: balance.reservedPendingDays.sub(request.totalDays),
+          ...(legacyReserved
+            ? { reservedPendingDays: balance.reservedPendingDays.sub(request.totalDays) }
+            : {}),
           usedApprovedDays: balance.usedApprovedDays.add(request.totalDays),
         },
       });
@@ -1306,17 +1339,20 @@ export class PrismaLeaveRepository implements LeaveRepository {
       });
       if (!balance) throw new LeaveNotFoundError('Employee leave balance');
 
+      const legacyReserved = balance.reservedPendingDays.gte(request.totalDays);
       const availableBefore = parseLeaveDays(computeAvailableDays(balance));
+      let availableAfter = availableBefore;
 
-      await tx.employeeLeaveBalance.update({
-        where: { id: balance.id },
-        data: { reservedPendingDays: balance.reservedPendingDays.sub(request.totalDays) },
-      });
-
-      const updatedBalance = await tx.employeeLeaveBalance.findUniqueOrThrow({
-        where: { id: balance.id },
-      });
-      const availableAfter = parseLeaveDays(computeAvailableDays(updatedBalance));
+      if (legacyReserved) {
+        await tx.employeeLeaveBalance.update({
+          where: { id: balance.id },
+          data: { reservedPendingDays: balance.reservedPendingDays.sub(request.totalDays) },
+        });
+        const updatedBalance = await tx.employeeLeaveBalance.findUniqueOrThrow({
+          where: { id: balance.id },
+        });
+        availableAfter = parseLeaveDays(computeAvailableDays(updatedBalance));
+      }
 
       const updated = await tx.leaveRequest.update({
         where: { id: requestId },
@@ -1334,23 +1370,25 @@ export class PrismaLeaveRepository implements LeaveRepository {
         select: { calendarYear: true },
       });
 
-      await tx.leaveBalanceTransaction.create({
-        data: {
-          id: randomUUID(),
-          organizationId,
-          employeeId: request.employeeId,
-          leaveTypeId: request.leaveTypeId,
-          employeeLeaveBalanceId: balance.id,
-          calendarYear: yearRow?.calendarYear ?? request.startDate.getUTCFullYear(),
-          transactionType: 'LEAVE_REJECTED_RELEASE',
-          days: request.totalDays,
-          balanceBeforeDays: availableBefore,
-          balanceAfterDays: availableAfter,
-          leaveRequestId: request.id,
-          reason: rejectionReason,
-          performedByAdminId: adminId,
-        },
-      });
+      if (legacyReserved) {
+        await tx.leaveBalanceTransaction.create({
+          data: {
+            id: randomUUID(),
+            organizationId,
+            employeeId: request.employeeId,
+            leaveTypeId: request.leaveTypeId,
+            employeeLeaveBalanceId: balance.id,
+            calendarYear: yearRow?.calendarYear ?? request.startDate.getUTCFullYear(),
+            transactionType: 'LEAVE_REJECTED_RELEASE',
+            days: request.totalDays,
+            balanceBeforeDays: availableBefore,
+            balanceAfterDays: availableAfter,
+            leaveRequestId: request.id,
+            reason: rejectionReason,
+            performedByAdminId: adminId,
+          },
+        });
+      }
 
       await tx.leaveRequestStatusEvent.create({
         data: {

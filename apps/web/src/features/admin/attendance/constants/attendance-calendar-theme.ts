@@ -136,6 +136,10 @@ function orgCalendarCardVariantForKind(
   if (isOrgHolidayKind(kind)) return 'holiday';
   if (isOrgWeeklyOffKind(kind)) return 'weeklyOff';
   if (kind === 'NON_WORKING') return 'nonWorking';
+  if (kind === 'SPECIAL_WORKING' || kind === 'HALF_DAY' || kind === 'WORKING') {
+    if (dateKey > orgTodayKey) return 'upcomingWorking';
+    return 'pastWorking';
+  }
   if (dateKey > orgTodayKey) return 'upcomingWorking';
   return 'pastWorking';
 }

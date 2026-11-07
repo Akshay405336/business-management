@@ -24,8 +24,17 @@ const PIPELINE_SECONDARY_BTN =
 const PIPELINE_PRIMARY_BTN =
   'h-9 shrink-0 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900';
 
+function resolveOrgCalendarScope(has: (key: 'calendar.view' | 'calendar.view_all' | 'calendar.create' | 'calendar.manage_holidays') => boolean) {
+  if (has('calendar.view_all') || has('calendar.create') || has('calendar.manage_holidays')) {
+    return 'organization' as const;
+  }
+  return 'member' as const;
+}
+
 export function AdminOrgCalendarWorkspace() {
   const access = useAdminAccess();
+  const monthScope = resolveOrgCalendarScope(access.has);
+  const readOnly = monthScope === 'member';
   const orgTimeZone = useAttendanceOrgTimeZone();
   const orgTodayKey = useMemo(() => todayKeyInTimeZone(orgTimeZone), [orgTimeZone]);
   const today = orgTodayKey;
@@ -39,14 +48,15 @@ export function AdminOrgCalendarWorkspace() {
   const [holidaysOpen, setHolidaysOpen] = useState(false);
   const [editEvent, setEditEvent] = useState<OrgCalendarEventItem | null>(null);
 
-  const canManageDate = access.has('calendar.create') || access.has('calendar.update');
-  const canCreate = access.has('calendar.create');
-  const canManageHolidays = access.has('calendar.manage_holidays');
+  const canManageDate = !readOnly && (access.has('calendar.create') || access.has('calendar.update'));
+  const canCreate = !readOnly && access.has('calendar.create');
+  const canManageHolidays = !readOnly && access.has('calendar.manage_holidays');
 
   const { data, loading, error, reload } = useOrgCalendarMonth({
     year,
     month: monthIndex + 1,
     search: search || undefined,
+    scope: monthScope,
   });
 
   const daysByDate = useMemo(() => {
@@ -105,7 +115,11 @@ export function AdminOrgCalendarWorkspace() {
       <section className="workspace-surface min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm">
         <CrmToolbarHeader
           title="Organisation Calendar"
-          description="Manage holidays, working days and important organisation events."
+          description={
+            readOnly
+              ? 'Holidays, weekly offs and company events for your organisation.'
+              : 'Manage holidays, working days and important organisation events.'
+          }
           layout="inline"
           className="rounded-none border-0 bg-card pb-2 shadow-none"
           headerRowClassName="flex-wrap items-center justify-between gap-x-4 gap-y-3 sm:flex-nowrap"

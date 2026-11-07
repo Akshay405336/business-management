@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type {
   OrgCalendarEventItem,
   OrgCalendarEventListResponse,
+  OrgCalendarMonthDay,
   OrgCalendarMonthResponse,
 } from '@techwin/contracts';
 import {
@@ -207,6 +208,31 @@ export class ExportOrgCalendarHandler {
   ): Promise<readonly OrgCalendarEventItem[]> {
     await this.authz.requirePermissions(actor, ['calendar.export', 'calendar.view_all']);
     return this.repository.exportEvents(actor.organizationId, from, to);
+  }
+}
+
+@Injectable()
+export class ReplaceOrgCalendarDateClassificationHandler {
+  constructor(
+    @Inject(ORG_CALENDAR_REPOSITORY) private readonly repository: OrgCalendarRepository,
+    private readonly authz: OrgCalendarAuthorizationService,
+    private readonly reconcile: OrgCalendarAttendanceReconcileService,
+  ) {}
+
+  async execute(
+    actor: OrgAccessActor,
+    dateKey: string,
+    create: OrgCalendarEventWriteInput | null,
+  ): Promise<OrgCalendarMonthDay> {
+    await this.authz.requirePermissions(actor, ['calendar.update', 'calendar.create']);
+    const day = await this.repository.replaceDateClassification(
+      actor.organizationId,
+      actor.adminId,
+      dateKey,
+      create,
+    );
+    await this.reconcile.reconcileDate(actor.organizationId, dateKey);
+    return day;
   }
 }
 

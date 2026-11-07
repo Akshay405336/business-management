@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import { EmployeeDashboard } from '@/features/employee/components/employee-dashboard';
+import { AdminDashboard } from '@/features/admin/auth/components/admin-dashboard';
 
 export const metadata: Metadata = {
   title: 'Dashboard',
 };
 
 export default function EmployeeDashboardPage() {
-  return <EmployeeDashboard />;
+  return <AdminDashboard />;
 }

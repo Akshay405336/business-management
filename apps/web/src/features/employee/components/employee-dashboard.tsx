@@ -1,3 +1,4 @@
+/** @deprecated Use `AdminDashboard` on `/employee/dashboard`. */
 'use client';
 
 import Link from 'next/link';

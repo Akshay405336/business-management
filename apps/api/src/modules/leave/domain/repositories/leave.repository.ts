@@ -1,6 +1,7 @@
 import type {
   EmployeeLeaveBalanceItem,
   EmployeeLeaveBalanceListResponse,
+  EmployeeLeaveRecordsResponse,
   GenerateEmployeeBalancesResponse,
   LeaveRequestItem,
   LeaveRequestListResponse,
@@ -16,6 +17,7 @@ import type {
   CreateLeaveYearConfigurationRequest,
   UpdateLeaveBalanceConfigurationRequest,
   EmployeeLeaveBalanceListQuery,
+  EmployeeLeaveRecordsListQuery,
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
@@ -128,6 +130,11 @@ export interface LeaveRepository {
     organizationId: string,
     query: EmployeeLeaveBalanceListQuery,
   ): Promise<EmployeeLeaveBalanceListResponse>;
+  listEmployeeLeaveRecords(
+    organizationId: string,
+    leaveYearConfigurationId: string,
+    query: EmployeeLeaveRecordsListQuery,
+  ): Promise<EmployeeLeaveRecordsResponse>;
   listMyEmployeeLeaveBalances(
     organizationId: string,
     employeeId: string,

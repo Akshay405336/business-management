@@ -36,7 +36,7 @@ export class TaskCalendarController {
   ) {}
 
   @Get()
-  @RequirePermissions('tasks.read', 'projects.read')
+  @RequirePermissions('tasks.read')
   @ApiOperation({
     summary: 'Organization task calendar — daily tasks and project plan tasks (grouped by day)',
   })
@@ -55,7 +55,7 @@ export class TaskCalendarController {
   }
 
   @Get('filters')
-  @RequirePermissions('tasks.read', 'projects.read')
+  @RequirePermissions('tasks.read')
   @ApiOperation({ summary: 'Filter options for task calendar (employees, projects, statuses)' })
   async listFilters(
     @CrmContext() ctx: CrmRequestContext,

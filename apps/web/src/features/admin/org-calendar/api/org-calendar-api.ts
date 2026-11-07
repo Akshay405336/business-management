@@ -2,11 +2,13 @@ import {
   ORG_CALENDAR_ROUTES,
   type OrgCalendarEventItem,
   type OrgCalendarEventListResponse,
+  type OrgCalendarMonthDay,
   type OrgCalendarMonthResponse,
 } from '@techwin/contracts';
 import type {
   CreateOrgCalendarEventRequest,
   DuplicateOrgCalendarHolidaysRequest,
+  ReplaceOrgCalendarDateClassificationRequest,
   UpdateOrgCalendarEventRequest,
 } from '@techwin/validation';
 import { apiRequest } from '@/shared/api/api-client';
@@ -51,6 +53,18 @@ export function fetchOrgCalendarHolidays(
     `${ORG_CALENDAR_ROUTES.holidays}${buildQueryString(query)}`,
     { auth: true, signal },
   );
+}
+
+export async function replaceOrgCalendarDateClassification(
+  body: ReplaceOrgCalendarDateClassificationRequest,
+): Promise<OrgCalendarMonthDay> {
+  const day = await apiRequest<OrgCalendarMonthDay>(ORG_CALENDAR_ROUTES.replaceDateClassification, {
+    auth: true,
+    method: 'POST',
+    body,
+  });
+  notifyOrgCalendarChanged();
+  return day;
 }
 
 export async function createOrgCalendarEvent(

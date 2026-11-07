@@ -345,6 +345,7 @@ export function RoleFormDialog({
                   Permissions
                 </p>
                 <RolePermissionMatrix
+                  matrixKey={`${open}-${roleId ?? 'create'}`}
                   selected={form.permissionKeys}
                   readOnly={effectiveReadOnly || pending}
                   grantable={grantablePermissions}

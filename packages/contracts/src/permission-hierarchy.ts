@@ -140,12 +140,12 @@ export const PERMISSION_HIERARCHY: readonly PermissionHierarchyModule[] = [
     ],
   },
   {
-    id: 'tasks',
-    label: 'Tasks',
+    id: 'projects',
+    label: 'Project Management',
     groups: [
       {
-        id: 'task-workspace',
-        label: 'Tasks',
+        id: 'project-workspace',
+        label: 'Project Management',
         pages: [
           {
             id: 'daily-tasks',
@@ -157,6 +157,8 @@ export const PERMISSION_HIERARCHY: readonly PermissionHierarchyModule[] = [
               'tasks.update',
               'tasks.delete',
               'tasks.assign',
+              'tasks.progress',
+              'tasks.comment',
               'daily_tasks.update_status',
               'daily_tasks.comment',
               'daily_tasks.manage_workflow',
@@ -164,41 +166,27 @@ export const PERMISSION_HIERARCHY: readonly PermissionHierarchyModule[] = [
               'daily_tasks.notes.view_own',
               'daily_tasks.notes.view_all',
               'daily_tasks.notes.acknowledge',
-              'tasks.progress',
-              'tasks.comment',
             ],
           },
           {
             id: 'task-calendar',
             label: 'Task Calendar',
             href: '/admin/task-calendar',
-            permissionKeys: ['tasks.read'],
+            permissionKeys: ['tasks.read', 'projects.read'],
           },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'projects',
-    label: 'Project Management',
-    groups: [
-      {
-        id: 'project-workspace',
-        label: 'Project Management',
-        pages: [
           {
             id: 'project-tasks',
-            label: 'Project Management',
+            label: 'Projects & Tasks',
             href: '/admin/project-tasks',
             permissionKeys: [
-              'tasks.read',
-              'tasks.update',
-              'tasks.delete',
-              'tasks.assign',
               'projects.read',
               'projects.create',
               'projects.update',
               'projects.delete',
+              'tasks.read',
+              'tasks.update',
+              'tasks.delete',
+              'tasks.assign',
             ],
           },
         ],
@@ -306,6 +294,16 @@ export const PERMISSION_HIERARCHY: readonly PermissionHierarchyModule[] = [
               'leave.allocations.manage',
               'leave.balances.read',
               'leave.balances.adjust',
+            ],
+          },
+          {
+            id: 'employee-leave-records',
+            label: 'Employee Leave Records',
+            href: '/admin/employee-leave-records',
+            permissionKeys: [
+              'leave.balances.read',
+              'leave.config.read',
+              'leave.config.manage',
             ],
           },
           {

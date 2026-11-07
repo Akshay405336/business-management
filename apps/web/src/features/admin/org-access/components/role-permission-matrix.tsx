@@ -4,10 +4,11 @@ import {
   PERMISSION_HIERARCHY,
   permissionDefinitionForKey,
   type PermissionHierarchyModule,
+  type PermissionHierarchyPage,
   type PermissionKey,
 } from '@techwin/contracts';
 import { ChevronDown, ChevronRight, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,8 +23,13 @@ function eligibleKeys(
   keys: readonly PermissionKey[],
   grantable: ReadonlySet<PermissionKey> | undefined,
 ): PermissionKey[] {
-  if (!grantable) return [...keys];
-  return keys.filter((key) => grantable.has(key));
+  const unique = [...new Set(keys)];
+  if (!grantable) return unique;
+  return unique.filter((key) => grantable.has(key));
+}
+
+function uniquePagePermissionKeys(page: PermissionHierarchyPage): PermissionKey[] {
+  return [...new Set(page.permissionKeys)];
 }
 
 function computeSelectionState(
@@ -39,6 +45,15 @@ function computeSelectionState(
   return 'partial';
 }
 
+function countSelected(keys: readonly PermissionKey[], selected: ReadonlySet<PermissionKey>): number {
+  const unique = new Set(keys);
+  let count = 0;
+  for (const key of unique) {
+    if (selected.has(key)) count += 1;
+  }
+  return count;
+}
+
 function moduleUniqueKeys(mod: PermissionHierarchyModule): PermissionKey[] {
   const keys = new Set<PermissionKey>();
   for (const group of mod.groups) {
@@ -49,23 +64,23 @@ function moduleUniqueKeys(mod: PermissionHierarchyModule): PermissionKey[] {
   return [...keys];
 }
 
-function matchesSearch(
-  query: string,
-  parts: readonly string[],
-): boolean {
+function matchesSearch(query: string, parts: readonly string[]): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
   return parts.some((part) => part.toLowerCase().includes(q));
 }
 
 export function RolePermissionMatrix({
+  matrixKey,
   selected,
   readOnly,
   grantable,
   onToggle,
   onReplaceSelection,
 }: {
-  /** @deprecated Catalog is derived from {@link PERMISSION_HIERARCHY}; kept for call-site compatibility. */
+  /** Remount expansion state when the editor session changes. */
+  matrixKey: string;
+  /** @deprecated Catalog is derived from {@link PERMISSION_HIERARCHY}. */
   catalog?: unknown;
   selected: ReadonlySet<PermissionKey>;
   readOnly: boolean;
@@ -74,10 +89,17 @@ export function RolePermissionMatrix({
   onReplaceSelection: (keys: readonly PermissionKey[]) => void;
 }) {
   const [search, setSearch] = useState('');
-  const [collapsedModules, setCollapsedModules] = useState<ReadonlySet<string>>(() => new Set());
-  const [collapsedPages, setCollapsedPages] = useState<ReadonlySet<string>>(() => new Set());
+  const [expandedModules, setExpandedModules] = useState<ReadonlySet<string>>(() => new Set());
+  const [expandedPages, setExpandedPages] = useState<ReadonlySet<string>>(() => new Set());
+
+  useEffect(() => {
+    setSearch('');
+    setExpandedModules(new Set());
+    setExpandedPages(new Set());
+  }, [matrixKey]);
 
   const query = search.trim().toLowerCase();
+  const searching = query.length > 0;
 
   const hierarchy = PERMISSION_HIERARCHY;
 
@@ -85,14 +107,19 @@ export function RolePermissionMatrix({
     return hierarchy
       .map((mod) => {
         const modKeys = moduleUniqueKeys(mod);
-        if (modKeys.length === 0) return null;
+        const modEligible = eligibleKeys(modKeys, grantable);
+        if (modEligible.length === 0) return null;
 
         const groups = mod.groups
           .map((group) => {
             const pages = group.pages
               .map((page) => {
-                if (page.permissionKeys.length === 0) return null;
-                const items = page.permissionKeys.map((key) => {
+                const pageKeys = uniquePagePermissionKeys(page);
+                if (pageKeys.length === 0) return null;
+                const pageEligible = eligibleKeys(pageKeys, grantable);
+                if (pageEligible.length === 0) return null;
+
+                const items = pageEligible.map((key) => {
                   const def = permissionDefinitionForKey(key);
                   return { key, def };
                 });
@@ -106,13 +133,19 @@ export function RolePermissionMatrix({
                       item.key,
                       item.def.action,
                       item.def.description,
+                      item.def.module,
                     ]),
                   ]) ||
                   items.some((item) =>
-                    matchesSearch(query, [item.key, item.def.action, item.def.description]),
+                    matchesSearch(query, [
+                      item.key,
+                      item.def.action,
+                      item.def.description,
+                      item.def.module,
+                    ]),
                   );
                 if (!pageMatches) return null;
-                const visibleItems = query
+                const visibleItems = searching
                   ? items.filter((item) =>
                       matchesSearch(query, [
                         mod.label,
@@ -121,11 +154,12 @@ export function RolePermissionMatrix({
                         item.key,
                         item.def.action,
                         item.def.description,
+                        item.def.module,
                       ]),
                     )
                   : items;
                 if (visibleItems.length === 0) return null;
-                return { page, visibleItems };
+                return { page, pageEligible, visibleItems };
               })
               .filter((page): page is NonNullable<typeof page> => page !== null);
             if (pages.length === 0) return null;
@@ -133,10 +167,10 @@ export function RolePermissionMatrix({
           })
           .filter((group): group is NonNullable<typeof group> => group !== null);
         if (groups.length === 0) return null;
-        return { mod, groups };
+        return { mod, modEligible, groups };
       })
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
-  }, [hierarchy, query]);
+  }, [grantable, hierarchy, query, searching]);
 
   const totalEligible = useMemo(() => {
     const keys = new Set<PermissionKey>();
@@ -158,11 +192,13 @@ export function RolePermissionMatrix({
 
   const selectedSummary = useMemo(() => {
     const rows: { module: string; page: string; action: string; key: PermissionKey }[] = [];
+    const seen = new Set<PermissionKey>();
     for (const mod of hierarchy) {
       for (const group of mod.groups) {
         for (const page of group.pages) {
-          for (const key of page.permissionKeys) {
-            if (!selected.has(key)) continue;
+          for (const key of uniquePagePermissionKeys(page)) {
+            if (!selected.has(key) || seen.has(key)) continue;
+            seen.add(key);
             const def = permissionDefinitionForKey(key);
             rows.push({
               module: mod.label,
@@ -174,16 +210,11 @@ export function RolePermissionMatrix({
         }
       }
     }
-    const seen = new Set<PermissionKey>();
-    return rows.filter((row) => {
-      if (seen.has(row.key)) return false;
-      seen.add(row.key);
-      return true;
-    });
+    return rows;
   }, [hierarchy, selected]);
 
-  const toggleModuleCollapsed = (moduleId: string) => {
-    setCollapsedModules((previous) => {
+  const toggleModuleExpanded = (moduleId: string) => {
+    setExpandedModules((previous) => {
       const next = new Set(previous);
       if (next.has(moduleId)) next.delete(moduleId);
       else next.add(moduleId);
@@ -191,8 +222,8 @@ export function RolePermissionMatrix({
     });
   };
 
-  const togglePageCollapsed = (pageId: string) => {
-    setCollapsedPages((previous) => {
+  const togglePageExpanded = (pageId: string) => {
+    setExpandedPages((previous) => {
       const next = new Set(previous);
       if (next.has(pageId)) next.delete(pageId);
       else next.add(pageId);
@@ -278,11 +309,10 @@ export function RolePermissionMatrix({
         <p className="text-muted-foreground px-1 py-4 text-sm">No permissions match your search.</p>
       ) : (
         <div className="grid gap-2">
-          {visibleModules.map(({ mod, groups }) => {
-            const modKeys = moduleUniqueKeys(mod);
-            const modState = computeSelectionState(modKeys, selected, grantable);
-            const modSelected = modKeys.filter((key) => selected.has(key)).length;
-            const modCollapsed = collapsedModules.has(mod.id) && !query;
+          {visibleModules.map(({ mod, modEligible, groups }) => {
+            const modState = computeSelectionState(modEligible, selected, grantable);
+            const modSelected = countSelected(modEligible, selected);
+            const modExpanded = searching || expandedModules.has(mod.id);
 
             return (
               <div key={mod.id} className="overflow-hidden rounded-lg border border-border/80">
@@ -290,24 +320,24 @@ export function RolePermissionMatrix({
                   <button
                     type="button"
                     className="hover:bg-muted/60 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm font-semibold"
-                    onClick={() => toggleModuleCollapsed(mod.id)}
-                    aria-expanded={!modCollapsed}
+                    onClick={() => toggleModuleExpanded(mod.id)}
+                    aria-expanded={modExpanded}
                   >
-                    {modCollapsed ? (
-                      <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
-                    ) : (
+                    {modExpanded ? (
                       <ChevronDown className="size-4 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <ChevronRight className="size-4 shrink-0" aria-hidden="true" />
                     )}
                     <span className="truncate">{mod.label}</span>
                     <span className="text-muted-foreground text-xs font-normal tabular-nums">
-                      {modSelected}/{modKeys.length}
+                      {modSelected}/{modEligible.length}
                     </span>
                   </button>
                   {!readOnly ? (
                     <label className="flex cursor-pointer items-center gap-2 text-xs">
                       <Checkbox
                         checked={checkboxChecked(modState)}
-                        onCheckedChange={(value) => setKeysChecked(modKeys, value === true)}
+                        onCheckedChange={(value) => setKeysChecked(modEligible, value === true)}
                         aria-label={`Select all ${mod.label} permissions`}
                       />
                       All module
@@ -315,19 +345,13 @@ export function RolePermissionMatrix({
                   ) : null}
                 </div>
 
-                {!modCollapsed ? (
+                {modExpanded ? (
                   <div className="divide-y">
                     {groups.flatMap(({ pages }) =>
-                      pages.map(({ page, visibleItems }) => {
-                        const pageState = computeSelectionState(
-                          page.permissionKeys,
-                          selected,
-                          grantable,
-                        );
-                        const pageSelected = page.permissionKeys.filter((key) =>
-                          selected.has(key),
-                        ).length;
-                        const pageCollapsed = collapsedPages.has(page.id) && !query;
+                      pages.map(({ page, pageEligible, visibleItems }) => {
+                        const pageState = computeSelectionState(pageEligible, selected, grantable);
+                        const pageSelected = countSelected(pageEligible, selected);
+                        const pageExpanded = searching || expandedPages.has(page.id);
 
                         return (
                           <div key={page.id} className="bg-card">
@@ -335,17 +359,17 @@ export function RolePermissionMatrix({
                               <button
                                 type="button"
                                 className="hover:bg-muted/40 flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm font-medium"
-                                onClick={() => togglePageCollapsed(page.id)}
-                                aria-expanded={!pageCollapsed}
+                                onClick={() => togglePageExpanded(page.id)}
+                                aria-expanded={pageExpanded}
                               >
-                                {pageCollapsed ? (
-                                  <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
-                                ) : (
+                                {pageExpanded ? (
                                   <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
+                                ) : (
+                                  <ChevronRight className="size-3.5 shrink-0" aria-hidden="true" />
                                 )}
                                 <span className="truncate">{page.label}</span>
                                 <span className="text-muted-foreground text-xs font-normal tabular-nums">
-                                  {pageSelected}/{page.permissionKeys.length}
+                                  {pageSelected}/{pageEligible.length}
                                 </span>
                               </button>
                               {!readOnly ? (
@@ -354,7 +378,7 @@ export function RolePermissionMatrix({
                                     <Checkbox
                                       checked={checkboxChecked(pageState)}
                                       onCheckedChange={(value) =>
-                                        setKeysChecked(page.permissionKeys, value === true)
+                                        setKeysChecked(pageEligible, value === true)
                                       }
                                       aria-label={`Select all permissions for ${page.label}`}
                                     />
@@ -365,7 +389,7 @@ export function RolePermissionMatrix({
                                     variant="ghost"
                                     size="sm"
                                     className="text-muted-foreground h-7 px-2 text-xs"
-                                    onClick={() => setKeysChecked(page.permissionKeys, false)}
+                                    onClick={() => setKeysChecked(pageEligible, false)}
                                   >
                                     Clear page
                                   </Button>
@@ -373,7 +397,7 @@ export function RolePermissionMatrix({
                               ) : null}
                             </div>
 
-                            {!pageCollapsed ? (
+                            {pageExpanded ? (
                               <ul className="divide-y divide-border/40">
                                 {visibleItems.map(({ key, def }) => (
                                   <li key={`${page.id}-${key}`}>
@@ -388,7 +412,9 @@ export function RolePermissionMatrix({
                                       <Checkbox
                                         className="mt-0.5"
                                         checked={selected.has(key)}
-                                        disabled={readOnly || (grantable ? !grantable.has(key) : false)}
+                                        disabled={
+                                          readOnly || (grantable ? !grantable.has(key) : false)
+                                        }
                                         onCheckedChange={(value) => onToggle(key, value === true)}
                                         aria-label={`${def.action}: ${def.description}`}
                                       />

@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { filterAdminNav, type AdminNavGroupWithAccess } from '@/features/admin/navigation/filter-admin-nav';
-import { canAccessAdminPath } from '@/features/admin/navigation/admin-route-permissions';
+import { canAccessAppPath } from '@/shared/navigation/app-route-permissions';
 import { usePermissions } from '@/features/auth/components/permissions-provider';
 
 export type AdminAccessContextValue = {
@@ -48,7 +48,7 @@ export function AdminAccessProvider({ children }: { children: ReactNode }) {
   }, [access]);
 
   const redirectTarget = useMemo(() => {
-    if (canAccessAdminPath(pathname, value.permissionSet, access.navAccess)) return null;
+    if (canAccessAppPath(pathname, value.permissionSet, access.navAccess)) return null;
     const fallback =
       value.navGroups.flatMap((group) => group.items).find((item) => item.kind === 'link')?.href ??
       access.defaultDashboard;

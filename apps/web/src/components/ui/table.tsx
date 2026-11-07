@@ -4,6 +4,7 @@ import { cn } from '@/shared/lib/utils';
 function Table({
   className,
   containerClassName,
+  style,
   ...props
 }: ComponentProps<'table'> & { containerClassName?: string }) {
   return (
@@ -13,6 +14,7 @@ function Table({
     >
       <table
         data-slot="table"
+        style={style}
         className={cn('w-full min-w-0 max-w-full caption-bottom text-sm', className)}
         {...props}
       />

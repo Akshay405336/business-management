@@ -11,10 +11,12 @@ import { useAdminToast } from '@/features/admin/components/toast';
 import { listAssignableEmployees } from '@/features/employees/api/employee.api';
 import { listProjects } from '@/features/admin/projects/api/projects';
 import { listAllDailyTasksInRange } from '../api/list-all-daily-tasks';
+import { listAllMyDailyTasksInRange } from '../api/list-my-daily-tasks-in-range';
 import {
   fetchDailyTaskBoard,
   fetchDailyTaskWorkflowStages,
   listDailyTasks,
+  listMyDailyTasks,
 } from '../api/daily-tasks';
 import type { OrgCalendarMonthDay } from '@techwin/contracts';
 import type {
@@ -23,7 +25,14 @@ import type {
   DailyTaskWorkflowStage,
 } from '../types';
 import { useDailyTasksPolling } from '../hooks/use-daily-tasks-polling';
+import { buildMyTaskBoard } from '../utils/build-my-task-board';
+import {
+  resolveDailyTasksDataScope,
+  type DailyTasksDataScope,
+  type DailyTasksPortal,
+} from '../utils/daily-tasks-organization-scope';
 import { localDateInputValue } from '../utils/local-date';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
 import {
   filterTasksByAssignment,
   filterTasksByStatusBucket,
@@ -46,7 +55,6 @@ import { DailyTaskKanbanBoard } from './daily-task-kanban-board';
 import { DailyTaskListView } from './daily-task-list-view';
 import { DailyTaskToolbar, DailyTaskToolbarSearch } from './daily-task-toolbar';
 import { DailyTaskWorkflowDialog } from './daily-task-workflow-dialog';
-import { MyDailyTasksPage } from './my-daily-tasks-page';
 import {
   DailyTasksViewTabs,
   type DailyTasksWorkspaceView,
@@ -55,23 +63,42 @@ import {
 type WorkspaceView = DailyTasksWorkspaceView;
 
 export function DailyTasksWorkspace({
-  title = 'Daily Task Management',
-  description = 'Create, assign and monitor daily work across your organization.',
+  portal,
+  title,
+  description,
   defaultView = 'kanban',
+  defaultDataScope,
 }: {
+  portal: DailyTasksPortal;
   title?: string;
   description?: string;
   defaultView?: WorkspaceView;
+  /** Admin portal only: optional scope override (e.g. `?workspace=my`). */
+  defaultDataScope?: DailyTasksDataScope;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
   const toast = useAdminToast();
+  const { dashboardBreadcrumb } = usePortalNavigation();
   const missingBoardTaskToast = useRef<string | null>(null);
   const { has } = useAdminAccess();
   const canAssignTasks = has('tasks.create') && has('tasks.assign');
   const canManageWorkflow = has('tasks.update') || has('daily_tasks.manage_workflow');
-  const workspaceMode = searchParams.get('workspace') === 'my' ? 'my' : 'team';
+  const dataScope = useMemo((): DailyTasksDataScope => {
+    return resolveDailyTasksDataScope({
+      portal,
+      workspaceParam: searchParams.get('workspace'),
+      explicitScope: defaultDataScope,
+    });
+  }, [defaultDataScope, portal, searchParams]);
+  const resolvedTitle =
+    title ?? (dataScope === 'own' ? 'My Daily Tasks' : 'Daily Task Management');
+  const resolvedDescription =
+    description ??
+    (dataScope === 'own'
+      ? 'View your assigned work and keep your progress updated.'
+      : 'Create, assign and monitor daily work across your organization.');
   const clientToday = useMemo(() => localDateInputValue(), []);
   const [assignDate, setAssignDate] = useState(() => {
     const dateParam = searchParams.get('date');
@@ -81,15 +108,22 @@ export function DailyTasksWorkspace({
   const [view, setView] = useState<WorkspaceView>(() => {
     const viewParam = searchParams.get('view');
     if (viewParam === 'kanban' || viewParam === 'list') return viewParam;
-    return defaultView;
+    return defaultView === 'calendar' ? 'kanban' : defaultView;
   });
 
   useEffect(() => {
     const viewParam = searchParams.get('view');
+    if (viewParam === 'calendar') {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('view', 'kanban');
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+      setView('kanban');
+      return;
+    }
     if (viewParam === 'kanban' || viewParam === 'list') {
       setView(viewParam);
     }
-  }, [searchParams]);
+  }, [pathname, router, searchParams]);
 
   const setViewInUrl = useCallback(
     (next: WorkspaceView) => {
@@ -265,34 +299,66 @@ export function DailyTasksWorkspace({
     setBoardLoading(true);
     setBoardError(false);
     try {
-      const response = await fetchDailyTaskBoard(filterQuery);
-      setBoard(response);
-      setStages(response.stages);
+      if (dataScope === 'own') {
+        const [stageResponse, taskResponse] = await Promise.all([
+          stages.length > 0 ? Promise.resolve({ stages }) : fetchDailyTaskWorkflowStages(),
+          listMyDailyTasks({
+            ...filterQuery,
+            page: 1,
+            pageSize: 100,
+            sortBy: 'priority',
+            sortDir: 'desc',
+          }),
+        ]);
+        if (stages.length === 0) setStages(stageResponse.stages);
+        setBoard(
+          buildMyTaskBoard({
+            assignDate,
+            stages: stageResponse.stages,
+            tasks: taskResponse.items,
+          }),
+        );
+      } else {
+        const response = await fetchDailyTaskBoard(filterQuery);
+        setBoard(response);
+        setStages(response.stages);
+      }
     } catch {
       setBoardError(true);
     } finally {
       setBoardLoading(false);
     }
-  }, [filterQuery]);
+  }, [assignDate, dataScope, filterQuery, stages]);
 
   const loadList = useCallback(async () => {
     setListLoading(true);
     setListError(false);
     try {
-      const response = await listDailyTasks({
-        ...filterQuery,
-        page: listPage,
-        pageSize: listPageSize,
-        sortBy,
-        sortDir,
-      });
-      setListData(response);
+      if (dataScope === 'own') {
+        const response = await listMyDailyTasks({
+          ...filterQuery,
+          page: listPage,
+          pageSize: listPageSize,
+          sortBy,
+          sortDir,
+        });
+        setListData(response);
+      } else {
+        const response = await listDailyTasks({
+          ...filterQuery,
+          page: listPage,
+          pageSize: listPageSize,
+          sortBy,
+          sortDir,
+        });
+        setListData(response);
+      }
     } catch {
       setListError(true);
     } finally {
       setListLoading(false);
     }
-  }, [filterQuery, listPage, listPageSize, sortBy, sortDir]);
+  }, [dataScope, filterQuery, listPage, listPageSize, sortBy, sortDir]);
 
   const loadCalendarMonth = useCallback(async () => {
     const anchor = new Date(`${calendarAnchor}T12:00:00`);
@@ -302,23 +368,37 @@ export function DailyTasksWorkspace({
     const assignDateTo = localDateInputValue(end);
     setCalendarLoading(true);
     try {
-      const response = await listAllDailyTasksInRange({
-        assignDateFrom,
-        assignDateTo,
-        clientToday,
-        search: filterQuery.search,
-        type: filterQuery.type,
-        employeeId: filterQuery.employeeId,
-        projectId: filterQuery.projectId,
-        priority:
-          calendarPriorityFilter === 'ALL'
-            ? filterQuery.priority
-            : calendarPriorityFilter,
-        workflowStageId: calendarWorkflowStageId || undefined,
-        completedOnly: calendarStatusFilter === 'COMPLETED' ? true : undefined,
-        overdueOnly: calendarStatusFilter === 'OVERDUE' ? true : undefined,
-      });
-      setCalendarRawTasks(response.items);
+      if (dataScope === 'own') {
+        const response = await listAllMyDailyTasksInRange({
+          assignDateFrom,
+          assignDateTo,
+          clientToday,
+          search: filterQuery.search,
+          type: filterQuery.type,
+          priority:
+            calendarPriorityFilter === 'ALL' ? filterQuery.priority : calendarPriorityFilter,
+          workflowStageId: calendarWorkflowStageId || undefined,
+        });
+        setCalendarRawTasks(response.items);
+      } else {
+        const response = await listAllDailyTasksInRange({
+          assignDateFrom,
+          assignDateTo,
+          clientToday,
+          search: filterQuery.search,
+          type: filterQuery.type,
+          employeeId: filterQuery.employeeId,
+          projectId: filterQuery.projectId,
+          priority:
+            calendarPriorityFilter === 'ALL'
+              ? filterQuery.priority
+              : calendarPriorityFilter,
+          workflowStageId: calendarWorkflowStageId || undefined,
+          completedOnly: calendarStatusFilter === 'COMPLETED' ? true : undefined,
+          overdueOnly: calendarStatusFilter === 'OVERDUE' ? true : undefined,
+        });
+        setCalendarRawTasks(response.items);
+      }
     } catch {
       setCalendarRawTasks([]);
     } finally {
@@ -330,11 +410,12 @@ export function DailyTasksWorkspace({
     calendarStatusFilter,
     calendarWorkflowStageId,
     clientToday,
+    dataScope,
+    filterQuery.employeeId,
     filterQuery.priority,
+    filterQuery.projectId,
     filterQuery.search,
     filterQuery.type,
-    filterQuery.employeeId,
-    filterQuery.projectId,
   ]);
 
   const calendarTasks = useMemo(() => {
@@ -354,13 +435,14 @@ export function DailyTasksWorkspace({
 
   useEffect(() => {
     void fetchDailyTaskWorkflowStages().then((r) => setStages(r.stages));
+    if (dataScope !== 'team') return;
     void listAssignableEmployees().then((r) =>
       setEmployees(r.items.map((e) => ({ id: e.id, displayName: e.displayName }))),
     );
     void listProjects({ pageSize: 100, status: 'ACTIVE' }).then((r) =>
       setProjects(r.items.map((p) => ({ id: p.id, name: p.name }))),
     );
-  }, []);
+  }, [dataScope]);
 
   useEffect(() => {
     if (view === 'kanban') void loadBoard();
@@ -386,7 +468,7 @@ export function DailyTasksWorkspace({
     ]);
   };
 
-  useDailyTasksPolling(refreshAll, workspaceMode === 'team');
+  useDailyTasksPolling(refreshAll, true);
 
   const openAssign = (options?: { date?: string; workflowStageId?: string }) => {
     if (!canAssignTasks) return;
@@ -447,17 +529,15 @@ export function DailyTasksWorkspace({
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [assignDate, board, boardError, boardLoading, pathname, router, searchParams, toast]);
 
-  if (workspaceMode === 'my') {
-    return <MyDailyTasksPage />;
-  }
+  const employeeMode = dataScope === 'own';
 
   return (
     <div className="mx-auto grid w-full max-w-[1400px] gap-3 pb-8 pt-1">
       <AdminBreadcrumb
         breadcrumbs={[
-          { label: 'Dashboard', href: '/admin/dashboard' },
+          dashboardBreadcrumb,
           { label: 'Tasks' },
-          { label: title },
+          { label: resolvedTitle },
         ]}
         className="mb-0.5"
       />
@@ -465,15 +545,11 @@ export function DailyTasksWorkspace({
         <div className="rounded-lg">
           <div className="flex min-w-0 flex-col gap-3 border-b border-[#E8E8EF] px-4 py-3 sm:px-5">
             <DailyTaskHeader
-              title={title}
-              description={description}
+              title={resolvedTitle}
+              description={resolvedDescription}
               toolbar={
                 <>
-                  <DailyTasksViewTabs
-                    value={view === 'calendar' ? 'kanban' : view}
-                    onValueChange={setViewInUrl}
-                    includeCalendar={false}
-                  />
+                  <DailyTasksViewTabs value={view} onValueChange={setViewInUrl} includeCalendar={false} />
                   {canAssignTasks ? (
                     <Button
                       type="button"
@@ -511,24 +587,28 @@ export function DailyTasksWorkspace({
                     options={typeMenuOptions}
                     onValueChange={(v) => setTypeFilter(v === 'all' ? 'ALL' : (v as typeof typeFilter))}
                   />
-                  <CrmIconFilterDropdown
-                    icon={<Users aria-hidden="true" />}
-                    tooltip="Employee"
-                    label="Employee"
-                    allLabel="All employees"
-                    value={employeeId || 'all'}
-                    options={employeeMenuOptions}
-                    onValueChange={(v) => setEmployeeId(v === 'all' ? '' : v)}
-                  />
-                  <CrmIconFilterDropdown
-                    icon={<Folder aria-hidden="true" />}
-                    tooltip="Project"
-                    label="Project"
-                    allLabel="All projects"
-                    value={projectId || 'all'}
-                    options={projectMenuOptions}
-                    onValueChange={(v) => setProjectId(v === 'all' ? '' : v)}
-                  />
+                  {dataScope === 'team' ? (
+                    <CrmIconFilterDropdown
+                      icon={<Users aria-hidden="true" />}
+                      tooltip="Employee"
+                      label="Employee"
+                      allLabel="All employees"
+                      value={employeeId || 'all'}
+                      options={employeeMenuOptions}
+                      onValueChange={(v) => setEmployeeId(v === 'all' ? '' : v)}
+                    />
+                  ) : null}
+                  {dataScope === 'team' ? (
+                    <CrmIconFilterDropdown
+                      icon={<Folder aria-hidden="true" />}
+                      tooltip="Project"
+                      label="Project"
+                      allLabel="All projects"
+                      value={projectId || 'all'}
+                      options={projectMenuOptions}
+                      onValueChange={(v) => setProjectId(v === 'all' ? '' : v)}
+                    />
+                  ) : null}
                   {view === 'calendar' ? (
                     <CrmIconFilterDropdown
                       icon={<Flag aria-hidden="true" />}
@@ -568,19 +648,21 @@ export function DailyTasksWorkspace({
                           setCalendarWorkflowStageId('');
                         }}
                       />
-                      <CrmIconFilterDropdown
-                        icon={<UserRound aria-hidden="true" />}
-                        tooltip="Assignment"
-                        label="Assignment"
-                        allLabel="Assigned & unassigned"
-                        value={calendarAssignmentFilter === 'ALL' ? 'all' : calendarAssignmentFilter}
-                        options={calendarAssignmentMenuOptions}
-                        onValueChange={(v) =>
-                          setCalendarAssignmentFilter(
-                            v === 'all' ? 'ALL' : (v as typeof calendarAssignmentFilter),
-                          )
-                        }
-                      />
+                      {dataScope === 'team' ? (
+                        <CrmIconFilterDropdown
+                          icon={<UserRound aria-hidden="true" />}
+                          tooltip="Assignment"
+                          label="Assignment"
+                          allLabel="Assigned & unassigned"
+                          value={calendarAssignmentFilter === 'ALL' ? 'all' : calendarAssignmentFilter}
+                          options={calendarAssignmentMenuOptions}
+                          onValueChange={(v) =>
+                            setCalendarAssignmentFilter(
+                              v === 'all' ? 'ALL' : (v as typeof calendarAssignmentFilter),
+                            )
+                          }
+                        />
+                      ) : null}
                       <CrmIconFilterDropdown
                         icon={<GitBranch aria-hidden="true" />}
                         tooltip="Workflow stage"
@@ -622,10 +704,11 @@ export function DailyTasksWorkspace({
                 <div className="min-w-0 px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
                   <DailyTaskKanbanBoard
                     board={board}
+                    employeeMode={employeeMode}
                     highlightTaskId={highlightTaskId}
                     onRefresh={refreshAll}
                     onOpenTask={(task) => openTask(task)}
-                    onEditTask={openEdit}
+                    onEditTask={employeeMode ? (task) => openTask(task) : openEdit}
                     onRescheduleTask={(task) => openTask(task, { focusReschedule: true })}
                     onAssignTask={
                       canAssignTasks ? (workflowStageId) => openAssign({ workflowStageId }) : undefined
@@ -640,6 +723,7 @@ export function DailyTasksWorkspace({
           {view === 'list' ? (
             <div className="min-w-0 px-4 pb-4 sm:px-5">
               <DailyTaskListView
+                employeeMode={employeeMode}
                 data={listData}
                 loading={listLoading}
                 error={listError}
@@ -661,9 +745,11 @@ export function DailyTasksWorkspace({
                 anchorDate={calendarAnchor}
                 selectedDate={assignDate}
                 tasks={calendarTasks}
-                orgDaysByDate={orgDaysByDate}
-                orgTodayKey={orgTodayKey}
-                loading={calendarLoading || orgCalendarLoading}
+                orgDaysByDate={dataScope === 'team' ? orgDaysByDate : undefined}
+                orgTodayKey={dataScope === 'team' ? orgTodayKey : undefined}
+                loading={
+                  calendarLoading || (dataScope === 'team' ? orgCalendarLoading : false)
+                }
                 onAnchorChange={setCalendarAnchor}
                 onSelectDate={openDailyTasksForDate}
               />
@@ -691,6 +777,7 @@ export function DailyTasksWorkspace({
         taskId={detailId}
         open={detailOpen}
         stages={stages}
+        employeeMode={employeeMode}
         onOpenChange={(open) => {
           setDetailOpen(open);
           if (!open) {

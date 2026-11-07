@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { OrgCalendarMonthResponse } from '@techwin/contracts';
 import { isAbortError } from '@/shared/lib/abort-error';
-import { fetchOrgCalendarMonth } from '../api/org-calendar-api';
+import { fetchEmployeeOrgCalendarMonth, fetchOrgCalendarMonth } from '../api/org-calendar-api';
 import { subscribeOrgCalendarSync } from '../lib/org-calendar-sync';
+
+export type OrgCalendarMonthScope = 'organization' | 'member';
 
 export function useOrgCalendarMonth(params: {
   year: number;
@@ -12,6 +14,8 @@ export function useOrgCalendarMonth(params: {
   eventTypes?: string;
   search?: string;
   enabled?: boolean;
+  /** Member scope uses the employee calendar API (read-only organisation view). */
+  scope?: OrgCalendarMonthScope;
 }) {
   const [data, setData] = useState<OrgCalendarMonthResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,15 +30,16 @@ export function useOrgCalendarMonth(params: {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetchOrgCalendarMonth(
-        {
-          year: params.year,
-          month: params.month,
-          eventTypes: params.eventTypes,
-          search: params.search || undefined,
-        },
-        controller.signal,
-      );
+      const query = {
+        year: params.year,
+        month: params.month,
+        eventTypes: params.eventTypes,
+        search: params.search || undefined,
+      };
+      const response =
+        params.scope === 'member'
+          ? await fetchEmployeeOrgCalendarMonth(query, controller.signal)
+          : await fetchOrgCalendarMonth(query, controller.signal);
       setData(response);
     } catch (err) {
       if (isAbortError(err)) return;
@@ -43,7 +48,7 @@ export function useOrgCalendarMonth(params: {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [params.year, params.month, params.eventTypes, params.search, params.enabled]);
+  }, [params.year, params.month, params.eventTypes, params.search, params.enabled, params.scope]);
 
   useEffect(() => {
     void reload();

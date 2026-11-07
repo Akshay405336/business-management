@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type {
   EmployeeLeaveBalanceItem,
   EmployeeLeaveBalanceListResponse,
+  EmployeeLeaveRecordsResponse,
   GenerateEmployeeBalancesResponse,
   LeavePreviewDaysResponse,
   LeaveRequestItem,
@@ -18,6 +19,7 @@ import type {
   CreateLeaveYearConfigurationRequest,
   UpdateLeaveBalanceConfigurationRequest,
   EmployeeLeaveBalanceListQuery,
+  EmployeeLeaveRecordsListQuery,
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
@@ -34,6 +36,7 @@ import {
 } from '../domain/repositories/leave.repository.js';
 import { LeaveAuthorizationService } from './services/leave-authorization.service.js';
 import { resolveLeaveRequestDates } from '../domain/policies/leave-request-dates.policy.js';
+import { LeaveValidationError } from '../domain/errors/leave.errors.js';
 import { LeaveDayCalculationService } from './services/leave-day-calculation.service.js';
 
 @Injectable()
@@ -286,6 +289,31 @@ export class ListEmployeeLeaveBalancesHandler {
 }
 
 @Injectable()
+export class ListEmployeeLeaveRecordsHandler {
+  constructor(
+    @Inject(LEAVE_REPOSITORY) private readonly repository: LeaveRepository,
+    private readonly authz: LeaveAuthorizationService,
+  ) {}
+
+  async execute(
+    actor: OrgAccessActor,
+    leaveYearConfigurationId: string,
+    query: EmployeeLeaveRecordsListQuery,
+  ): Promise<EmployeeLeaveRecordsResponse> {
+    await this.authz.requireAnyPermission(actor, [
+      'leave.balances.read',
+      'leave.config.read',
+      'leave.config.manage',
+    ]);
+    return this.repository.listEmployeeLeaveRecords(
+      actor.organizationId,
+      leaveYearConfigurationId,
+      query,
+    );
+  }
+}
+
+@Injectable()
 export class GetEmployeeLeaveBalanceHandler {
   constructor(
     @Inject(LEAVE_REPOSITORY) private readonly repository: LeaveRepository,
@@ -459,13 +487,35 @@ export class ApplyForLeaveHandler {
       actor.organizationId,
       applicationDateKey,
     );
-    const resolved = resolveLeaveRequestDates({
+    const resolvedRaw = resolveLeaveRequestDates({
       selectedDates: input.selectedDates,
       startDate: input.startDate,
       endDate: input.endDate,
       isHalfDay: input.isHalfDay,
       halfDayDate: input.halfDayDate ?? null,
     });
+    const workingDates = await this.leaveDays.filterWorkingLeaveDates(
+      actor.organizationId,
+      employeeId,
+      resolvedRaw.selectedDates,
+    );
+    if (workingDates.length === 0) {
+      throw new LeaveValidationError(
+        'The selected period has no working leave days according to the organization calendar.',
+      );
+    }
+    const resolved = {
+      ...resolvedRaw,
+      selectedDates: workingDates,
+      startDate: workingDates[0]!,
+      endDate: workingDates[workingDates.length - 1]!,
+      halfDayDate:
+        input.isHalfDay && resolvedRaw.halfDayDate && workingDates.includes(resolvedRaw.halfDayDate)
+          ? resolvedRaw.halfDayDate
+          : input.isHalfDay && workingDates.length === 1
+            ? workingDates[0]!
+            : resolvedRaw.halfDayDate,
+    };
     await this.leaveDays.assertLeaveRequestDates(
       actor.organizationId,
       employeeId,
@@ -484,7 +534,7 @@ export class ApplyForLeaveHandler {
       actor.organizationId,
       employeeId,
       actor.adminId,
-      input,
+      { ...input, selectedDates: [...resolved.selectedDates], startDate: resolved.startDate, endDate: resolved.endDate },
       totalDays,
     );
   }

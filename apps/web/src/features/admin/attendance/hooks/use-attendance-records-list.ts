@@ -6,12 +6,18 @@ import { useAdminToast } from '@/features/admin/components/toast';
 import {
   fetchAttendanceRecordDetail,
   fetchAttendanceSettings,
+  fetchMyAttendanceHistory,
   listAttendanceRecords,
 } from '@/features/attendance/api/attendance';
 import { isAbortError } from '@/shared/lib/abort-error';
 import { subscribeOrgCalendarSync } from '@/features/admin/org-calendar/lib/org-calendar-sync';
 import { addDaysToDateKey } from '@/features/attendance/utils/time';
-import { localTodayKey, todayKeyInTimeZone } from '../utils/calendar-month';
+import {
+  localTodayKey,
+  monthBounds,
+  shiftMonth,
+  todayKeyInTimeZone,
+} from '../utils/calendar-month';
 import type { AttendanceStatusFilter } from '../constants/attendance-status-filter-options';
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -21,8 +27,14 @@ function describeAttendanceError(failure: unknown): string {
   return failure instanceof Error ? failure.message : 'Failed to load attendance records.';
 }
 
-export function useAttendanceRecordsList(active: boolean) {
+export type AttendanceRecordsScope = 'organization' | 'self';
+
+export function useAttendanceRecordsList(
+  active: boolean,
+  scope: AttendanceRecordsScope = 'organization',
+) {
   const toast = useAdminToast();
+  const selfScope = scope === 'self';
 
   const [items, setItems] = useState<readonly AttendanceRecordItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -46,48 +58,72 @@ export function useAttendanceRecordsList(active: boolean) {
     [orgTimeZone],
   );
 
+  const monthRange = useMemo(() => monthBounds(visibleMonth), [visibleMonth]);
+  const currentMonthKey = useMemo(
+    () => (orgTodayKey ?? localTodayKey()).slice(0, 7),
+    [orgTodayKey],
+  );
+
   const queryDate = date || orgTodayKey || '';
 
-  const filtersActive =
-    search.trim().length > 0 ||
-    statusFilter !== 'ALL' ||
-    (orgTodayKey != null && queryDate !== orgTodayKey);
+  const filtersActive = selfScope
+    ? statusFilter !== 'ALL' || visibleMonth !== currentMonthKey
+    : search.trim().length > 0 ||
+      statusFilter !== 'ALL' ||
+      (orgTodayKey != null && queryDate !== orgTodayKey);
 
-  const queryKey = useMemo(
-    () => ({
+  const queryKey = useMemo(() => {
+    if (selfScope) {
+      return {
+        page,
+        pageSize,
+        from: monthRange.from,
+        to: monthRange.to,
+        status: statusFilter === 'ALL' ? undefined : statusFilter,
+      };
+    }
+    return {
       page,
       pageSize,
       search: search.trim() || undefined,
       date: queryDate || undefined,
       status: statusFilter === 'ALL' ? undefined : statusFilter,
-    }),
-    [page, pageSize, search, queryDate, statusFilter],
-  );
+    };
+  }, [monthRange.from, monthRange.to, page, pageSize, queryDate, search, selfScope, statusFilter]);
+
+  const listReady = selfScope ? Boolean(visibleMonth) : Boolean(queryDate);
 
   useEffect(() => {
     let cancelled = false;
     void fetchAttendanceSettings().then((settings) => {
       if (cancelled) return;
-      setOrgTimeZone(settings.current?.timeZone?.trim() || 'UTC');
+      const zone = settings.current?.timeZone?.trim() || 'UTC';
+      setOrgTimeZone(zone);
+      if (selfScope) {
+        setVisibleMonth(todayKeyInTimeZone(zone).slice(0, 7));
+      }
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selfScope]);
 
   useEffect(() => {
-    if (!orgTodayKey || date !== '') return;
+    if (selfScope || !orgTodayKey || date !== '') return;
     setDate(orgTodayKey);
     setSelectedCalendarDate(orgTodayKey);
     setVisibleMonth(orgTodayKey.slice(0, 7));
-  }, [date, orgTodayKey]);
+  }, [date, orgTodayKey, selfScope]);
 
   const load = useCallback(async () => {
-    if (!active || !queryDate) return;
+    if (!active || !listReady) return;
     setLoading(true);
     setError(null);
     try {
-      const response = await listAttendanceRecords(queryKey);
+      const response =
+        scope === 'self'
+          ? await fetchMyAttendanceHistory(queryKey)
+          : await listAttendanceRecords(queryKey);
       setItems(response.items);
       setTotal(response.total);
     } catch (failure) {
@@ -95,14 +131,14 @@ export function useAttendanceRecordsList(active: boolean) {
     } finally {
       setLoading(false);
     }
-  }, [active, queryDate, queryKey]);
+  }, [active, listReady, queryKey, scope]);
 
   useEffect(() => {
     if (!active) {
       setLoading(false);
       return;
     }
-    if (!queryDate) {
+    if (!listReady) {
       setLoading(true);
       return;
     }
@@ -111,7 +147,10 @@ export function useAttendanceRecordsList(active: boolean) {
       setLoading(true);
       setError(null);
       try {
-        const response = await listAttendanceRecords(queryKey, controller.signal);
+        const response =
+          scope === 'self'
+            ? await fetchMyAttendanceHistory(queryKey, controller.signal)
+            : await listAttendanceRecords(queryKey, controller.signal);
         if (controller.signal.aborted) return;
         setItems(response.items);
         setTotal(response.total);
@@ -123,7 +162,7 @@ export function useAttendanceRecordsList(active: boolean) {
       }
     })();
     return () => controller.abort();
-  }, [active, queryDate, queryKey]);
+  }, [active, listReady, queryKey, scope]);
 
   useEffect(() => {
     if (!active) return;
@@ -133,7 +172,7 @@ export function useAttendanceRecordsList(active: boolean) {
   }, [active]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || selfScope) return;
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
       setSearch(searchDraft.trim());
@@ -142,7 +181,7 @@ export function useAttendanceRecordsList(active: boolean) {
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
-  }, [active, searchDraft]);
+  }, [active, searchDraft, selfScope]);
 
   const setDateFilter = useCallback((value: string) => {
     setDate(value);
@@ -164,6 +203,19 @@ export function useAttendanceRecordsList(active: boolean) {
     [queryDate, setDateFilter],
   );
 
+  const setVisibleMonthFilter = useCallback(
+    (monthKey: string) => {
+      setVisibleMonth(monthKey);
+      setPage(1);
+    },
+    [],
+  );
+
+  const shiftVisibleMonth = useCallback((deltaMonths: number) => {
+    setVisibleMonth((current) => shiftMonth(current, deltaMonths));
+    setPage(1);
+  }, []);
+
   const setStatusFilterAndResetPage = useCallback((value: AttendanceStatusFilter) => {
     setStatusFilter(value);
     setPage(1);
@@ -180,6 +232,12 @@ export function useAttendanceRecordsList(active: boolean) {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     setSearchDraft('');
     setSearch('');
+    if (selfScope) {
+      setVisibleMonth(currentMonthKey);
+      setStatusFilter('ALL');
+      setPage(1);
+      return;
+    }
     const resetDate = orgTodayKey ?? date;
     setDate(resetDate);
     setStatusFilter('ALL');
@@ -188,7 +246,7 @@ export function useAttendanceRecordsList(active: boolean) {
       setVisibleMonth(resetDate.slice(0, 7));
     }
     setPage(1);
-  }, [date, orgTodayKey]);
+  }, [currentMonthKey, date, orgTodayKey, selfScope]);
 
   const refreshAll = useCallback(() => {
     void load();
@@ -217,6 +275,7 @@ export function useAttendanceRecordsList(active: boolean) {
   const refreshing = loading && items.length > 0;
 
   return {
+    scope,
     items,
     total,
     loading,
@@ -244,7 +303,9 @@ export function useAttendanceRecordsList(active: boolean) {
     openDetail,
     describeAttendanceError,
     visibleMonth,
-    setVisibleMonth,
+    setVisibleMonth: setVisibleMonthFilter,
+    shiftVisibleMonth,
+    monthRange,
     selectedCalendarDate,
     setSelectedCalendarDate,
     selectCalendarDate,

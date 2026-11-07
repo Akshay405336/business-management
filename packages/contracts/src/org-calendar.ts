@@ -9,6 +9,7 @@ export const ORG_CALENDAR_ROUTES = {
   export: `${API_PREFIX}/organization-calendar/export`,
   classify: `${API_PREFIX}/organization-calendar/classify`,
   employeeMonth: `${API_PREFIX}/organization-calendar/employee/month`,
+  replaceDateClassification: `${API_PREFIX}/organization-calendar/dates/classification`,
 } as const;
 
 export type OrgCalendarEventType =

@@ -18,14 +18,16 @@ export function isOrgDayEligibleForLeave(
 export function describeLeaveDateDisabledReason(input: {
   dateKey: string;
   day: OrgCalendarMonthDay | undefined;
-  earliestEligibleStartDate: string | null;
   policyYearStartDate: string | null;
   policyYearEndDate: string | null;
   minDateKey: string | null;
+  orgTodayKey?: string | null;
 }): string {
-  const { dateKey, day, earliestEligibleStartDate, policyYearStartDate, policyYearEndDate, minDateKey } =
-    input;
+  const { dateKey, day, policyYearStartDate, policyYearEndDate, minDateKey, orgTodayKey } = input;
 
+  if (orgTodayKey && dateKey < orgTodayKey) {
+    return 'Past dates cannot be selected for new leave applications.';
+  }
   if (policyYearStartDate && dateKey < policyYearStartDate) {
     return `Before the active leave policy start (${policyYearStartDate}).`;
   }
@@ -34,9 +36,6 @@ export function describeLeaveDateDisabledReason(input: {
   }
   if (minDateKey && dateKey < minDateKey) {
     return 'End date cannot be before the start date.';
-  }
-  if (earliestEligibleStartDate && dateKey < earliestEligibleStartDate) {
-    return `Before the earliest eligible start date (${earliestEligibleStartDate}).`;
   }
   if (day) {
     const label = ORG_CALENDAR_DAY_KIND_LABEL[day.dayKind] ?? 'Non-working day';
@@ -71,6 +70,26 @@ export function formatDateKeyShort(dateKey: string): string {
 
 export function normalizeSelectedDateKeys(dates: readonly string[]): string[] {
   return [...new Set(dates.filter(Boolean))].sort();
+}
+
+export function expandInclusiveCalendarRange(startDate: string, endDate: string): string[] {
+  if (endDate < startDate) {
+    return expandInclusiveCalendarRange(endDate, startDate);
+  }
+  const out: string[] = [];
+  const [sy, sm, sd] = startDate.split('-').map(Number);
+  const [ey, em, ed] = endDate.split('-').map(Number);
+  if (!sy || !sm || !sd || !ey || !em || !ed) return out;
+  const cursor = new Date(Date.UTC(sy, sm - 1, sd));
+  const end = new Date(Date.UTC(ey, em - 1, ed));
+  while (cursor.getTime() <= end.getTime()) {
+    const y = cursor.getUTCFullYear();
+    const m = String(cursor.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(cursor.getUTCDate()).padStart(2, '0');
+    out.push(`${y}-${m}-${d}`);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return out;
 }
 
 export function formatSelectedDatesCompactSummary(dates: readonly string[]): string {

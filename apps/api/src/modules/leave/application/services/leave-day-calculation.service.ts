@@ -107,11 +107,7 @@ export class LeaveDayCalculationService {
     let earliest: string;
 
     if (requiredWorkingDays === 0) {
-      earliest = await this.nextWorkingDayOnOrAfter(
-        organizationId,
-        employeeId,
-        applicationDateKey,
-      );
+      earliest = applicationDateKey;
     } else {
       let candidate = addDaysToDateKey(applicationDateKey, 1);
       let found: string | null = null;
@@ -212,13 +208,13 @@ export class LeaveDayCalculationService {
       throw new LeaveValidationError('Half-day date must be one of the selected leave dates.');
     }
 
+    const workingDates: string[] = [];
     let total = 0;
     for (const dateKey of dates) {
       if (!(await this.isWorkingDay(organizationId, dateKey, employeeId))) {
-        throw new LeaveValidationError(
-          `Date ${dateKey} is not a working leave day according to the organization calendar.`,
-        );
+        continue;
       }
+      workingDates.push(dateKey);
       if (isHalfDay && dateKey === resolvedHalfDayDate) {
         total += 0.5;
       } else {
@@ -403,6 +399,20 @@ export class LeaveDayCalculationService {
     };
   }
 
+  async filterWorkingLeaveDates(
+    organizationId: string,
+    employeeId: string,
+    dateKeys: readonly string[],
+  ): Promise<string[]> {
+    const out: string[] = [];
+    for (const dateKey of normalizeLeaveDateKeys(dateKeys)) {
+      if (await this.isWorkingDay(organizationId, dateKey, employeeId)) {
+        out.push(dateKey);
+      }
+    }
+    return out;
+  }
+
   async assertLeaveRequestDates(
     organizationId: string,
     employeeId: string,
@@ -410,12 +420,22 @@ export class LeaveDayCalculationService {
     minApplicationDays?: string,
     policyWindow?: LeavePolicyDateWindow | null,
   ): Promise<void> {
-    await this.assertAdvanceNoticeForSelectedDates(
-      organizationId,
-      employeeId,
-      resolved.selectedDates,
-      minApplicationDays,
-      policyWindow,
-    );
+    this.assertSelectedDatesWithinPolicy(resolved.selectedDates, policyWindow ?? null);
+    const applicationDate = await this.resolveApplicationDateKey(organizationId);
+    for (const dateKey of resolved.selectedDates) {
+      if (dateKey < applicationDate) {
+        throw new LeaveValidationError('Leave cannot be requested for past dates.');
+      }
+    }
+    const requiredNotice = parseMinNoticeWorkingDays(minApplicationDays);
+    if (requiredNotice > 0) {
+      await this.assertAdvanceNoticeForSelectedDates(
+        organizationId,
+        employeeId,
+        resolved.selectedDates,
+        minApplicationDays,
+        policyWindow,
+      );
+    }
   }
 }

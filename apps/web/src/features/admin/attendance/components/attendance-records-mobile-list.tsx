@@ -9,15 +9,18 @@ import {
   formatAttendanceDate,
   formatAttendanceWorkingHours,
   formatIsoTime,
+  weekdayLabel,
 } from '@/features/attendance/utils/time';
 
 export function AttendanceRecordsMobileList({
   items,
+  selfScope = false,
   canCorrectRecords,
   onOpenDetail,
   onOpenEdit,
 }: {
   items: readonly AttendanceRecordItem[];
+  selfScope?: boolean;
   canCorrectRecords: boolean;
   onOpenDetail: (id: string) => void;
   onOpenEdit: (id: string) => void;
@@ -29,33 +32,45 @@ export function AttendanceRecordsMobileList({
         return (
           <li key={row.id}>
             <div
-              role="button"
-              tabIndex={0}
-              className="hover:bg-muted/40 flex w-full cursor-pointer gap-3 px-4 py-3 text-left transition-colors sm:px-5"
-              onClick={() => onOpenDetail(row.id)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onOpenDetail(row.id);
-                }
-              }}
+              role={selfScope ? undefined : 'button'}
+              tabIndex={selfScope ? undefined : 0}
+              className={
+                selfScope
+                  ? 'flex w-full gap-3 px-4 py-3 text-left sm:px-5'
+                  : 'hover:bg-muted/40 flex w-full cursor-pointer gap-3 px-4 py-3 text-left transition-colors sm:px-5'
+              }
+              onClick={selfScope ? undefined : () => onOpenDetail(row.id)}
+              onKeyDown={
+                selfScope
+                  ? undefined
+                  : (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onOpenDetail(row.id);
+                      }
+                    }
+              }
             >
-              <EmployeeAvatar
-                displayName={row.employeeDisplayName}
-                profileImageUrl={row.profileImageUrl}
-              />
+              {selfScope ? null : (
+                <EmployeeAvatar
+                  displayName={row.employeeDisplayName}
+                  profileImageUrl={row.profileImageUrl}
+                />
+              )}
               <div className="min-w-0 flex-1 space-y-2">
-                <div className="flex min-w-0 items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-foreground line-clamp-2 text-[13px] leading-snug font-semibold">
-                      {row.employeeDisplayName}
-                    </p>
-                    <p className="text-muted-foreground truncate font-mono text-[10px]">
-                      {row.employeeCode}
-                    </p>
+                {selfScope ? null : (
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-foreground line-clamp-2 text-[13px] leading-snug font-semibold">
+                        {row.employeeDisplayName}
+                      </p>
+                      <p className="text-muted-foreground truncate font-mono text-[10px]">
+                        {row.employeeCode}
+                      </p>
+                    </div>
+                    <AttendanceResult row={row} className="max-w-[50%] items-end" />
                   </div>
-                  <AttendanceResult row={row} className="max-w-[50%] items-end" />
-                </div>
+                )}
                 <dl className="text-muted-foreground grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                   <div>
                     <dt className="text-[10px] font-medium uppercase tracking-wide">Date</dt>
@@ -63,12 +78,19 @@ export function AttendanceRecordsMobileList({
                       {formatAttendanceDate(row.attendanceDate, timeZone)}
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-[10px] font-medium uppercase tracking-wide">Hours</dt>
-                    <dd className="text-foreground tabular-nums">
-                      {formatAttendanceWorkingHours(row.workingMinutes, row.punchInAt, row.punchOutAt)}
-                    </dd>
-                  </div>
+                  {selfScope ? (
+                    <div>
+                      <dt className="text-[10px] font-medium uppercase tracking-wide">Day</dt>
+                      <dd className="text-foreground">{weekdayLabel(row.attendanceDate, timeZone)}</dd>
+                    </div>
+                  ) : (
+                    <div>
+                      <dt className="text-[10px] font-medium uppercase tracking-wide">Hours</dt>
+                      <dd className="text-foreground tabular-nums">
+                        {formatAttendanceWorkingHours(row.workingMinutes, row.punchInAt, row.punchOutAt)}
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="text-[10px] font-medium uppercase tracking-wide">In</dt>
                     <dd className="text-foreground tabular-nums">
@@ -81,38 +103,49 @@ export function AttendanceRecordsMobileList({
                       {formatIsoTime(row.punchOutAt, timeZone)}
                     </dd>
                   </div>
+                  {selfScope ? (
+                    <div className="col-span-2">
+                      <dt className="text-[10px] font-medium uppercase tracking-wide">Hours</dt>
+                      <dd className="text-foreground tabular-nums">
+                        {formatAttendanceWorkingHours(row.workingMinutes, row.punchInAt, row.punchOutAt)}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
+                {selfScope ? <AttendanceResult row={row} className="mt-1" /> : null}
               </div>
-              <div className="flex shrink-0 flex-col gap-0.5 self-center">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-primary size-8"
-                  aria-label={`View attendance for ${row.employeeDisplayName}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenDetail(row.id);
-                  }}
-                >
-                  <Eye className="size-4" aria-hidden="true" />
-                </Button>
-                {canCorrectRecords ? (
+              {selfScope ? null : (
+                <div className="flex shrink-0 flex-col gap-0.5 self-center">
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="size-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
-                    aria-label={`Edit attendance for ${row.employeeDisplayName}`}
+                    className="text-primary size-8"
+                    aria-label={`View attendance for ${row.employeeDisplayName}`}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onOpenEdit(row.id);
+                      onOpenDetail(row.id);
                     }}
                   >
-                    <SquarePen className="size-4" aria-hidden="true" />
+                    <Eye className="size-4" aria-hidden="true" />
                   </Button>
-                ) : null}
-              </div>
+                  {canCorrectRecords ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                      aria-label={`Edit attendance for ${row.employeeDisplayName}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenEdit(row.id);
+                      }}
+                    >
+                      <SquarePen className="size-4" aria-hidden="true" />
+                    </Button>
+                  ) : null}
+                </div>
+              )}
             </div>
           </li>
         );

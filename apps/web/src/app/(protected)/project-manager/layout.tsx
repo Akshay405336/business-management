@@ -1,17 +1,15 @@
 import type { ReactNode } from 'react';
+import { AdminAccessProvider } from '@/features/admin/auth/components/admin-access-provider';
+import { AdminShell } from '@/features/admin/auth/components/admin-shell';
 import { ToastProvider } from '@/features/admin/components/toast';
-import { PortalGate } from '@/features/auth/components/portal-gate';
-import { ProjectManagerAccessProvider } from '@/features/project-manager/components/project-manager-access-provider';
-import { ProjectManagerShell } from '@/features/project-manager/components/project-manager-shell';
 
+/** Same application shell as admin; legacy `/project-manager` URLs remain supported. */
 export default function ProjectManagerLayout({ children }: { children: ReactNode }) {
   return (
-    <PortalGate portal="project-manager">
-      <ToastProvider>
-        <ProjectManagerAccessProvider>
-          <ProjectManagerShell>{children}</ProjectManagerShell>
-        </ProjectManagerAccessProvider>
-      </ToastProvider>
-    </PortalGate>
+    <ToastProvider>
+      <AdminAccessProvider>
+        <AdminShell>{children}</AdminShell>
+      </AdminAccessProvider>
+    </ToastProvider>
   );
 }

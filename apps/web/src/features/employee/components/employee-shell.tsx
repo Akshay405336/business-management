@@ -1,3 +1,4 @@
+/** @deprecated Use `AdminShell` — all portals share the unified application shell. */
 'use client';
 
 import Link from 'next/link';

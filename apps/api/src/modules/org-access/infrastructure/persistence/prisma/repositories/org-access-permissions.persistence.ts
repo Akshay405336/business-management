@@ -122,6 +122,8 @@ export class OrgAccessPermissionsPersistence {
           });
         }
         await mergeSystemRoleDefaultPermissions(tx, organizationId, [
+          SYSTEM_ROLE_KEYS.owner,
+          SYSTEM_ROLE_KEYS.admin,
           SYSTEM_ROLE_KEYS.employee,
           SYSTEM_ROLE_KEYS.member,
         ]);

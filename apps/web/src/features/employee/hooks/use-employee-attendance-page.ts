@@ -166,7 +166,7 @@ export function useEmployeeAttendancePage() {
     }
   };
 
-  const onPunchIn = async () => {
+  const onPunchIn = async (): Promise<boolean> => {
     setPunchAction('in');
     try {
       await ensureDevice();
@@ -174,24 +174,28 @@ export function useEmployeeAttendancePage() {
       toast.success('Punched in successfully');
       await loadToday(undefined, { silent: true });
       setClockMs(Date.now() + serverSkewMs.current);
+      return true;
     } catch (failure) {
       toast.error(describeError(failure));
       await loadToday(undefined, { silent: true });
+      return false;
     } finally {
       setPunchAction(null);
     }
   };
 
-  const onPunchOut = async () => {
+  const onPunchOut = async (): Promise<boolean> => {
     setPunchAction('out');
     try {
       await punchOut({ deviceKey, idempotencyKey: crypto.randomUUID() });
       toast.success('Punched out successfully');
       await loadToday(undefined, { silent: true });
       await loadHistory();
+      return true;
     } catch (failure) {
       toast.error(describeError(failure));
       await loadToday(undefined, { silent: true });
+      return false;
     } finally {
       setPunchAction(null);
     }

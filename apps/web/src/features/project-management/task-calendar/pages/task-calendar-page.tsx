@@ -18,6 +18,9 @@ import { TaskCalendarStatusLegend } from '../components/task-calendar-status-leg
 import { TaskCalendarTaskDetailsModal } from '../components/task-calendar-task-details-modal';
 import { TaskCalendarToolbar } from '../components/task-calendar-toolbar';
 import { addMonths, parseMonthKey } from '../utils/calendar-date.utils';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
+import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
+import { canViewOrganizationDailyTasks } from '@/features/admin/daily-tasks/utils/daily-tasks-organization-scope';
 
 const EMPTY_FILTERS: TaskCalendarPageSearch = {};
 
@@ -46,10 +49,24 @@ type FilterParamKey =
   | 'status'
   | 'displayStatus';
 
-export function TaskCalendarPage() {
+export function TaskCalendarPage({
+  dataScope,
+  dailyTasksBasePath,
+}: {
+  dataScope?: 'organization' | 'self';
+  dailyTasksBasePath?: string;
+} = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { dashboardBreadcrumb } = usePortalNavigation();
+  const { has, hasAny } = useAdminAccess();
+  const resolvedScope =
+    dataScope ??
+    (canViewOrganizationDailyTasks(has, hasAny) ? 'organization' : 'self');
+  const dailyTasksHref =
+    dailyTasksBasePath ??
+    (pathname.startsWith('/employee') ? '/employee/daily-tasks' : '/admin/daily-tasks');
   const { monthKey, setMonthKey } = useCalendarNavigation();
   const { filters: filterOptions, loading: filtersLoading } = useCalendarFilters();
 
@@ -151,9 +168,9 @@ export function TaskCalendarPage() {
 
   const navigateToDailyKanban = useCallback(
     (date: string) => {
-      router.push(`/admin/daily-tasks?date=${encodeURIComponent(date)}&view=kanban`);
+      router.push(`${dailyTasksHref}?date=${encodeURIComponent(date)}&view=kanban`);
     },
-    [router],
+    [dailyTasksHref, router],
   );
 
   const openDetail = (task: TaskCalendarTaskDto) => {
@@ -165,11 +182,7 @@ export function TaskCalendarPage() {
     <div className="mx-auto grid w-full max-w-[1400px] gap-3 pb-10 pt-1">
       <AdminBreadcrumb
         className="px-3 sm:px-5"
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/admin/dashboard' },
-          { label: 'Tasks' },
-          { label: 'Task Calendar' },
-        ]}
+        breadcrumbs={[dashboardBreadcrumb, { label: 'Tasks' }, { label: 'Task Calendar' }]}
       />
       <section className="workspace-surface min-w-0 overflow-hidden rounded-lg">
         <TaskCalendarHeader
@@ -195,16 +208,18 @@ export function TaskCalendarPage() {
                     onValueChange={(v) => filterSelect('type', v)}
                     disabled={filtersLoading}
                   />
-                  <TaskCalendarFilterMenu
-                    icon={<Users aria-hidden="true" />}
-                    tooltip="Employee"
-                    label="Employee"
-                    allLabel="All employees"
-                    value={filters.employeeId ?? 'all'}
-                    options={employeeOptions}
-                    onValueChange={(v) => filterSelect('employeeId', v)}
-                    disabled={filtersLoading}
-                  />
+                  {resolvedScope === 'organization' ? (
+                    <TaskCalendarFilterMenu
+                      icon={<Users aria-hidden="true" />}
+                      tooltip="Employee"
+                      label="Employee"
+                      allLabel="All employees"
+                      value={filters.employeeId ?? 'all'}
+                      options={employeeOptions}
+                      onValueChange={(v) => filterSelect('employeeId', v)}
+                      disabled={filtersLoading}
+                    />
+                  ) : null}
                   <TaskCalendarFilterMenu
                     icon={<Flag aria-hidden="true" />}
                     tooltip="Priority"
@@ -239,6 +254,7 @@ export function TaskCalendarPage() {
             cellContentLoading={showGridSkeleton}
             onOpenTask={openDetail}
             onNavigateToDailyKanban={navigateToDailyKanban}
+            showEmptyDayAddTask={resolvedScope !== 'self'}
           />
           <TaskCalendarStatusLegend />
           {data ? (

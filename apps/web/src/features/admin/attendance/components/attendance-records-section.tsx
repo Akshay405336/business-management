@@ -20,10 +20,13 @@ import {
   formatAttendanceDate,
   formatAttendanceWorkingHours,
   formatIsoTime,
+  weekdayLabel,
 } from '@/features/attendance/utils/time';
 import { useMyPermissions } from '@/features/admin/org-access/hooks/use-my-permissions';
 import { cn } from '@/shared/lib/utils';
 import {
+  ATTENDANCE_SELF_TABLE_COLUMN_CLASS,
+  ATTENDANCE_SELF_TABLE_SKELETON,
   ATTENDANCE_TABLE_COLUMN_CLASS,
   ATTENDANCE_TABLE_COMPACT_CELL,
   ATTENDANCE_TABLE_HEAD_CLASS,
@@ -39,6 +42,7 @@ export function AttendanceRecordsSection() {
   const canCorrectRecords = has('attendance.correct_records');
 
   const {
+    scope,
     items,
     total,
     loading,
@@ -53,6 +57,7 @@ export function AttendanceRecordsSection() {
     safePage,
     openDetail,
   } = useAttendanceRecordsContext();
+  const selfScope = scope === 'self';
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -69,11 +74,15 @@ export function AttendanceRecordsSection() {
       icon: CalendarClock,
       title: 'No attendance records found',
       description: filtersActive
-        ? 'No records match the selected date or filters. Try another date or clear filters.'
-        : 'Attendance records will appear here once employees punch in.',
+        ? selfScope
+          ? 'No records match the selected month or status filter. Try another month or clear filters.'
+          : 'No records match the selected date or filters. Try another date or clear filters.'
+        : selfScope
+          ? 'Your attendance for this month will appear here after you punch in.'
+          : 'Attendance records will appear here once employees punch in.',
       secondaryAction: filtersActive ? { label: 'Clear filters', onClick: clearFilters } : undefined,
     };
-  }, [clearFilters, filtersActive]);
+  }, [clearFilters, filtersActive, selfScope]);
 
   const openEdit = (recordId: string) => {
     setEditRecordId(recordId);
@@ -106,7 +115,8 @@ export function AttendanceRecordsSection() {
       {showMobileCards ? (
         <AttendanceRecordsMobileList
           items={items}
-          canCorrectRecords={canCorrectRecords}
+          selfScope={selfScope}
+          canCorrectRecords={canCorrectRecords && !selfScope}
           onOpenDetail={(id) => void showDetail(id)}
           onOpenEdit={openEdit}
         />
@@ -124,55 +134,82 @@ export function AttendanceRecordsSection() {
         )}
         tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
         phase={tablePhase}
-        colSpan={7}
-        skeletonColumns={ATTENDANCE_TABLE_SKELETON}
+        colSpan={selfScope ? 6 : 7}
+        skeletonColumns={selfScope ? ATTENDANCE_SELF_TABLE_SKELETON : ATTENDANCE_TABLE_SKELETON}
         header={
           <TableRow className="hover:bg-transparent">
+            {selfScope ? null : (
+              <TableHead
+                className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.employee, ATTENDANCE_TABLE_HEAD_CLASS)}
+              >
+                Employee
+              </TableHead>
+            )}
             <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.employee, ATTENDANCE_TABLE_HEAD_CLASS)}
-            >
-              Employee
-            </TableHead>
-            <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.date, ATTENDANCE_TABLE_HEAD_CLASS)}
+              className={cn(
+                selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.date : ATTENDANCE_TABLE_COLUMN_CLASS.date,
+                ATTENDANCE_TABLE_HEAD_CLASS,
+              )}
               title="Date"
             >
               Date
             </TableHead>
+            {selfScope ? (
+              <TableHead
+                className={cn(ATTENDANCE_SELF_TABLE_COLUMN_CLASS.day, ATTENDANCE_TABLE_HEAD_CLASS)}
+                title="Day"
+              >
+                Day
+              </TableHead>
+            ) : null}
             <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.punchIn, ATTENDANCE_TABLE_HEAD_CLASS)}
+              className={cn(
+                selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.punchIn : ATTENDANCE_TABLE_COLUMN_CLASS.punchIn,
+                ATTENDANCE_TABLE_HEAD_CLASS,
+              )}
               title="Punch in"
             >
               Punch in
             </TableHead>
             <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.punchOut, ATTENDANCE_TABLE_HEAD_CLASS)}
+              className={cn(
+                selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.punchOut : ATTENDANCE_TABLE_COLUMN_CLASS.punchOut,
+                ATTENDANCE_TABLE_HEAD_CLASS,
+              )}
               title="Punch out"
             >
               Punch out
             </TableHead>
             <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.hours, ATTENDANCE_TABLE_HEAD_CLASS)}
+              className={cn(
+                selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.hours : ATTENDANCE_TABLE_COLUMN_CLASS.hours,
+                ATTENDANCE_TABLE_HEAD_CLASS,
+              )}
               title="Working hours"
             >
               <span className="hidden xl:inline">Working hours</span>
               <span className="xl:hidden">Hours</span>
             </TableHead>
             <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.result, ATTENDANCE_TABLE_HEAD_CLASS)}
+              className={cn(
+                selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.result : ATTENDANCE_TABLE_COLUMN_CLASS.result,
+                ATTENDANCE_TABLE_HEAD_CLASS,
+              )}
               title="Result"
             >
               Result
             </TableHead>
-            <TableHead
-              className={cn(
-                ATTENDANCE_TABLE_COLUMN_CLASS.actions,
-                ATTENDANCE_TABLE_HEAD_CLASS,
-                'text-right',
-              )}
-            >
-              <span className="sr-only">Actions</span>
-            </TableHead>
+            {selfScope ? null : (
+              <TableHead
+                className={cn(
+                  ATTENDANCE_TABLE_COLUMN_CLASS.actions,
+                  ATTENDANCE_TABLE_HEAD_CLASS,
+                  'text-right',
+                )}
+              >
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            )}
           </TableRow>
         }
         empty={emptyTableContent}
@@ -200,96 +237,130 @@ export function AttendanceRecordsSection() {
           return (
             <TableRow
               key={row.id}
-              className="border-0 cursor-pointer"
-              onClick={() => void showDetail(row.id)}
+              className={cn('border-0', !selfScope && 'cursor-pointer')}
+              onClick={selfScope ? undefined : () => void showDetail(row.id)}
             >
-              <TableCell className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.employee, 'min-w-0 overflow-hidden')}>
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <EmployeeAvatar
-                    displayName={row.employeeDisplayName}
-                    profileImageUrl={row.profileImageUrl}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-foreground line-clamp-2 text-[13px] leading-snug font-semibold">
-                          {row.employeeDisplayName}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">{row.employeeDisplayName}</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <p className="text-muted-foreground truncate font-mono text-[10px]">
-                          {row.employeeCode}
-                        </p>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">{row.employeeCode}</TooltipContent>
-                    </Tooltip>
+              {selfScope ? null : (
+                <TableCell className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.employee, 'min-w-0 overflow-hidden')}>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <EmployeeAvatar
+                      displayName={row.employeeDisplayName}
+                      profileImageUrl={row.profileImageUrl}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-foreground line-clamp-2 text-[13px] leading-snug font-semibold">
+                            {row.employeeDisplayName}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{row.employeeDisplayName}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <p className="text-muted-foreground truncate font-mono text-[10px]">
+                            {row.employeeCode}
+                          </p>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{row.employeeCode}</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              </TableCell>
+                </TableCell>
+              )}
               <TableCell
-                className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.date, ATTENDANCE_TABLE_COMPACT_CELL, 'text-sm')}
+                className={cn(
+                  selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.date : ATTENDANCE_TABLE_COLUMN_CLASS.date,
+                  ATTENDANCE_TABLE_COMPACT_CELL,
+                  'text-sm',
+                )}
               >
                 {formatAttendanceDate(row.attendanceDate, timeZone)}
               </TableCell>
+              {selfScope ? (
+                <TableCell
+                  className={cn(ATTENDANCE_SELF_TABLE_COLUMN_CLASS.day, ATTENDANCE_TABLE_COMPACT_CELL, 'text-sm')}
+                >
+                  {weekdayLabel(row.attendanceDate, timeZone)}
+                </TableCell>
+              ) : null}
               <TableCell
-                className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.punchIn, ATTENDANCE_TABLE_COMPACT_CELL, 'text-sm')}
+                className={cn(
+                  selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.punchIn : ATTENDANCE_TABLE_COLUMN_CLASS.punchIn,
+                  ATTENDANCE_TABLE_COMPACT_CELL,
+                  'text-sm',
+                )}
               >
                 {formatIsoTime(row.punchInAt, timeZone)}
               </TableCell>
               <TableCell
-                className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.punchOut, ATTENDANCE_TABLE_COMPACT_CELL, 'text-sm')}
+                className={cn(
+                  selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.punchOut : ATTENDANCE_TABLE_COLUMN_CLASS.punchOut,
+                  ATTENDANCE_TABLE_COMPACT_CELL,
+                  'text-sm',
+                )}
               >
                 {formatIsoTime(row.punchOutAt, timeZone)}
               </TableCell>
               <TableCell
-                className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.hours, ATTENDANCE_TABLE_COMPACT_CELL, 'text-sm')}
+                className={cn(
+                  selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.hours : ATTENDANCE_TABLE_COLUMN_CLASS.hours,
+                  ATTENDANCE_TABLE_COMPACT_CELL,
+                  'text-sm',
+                )}
               >
                 {formatAttendanceWorkingHours(row.workingMinutes, row.punchInAt, row.punchOutAt)}
               </TableCell>
-              <TableCell className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.result, 'whitespace-normal px-2 py-2')}>
+              <TableCell
+                className={cn(
+                  selfScope ? ATTENDANCE_SELF_TABLE_COLUMN_CLASS.result : ATTENDANCE_TABLE_COLUMN_CLASS.result,
+                  'whitespace-normal px-2 py-2',
+                )}
+              >
                 <AttendanceResult row={row} />
               </TableCell>
-              <TableCell
-                className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.actions, 'text-right')}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="flex items-center justify-end gap-0.5">
-                  <TableIconButton
-                    label={`View attendance for ${row.employeeDisplayName}`}
-                    tone="primary"
-                    onClick={() => void showDetail(row.id)}
-                  >
-                    <Eye className="size-4" aria-hidden="true" />
-                  </TableIconButton>
-                  {canCorrectRecords ? (
+              {selfScope ? null : (
+                <TableCell
+                  className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.actions, 'text-right')}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="flex items-center justify-end gap-0.5">
                     <TableIconButton
-                      label={`Edit attendance for ${row.employeeDisplayName}`}
-                      tone="default"
-                      className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
-                      onClick={() => openEdit(row.id)}
+                      label={`View attendance for ${row.employeeDisplayName}`}
+                      tone="primary"
+                      onClick={() => void showDetail(row.id)}
                     >
-                      <SquarePen className="size-4" aria-hidden="true" />
+                      <Eye className="size-4" aria-hidden="true" />
                     </TableIconButton>
-                  ) : null}
-                </div>
-              </TableCell>
+                    {canCorrectRecords ? (
+                      <TableIconButton
+                        label={`Edit attendance for ${row.employeeDisplayName}`}
+                        tone="default"
+                        className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                        onClick={() => openEdit(row.id)}
+                      >
+                        <SquarePen className="size-4" aria-hidden="true" />
+                      </TableIconButton>
+                    ) : null}
+                  </div>
+                </TableCell>
+              )}
             </TableRow>
           );
         })}
       </DataTable>
 
-      <AttendanceRecordDetailSheet
-        open={detailOpen}
-        onOpenChange={(open) => {
-          setDetailOpen(open);
-          if (!open) setDetail(null);
-        }}
-        detail={detail}
-        loading={detailLoading}
-      />
+      {!selfScope ? (
+        <AttendanceRecordDetailSheet
+          open={detailOpen}
+          onOpenChange={(open) => {
+            setDetailOpen(open);
+            if (!open) setDetail(null);
+          }}
+          detail={detail}
+          loading={detailLoading}
+        />
+      ) : null}
 
       <AttendanceEditRecordDialog
         open={editOpen}

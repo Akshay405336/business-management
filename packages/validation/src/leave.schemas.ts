@@ -284,6 +284,14 @@ export const employeeLeaveBalanceListQuerySchema = z.object({
 
 export type EmployeeLeaveBalanceListQuery = z.infer<typeof employeeLeaveBalanceListQuerySchema>;
 
+export const employeeLeaveRecordsListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  search: z.string().max(120).optional(),
+});
+
+export type EmployeeLeaveRecordsListQuery = z.infer<typeof employeeLeaveRecordsListQuerySchema>;
+
 export const adjustEmployeeLeaveBalanceRequestSchema = z
   .object({
     direction: z.enum(['CREDIT', 'DEBIT']),
@@ -504,6 +512,10 @@ export function parseLeaveAllocationListQuery(input: unknown): LeaveAllocationLi
 
 export function parseEmployeeLeaveBalanceListQuery(input: unknown): EmployeeLeaveBalanceListQuery {
   return employeeLeaveBalanceListQuerySchema.parse(input);
+}
+
+export function parseEmployeeLeaveRecordsListQuery(input: unknown): EmployeeLeaveRecordsListQuery {
+  return employeeLeaveRecordsListQuerySchema.parse(input);
 }
 
 export function parseLeaveBalanceTransactionListQuery(input: unknown): LeaveBalanceTransactionListQuery {

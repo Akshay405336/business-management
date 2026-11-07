@@ -51,7 +51,7 @@ import {
 import { CrmFormField } from '@/features/admin/crm/components/crm-feedback';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { cn } from '@/shared/lib/utils';
-import { createOrgCalendarEvent, deleteOrgCalendarEvent } from '../api/org-calendar-api';
+import { replaceOrgCalendarDateClassification } from '../api/org-calendar-api';
 import {
   defaultTitleForMarkAs,
   markAsFromDayEvents,
@@ -64,6 +64,12 @@ import {
 import { resolveOrgCalendarCardStyle } from '../constants/org-calendar-theme';
 import { labelForEventType, ORG_CALENDAR_DAY_KIND_LABEL } from '../constants/org-calendar-event-types';
 import { localTodayKey } from '@/features/admin/attendance/utils/calendar-month';
+import type { AttendanceSettingsResponse } from '@techwin/contracts';
+import {
+  buildScheduleWorkingOverridePayload,
+  orgWeekdayIndex,
+  scheduleMarksDateOff,
+} from '../utils/org-calendar-schedule';
 
 const DIALOG_SHELL = cn(
   CRM_PIPELINE_FORM_DIALOG_CLASS,
@@ -143,6 +149,9 @@ export function OrgCalendarDateManageDialog({
   const [startTime, setStartTime] = useState<Time12Parts>(() => minutesToTime12(9 * 60 + 30));
   const [endTime, setEndTime] = useState<Time12Parts>(() => minutesToTime12(18 * 60 + 30));
   const [scheduleLine, setScheduleLine] = useState<string | null>(null);
+  const [attendanceSettings, setAttendanceSettings] = useState<
+    NonNullable<AttendanceSettingsResponse['current']> | null
+  >(null);
   const [minHalfDayMinutes, setMinHalfDayMinutes] = useState<number | null>(null);
   const [officeStartMinutes, setOfficeStartMinutes] = useState(9 * 60 + 30);
   const [officeEndMinutes, setOfficeEndMinutes] = useState(18 * 60 + 30);
@@ -196,17 +205,17 @@ export function OrgCalendarDateManageDialog({
       .then((res) => {
         if (cancelled) return;
         if (!dateKey || !res.current) {
+          setAttendanceSettings(null);
           setScheduleLine(readOnlyScheduleFallback(dateKey, dayKind));
           setMinHalfDayMinutes(null);
           return;
         }
+        setAttendanceSettings(res.current);
         setMinHalfDayMinutes(res.current.minHalfDayMinutes);
-        const weekday = new Date(`${dateKey}T12:00:00`).getDay();
+        const weekday = orgWeekdayIndex(dateKey, res.current.timeZone);
         const label = WEEKDAY_UI_ROWS.find((r) => r.day === weekday)?.label ?? 'Day';
         const row = res.current.daySchedules.find((d) => d.day === weekday);
-        const off =
-          res.current.weeklyOffDays.includes(weekday) ||
-          !res.current.workingDays.includes(weekday);
+        const off = scheduleMarksDateOff(dateKey, res.current);
         const start = row?.startMinutes ?? res.current.officeStartMinutes;
         const end = row?.endMinutes ?? res.current.officeEndMinutes;
         setOfficeStartMinutes(start);
@@ -241,13 +250,6 @@ export function OrgCalendarDateManageDialog({
     }
   }, [open, markAs, officeStartMinutes, officeEndMinutes, minHalfDayMinutes, classificationEvents.length]);
 
-  async function removeClassificationEvents() {
-    const ids = [...new Set(classificationEvents.map((e) => e.id))];
-    for (const id of ids) {
-      await deleteOrgCalendarEvent(id);
-    }
-  }
-
   function buildPayload() {
     if (!dateKey) return null;
     const option = ORG_CALENDAR_MARK_AS_OPTIONS.find((o) => o.value === markAs);
@@ -275,28 +277,43 @@ export function OrgCalendarDateManageDialog({
     };
   }
 
+  function resolveReplaceEvent():
+    | ReturnType<typeof buildPayload>
+    | ReturnType<typeof buildScheduleWorkingOverridePayload>
+    | null {
+    if (!dateKey) return null;
+    if (markAs !== 'WORKING') {
+      return buildPayload();
+    }
+    if (attendanceSettings && scheduleMarksDateOff(dateKey, attendanceSettings)) {
+      return buildScheduleWorkingOverridePayload(dateKey);
+    }
+    return null;
+  }
+
   async function commitSave() {
     if (!dateKey || !canManage) return;
     setFieldErrors({});
+
+    const replaceEvent = resolveReplaceEvent();
 
     if (markAs !== 'WORKING') {
       if (isHolidayMarkAs(markAs) && !title.trim()) {
         setFieldErrors({ title: 'Enter a holiday title.' });
         return;
       }
-      const payload = buildPayload();
-      if (!payload) return;
-      if (payload.isFullDay === false) {
-        if (payload.startTimeMinutes == null || payload.endTimeMinutes == null) {
+      if (!replaceEvent) return;
+      if (replaceEvent.isFullDay === false) {
+        if (replaceEvent.startTimeMinutes == null || replaceEvent.endTimeMinutes == null) {
           setFieldErrors({ startTimeMinutes: 'Enter start and end times.' });
           return;
         }
-        if (payload.endTimeMinutes <= payload.startTimeMinutes) {
+        if (replaceEvent.endTimeMinutes <= replaceEvent.startTimeMinutes) {
           setFieldErrors({ endTimeMinutes: 'End time must be after start time.' });
           return;
         }
       }
-      const parsed = createOrgCalendarEventRequestSchema.safeParse(payload);
+      const parsed = createOrgCalendarEventRequestSchema.safeParse(replaceEvent);
       if (!parsed.success) {
         setFieldErrors(zodIssuesToFieldMap(parsed.error));
         return;
@@ -305,21 +322,21 @@ export function OrgCalendarDateManageDialog({
 
     setPending(true);
     try {
-      await removeClassificationEvents();
-      if (markAs !== 'WORKING') {
-        const payload = buildPayload();
-        if (!payload) throw new Error('Invalid classification.');
-        const parsed = createOrgCalendarEventRequestSchema.parse(payload);
-        await createOrgCalendarEvent(parsed);
-      }
+      const parsed =
+        replaceEvent === null ? null : createOrgCalendarEventRequestSchema.parse(replaceEvent);
+      await replaceOrgCalendarDateClassification({
+        date: dateKey,
+        replaceEvent: parsed,
+      });
+      await onSaved();
       toast.success('Calendar updated for this date.');
       onOpenChange(false);
-      await onSaved();
     } catch (err) {
       toast.error(describeCrmError(err));
       if (isApiError(err) && err.details.length > 0) {
         setFieldErrors((current) => ({ ...current, ...apiDetailsToFieldMap(err.details) }));
       }
+      await onSaved();
     } finally {
       setPending(false);
     }

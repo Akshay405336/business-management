@@ -1,5 +1,5 @@
-import { EmployeeOrgCalendarWorkspace } from '@/features/employee/components/employee-org-calendar-workspace';
+import { AdminOrgCalendarWorkspace } from '@/features/admin/org-calendar/components/admin-org-calendar-workspace';
 
 export default function EmployeeCalendarPage() {
-  return <EmployeeOrgCalendarWorkspace />;
+  return <AdminOrgCalendarWorkspace />;
 }

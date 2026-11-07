@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { Table, TableBody, TableHeader } from '@/components/ui/table';
 import { cn } from '@/shared/lib/utils';
 import type { DataTablePhase } from './data-table-state';
@@ -61,6 +61,7 @@ export function DataTable({
   tableClassName,
   tableContainerClassName,
   tableBodyClassName,
+  tableStyle,
   frame = 'surface',
   frameClassName,
 }: {
@@ -81,6 +82,7 @@ export function DataTable({
   tableClassName?: string;
   tableContainerClassName?: string;
   tableBodyClassName?: string;
+  tableStyle?: CSSProperties;
   /** Applied to the inner wrapper when `frame="flush"`. */
   frameClassName?: string;
 }) {
@@ -98,6 +100,7 @@ export function DataTable({
         <Table
           className={cn('bg-card', tableClassName)}
           containerClassName={tableContainerClassName}
+          style={tableStyle}
         >
           <TableHeader variant={headerVariant}>{header}</TableHeader>
           <TableBody className={cn('bg-card', tableBodyClassName)}>

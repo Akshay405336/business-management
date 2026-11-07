@@ -17,6 +17,7 @@ export function TaskCalendarGrid({
   cellContentLoading,
   onOpenTask,
   onNavigateToDailyKanban,
+  showEmptyDayAddTask = true,
 }: {
   monthKey: string;
   clientToday: string;
@@ -27,6 +28,7 @@ export function TaskCalendarGrid({
   cellContentLoading: boolean;
   onOpenTask: (task: TaskCalendarTaskDto) => void;
   onNavigateToDailyKanban: (date: string) => void;
+  showEmptyDayAddTask?: boolean;
 }) {
   const cells = buildMonthGrid(monthKey);
 
@@ -61,6 +63,7 @@ export function TaskCalendarGrid({
                 onOpenTask={onOpenTask}
                 onSelectDate={onSelectDate}
                 onNavigateToDailyKanban={onNavigateToDailyKanban}
+                showEmptyDayAddTask={showEmptyDayAddTask}
               />
             );
           })}

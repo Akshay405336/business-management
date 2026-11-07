@@ -65,6 +65,15 @@ export type OrgCalendarEventBody = z.infer<typeof orgCalendarEventBodySchema>;
 export const createOrgCalendarEventRequestSchema = orgCalendarEventBodySchema;
 export type CreateOrgCalendarEventRequest = OrgCalendarEventBody;
 
+export const replaceOrgCalendarDateClassificationSchema = z.object({
+  date: dateString,
+  replaceEvent: orgCalendarEventBodySchema.nullable(),
+});
+
+export type ReplaceOrgCalendarDateClassificationRequest = z.infer<
+  typeof replaceOrgCalendarDateClassificationSchema
+>;
+
 export const updateOrgCalendarEventRequestSchema = orgCalendarEventBodySchema;
 export type UpdateOrgCalendarEventRequest = OrgCalendarEventBody;
 

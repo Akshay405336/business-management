@@ -42,6 +42,7 @@ export function TaskCalendarDayCell({
   onOpenTask,
   onSelectDate,
   onNavigateToDailyKanban,
+  showEmptyDayAddTask = true,
 }: {
   date: string;
   /** View month `YYYY-MM` — compare with `date.slice(0, 7)` only (not “today’s month”). */
@@ -60,6 +61,8 @@ export function TaskCalendarDayCell({
   onOpenTask: (task: TaskCalendarTaskDto) => void;
   onSelectDate: (date: string) => void;
   onNavigateToDailyKanban: (date: string) => void;
+  /** When false, empty cells show only the “No tasks” state (employee read-only calendar). */
+  showEmptyDayAddTask?: boolean;
 }) {
   const dayNum = Number(date.slice(8, 10));
   const inDisplayedMonth = date.slice(0, 7) === displayMonthKey;
@@ -166,22 +169,24 @@ export function TaskCalendarDayCell({
             <CalendarCheck className="size-4 shrink-0" aria-hidden />
             <span className="text-[10px] font-medium sm:text-[11px]">No tasks</span>
           </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDayClick();
-            }}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold transition-colors sm:text-[11px]',
-              inDisplayedMonth
-                ? 'bg-[#F5F3FF] text-[#5B21B6] hover:bg-[#EDE9FE]'
-                : 'bg-[#E8EAED] text-[#9CA3AF] hover:bg-[#D1D5DB]',
-            )}
-          >
-            <Plus className="size-3 shrink-0" aria-hidden />
-            Add Task
-          </button>
+          {showEmptyDayAddTask ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDayClick();
+              }}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold transition-colors sm:text-[11px]',
+                inDisplayedMonth
+                  ? 'bg-[#F5F3FF] text-[#5B21B6] hover:bg-[#EDE9FE]'
+                  : 'bg-[#E8EAED] text-[#9CA3AF] hover:bg-[#D1D5DB]',
+              )}
+            >
+              <Plus className="size-3 shrink-0" aria-hidden />
+              Add Task
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col items-stretch gap-0.5">

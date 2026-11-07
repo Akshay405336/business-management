@@ -40,6 +40,7 @@ import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from '@/features/admin
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
+import { useAdminAccess } from '@/features/admin/auth/components/admin-access-provider';
 import {
   approveLeaveRequest,
   getLeaveRequest,
@@ -103,6 +104,9 @@ function formatDateRange(row: LeaveRequestItem) {
 
 export function AdminLeaveRequestsWorkspace() {
   const toast = useAdminToast();
+  const { has } = useAdminAccess();
+  const canApprove = has('leave.requests.approve');
+  const canReject = has('leave.requests.reject');
   const { pending, run } = useAsyncAction();
   const { dashboardBreadcrumb } = usePortalNavigation();
 
@@ -346,23 +350,27 @@ export function AdminLeaveRequestsWorkspace() {
                     </TableIconButton>
                     {row.status === 'PENDING' ? (
                       <>
-                        <TableIconButton
-                          label="Approve"
-                          tone="success"
-                          onClick={() => setApproveTarget(row)}
-                        >
-                          <Check className="size-4" aria-hidden />
-                        </TableIconButton>
-                        <TableIconButton
-                          label="Reject"
-                          tone="danger"
-                          onClick={() => {
-                            setRejectTarget(row);
-                            setRejectReason('');
-                          }}
-                        >
-                          <X className="size-4" aria-hidden />
-                        </TableIconButton>
+                        {canApprove ? (
+                          <TableIconButton
+                            label="Approve"
+                            tone="success"
+                            onClick={() => setApproveTarget(row)}
+                          >
+                            <Check className="size-4" aria-hidden />
+                          </TableIconButton>
+                        ) : null}
+                        {canReject ? (
+                          <TableIconButton
+                            label="Reject"
+                            tone="danger"
+                            onClick={() => {
+                              setRejectTarget(row);
+                              setRejectReason('');
+                            }}
+                          >
+                            <X className="size-4" aria-hidden />
+                          </TableIconButton>
+                        ) : null}
                       </>
                     ) : null}
                   </div>

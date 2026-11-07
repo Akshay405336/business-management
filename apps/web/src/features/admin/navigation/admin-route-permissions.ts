@@ -1,76 +1,20 @@
 import type { PermissionKey } from '@techwin/contracts';
+import type { MembershipAccessContext } from '@/features/auth/membership/membership-access';
 import {
-  canAccessWorkspaceDashboard,
-  type MembershipAccessContext,
-} from '@/features/auth/membership/membership-access';
+  APP_ROUTE_PERMISSIONS,
+  canAccessAppPath,
+  permissionsForAppPath,
+} from '@/shared/navigation/app-route-permissions';
 
-/**
- * Single source of truth for admin page access (any listed permission grants access).
- * Sidebar links derive their visibility from this map; admin paths missing from it are denied.
- */
-export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, readonly PermissionKey[]>> = {
-  '/admin': [],
-  '/admin/dashboard': [],
-  '/admin/users': ['users.read'],
-  '/admin/roles': ['roles.read'],
-  '/admin/employees': ['employees.read'],
-  '/admin/attendance': ['attendance.view_all', 'attendance.manage_settings'],
-  '/admin/calendar': ['calendar.view', 'calendar.view_all', 'calendar.manage_holidays'],
-  '/admin/leave-types': [
-    'leave.types.read',
-    'leave.types.create',
-    'leave.types.update',
-    'leave.types.manage',
-  ],
-  '/admin/leave-balances': [
-    'leave.config.read',
-    'leave.config.manage',
-    'leave.allocations.read',
-    'leave.allocations.manage',
-    'leave.balances.read',
-    'leave.balances.adjust',
-  ],
-  '/admin/leave': [
-    'leave.requests.read_all',
-    'leave.requests.approve',
-    'leave.requests.reject',
-    'leave.requests.cancel',
-  ],
-  '/admin/pipeline': ['leads.read'],
-  '/admin/leads': ['leads.read'],
-  '/admin/packages': ['settings.read'],
-  '/admin/quotations': ['leads.read'],
-  '/admin/proposals': ['leads.read'],
-  '/admin/clients': ['clients.read'],
-  '/admin/projects': ['projects.read'],
-  '/admin/project-tasks': ['tasks.read', 'projects.read'],
-  '/admin/daily-tasks': ['tasks.read'],
-  '/admin/my-tasks': ['tasks.read'],
-  '/admin/task-calendar': ['tasks.read'],
-  '/admin/whatsapp/inbox': ['whatsapp.read'],
-  '/admin/whatsapp/channels': ['whatsapp.channels.manage'],
-  '/admin/whatsapp/templates': ['whatsapp.templates.manage', 'whatsapp.broadcasts.manage'],
-  '/admin/whatsapp/broadcasts': ['whatsapp.broadcasts.manage'],
-  '/admin/whatsapp/reports': ['whatsapp.view_all', 'whatsapp.channels.manage'],
-};
+/** @deprecated Use APP_ROUTE_PERMISSIONS — admin-only entries remain for compatibility. */
+export const ADMIN_ROUTE_PERMISSIONS: Readonly<Record<string, readonly PermissionKey[]>> =
+  Object.fromEntries(
+    Object.entries(APP_ROUTE_PERMISSIONS).filter(([route]) => route.startsWith('/admin')),
+  ) as Record<string, readonly PermissionKey[]>;
 
-const EXACT_ONLY_ROUTES: ReadonlySet<string> = new Set(['/admin', '/admin/dashboard']);
-
-function normalizePath(pathname: string): string {
-  return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
-}
-
-/** Required permissions for an admin path, or `null` when the path is not a known admin route. */
 export function permissionsForAdminPath(pathname: string): readonly PermissionKey[] | null {
-  const path = normalizePath(pathname);
-  const exact = ADMIN_ROUTE_PERMISSIONS[path];
-  if (exact) return exact;
-  let best: { route: string; permissions: readonly PermissionKey[] } | null = null;
-  for (const [route, permissions] of Object.entries(ADMIN_ROUTE_PERMISSIONS)) {
-    if (EXACT_ONLY_ROUTES.has(route) || !path.startsWith(`${route}/`)) continue;
-    if (!best || route.length > best.route.length) best = { route, permissions };
-  }
-  return best?.permissions ?? null;
+  if (!pathname.startsWith('/admin')) return null;
+  return permissionsForAppPath(pathname);
 }
 
 export function canAccessAdminPath(
@@ -78,12 +22,5 @@ export function canAccessAdminPath(
   permissions: ReadonlySet<PermissionKey>,
   access?: MembershipAccessContext,
 ): boolean {
-  const path = normalizePath(pathname);
-  if (access && (path === '/admin' || path === '/admin/dashboard')) {
-    if (!canAccessWorkspaceDashboard(access)) return false;
-  }
-  const required = permissionsForAdminPath(path);
-  if (required === null) return !path.startsWith('/admin');
-  if (required.length === 0) return true;
-  return required.some((key) => permissions.has(key));
+  return canAccessAppPath(pathname, permissions, access);
 }

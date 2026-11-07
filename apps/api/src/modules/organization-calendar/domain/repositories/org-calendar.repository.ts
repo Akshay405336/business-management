@@ -85,4 +85,12 @@ export interface OrgCalendarRepository {
 
   /** Calendar date key (YYYY-MM-DD) for "today" in the organization's attendance timezone. */
   resolveOrganizationTodayKey(organizationId: string): Promise<string>;
+
+  /** Atomically remove classification events on a date and optionally create a replacement. */
+  replaceDateClassification(
+    organizationId: string,
+    adminId: string,
+    dateKey: string,
+    create: OrgCalendarEventWriteInput | null,
+  ): Promise<OrgCalendarMonthDay>;
 }

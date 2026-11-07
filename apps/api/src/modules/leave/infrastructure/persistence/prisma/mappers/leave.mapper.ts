@@ -46,12 +46,11 @@ export function computeAvailableDays(balance: {
     .add(balance.carryForwardDays)
     .add(balance.adjustmentCreditDays)
     .sub(balance.adjustmentDebitDays)
-    .sub(balance.usedApprovedDays)
-    .sub(balance.reservedPendingDays);
+    .sub(balance.usedApprovedDays);
   return formatLeaveDays(available);
 }
 
-type LeaveYearConfigurationWithAllocations = LeaveYearConfiguration & {
+export type LeaveYearConfigurationWithAllocations = LeaveYearConfiguration & {
   allocations: (LeaveYearAllocation & { leaveType: LeaveType })[];
 };
 

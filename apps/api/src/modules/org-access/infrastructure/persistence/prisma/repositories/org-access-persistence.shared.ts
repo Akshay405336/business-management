@@ -285,6 +285,8 @@ export async function ensureOrganizationRoleBootstrap(
   const map = await ensureProtectedSystemRoles(tx, organizationId);
   await ensureSystemRoleByKey(tx, organizationId, SYSTEM_ROLE_KEYS.employee);
   await mergeSystemRoleDefaultPermissions(tx, organizationId, [
+    SYSTEM_ROLE_KEYS.owner,
+    SYSTEM_ROLE_KEYS.admin,
     SYSTEM_ROLE_KEYS.employee,
     SYSTEM_ROLE_KEYS.member,
   ]);

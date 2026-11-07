@@ -1,3 +1,4 @@
+/** @deprecated Use `DailyTasksWorkspace` with `?workspace=my` or own data scope — same kanban/list/calendar UI. */
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';

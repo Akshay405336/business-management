@@ -13,17 +13,13 @@ import {
   isDataTableRefreshing,
 } from '@/features/admin/components/data-table';
 import { TablePagination } from '@/features/admin/components/table-pagination';
+import { AdminBreadcrumb } from '@/features/admin/components/admin-page-header';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
+import { CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
+import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
+import { PermissionGate } from '@/shared/components/permission-gate';
 import { useEmployeeLeavePage } from '../hooks/use-employee-leave-page';
-import {
-  EMPLOYEE_LEAVE_SURFACE,
-  EMPLOYEE_LEAVE_TAB_TRIGGER,
-  EMPLOYEE_LEAVE_TABLE_BODY,
-  EMPLOYEE_LEAVE_TABLE_CELL,
-  EMPLOYEE_LEAVE_TABLE_CLASS,
-  EMPLOYEE_LEAVE_TABLE_COL,
-  EMPLOYEE_LEAVE_TABLE_HEAD,
-} from '../constants/employee-leave-ui';
+import { EMPLOYEE_LEAVE_TABLE_COL } from '../constants/employee-leave-ui';
 import { EmployeeApplyLeaveDialog } from './employee-apply-leave-dialog';
 import { cn } from '@/shared/lib/utils';
 
@@ -77,7 +73,9 @@ function formatLeaveRequestDates(row: { startDate: string; endDate: string; sele
 
 export function EmployeeLeaveWorkspace() {
   const page = useEmployeeLeavePage();
+  const { dashboardBreadcrumb } = usePortalNavigation();
   const [applyOpen, setApplyOpen] = useState(false);
+  const breadcrumbs = [dashboardBreadcrumb, { label: 'My leave' }] as const;
 
   const historyPhase = deriveDataTablePhase({
     loading: page.historyLoading,
@@ -98,57 +96,53 @@ export function EmployeeLeaveWorkspace() {
         : `No ${page.historyTab.toLowerCase()} requests for ${page.calendarYear}.`;
 
   return (
-    <div className="mx-auto grid w-full max-w-[1100px] gap-3">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-0.5">
-          <h1 className="text-xl font-semibold tracking-tight text-[#1E293B] sm:text-2xl">Leave</h1>
-          <p className="text-xs text-[#64748B] sm:text-sm">
-            Track your leave requests ({page.calendarYear}).
-          </p>
-        </div>
-        <Button
-          type="button"
-          className={APPLY_BTN}
-          onClick={() => {
-            page.resetApplyForm();
-            setApplyOpen(true);
-          }}
-        >
-          <Plus className="size-4" aria-hidden />
-          Apply for Leave
-        </Button>
-      </header>
+    <div className="grid w-full min-w-0 max-w-full gap-3 pt-1">
+      <AdminBreadcrumb breadcrumbs={breadcrumbs} className="mb-0.5" />
+      <section className="workspace-surface min-w-0">
+        <div className="rounded-lg">
+          <CrmToolbarHeader
+            title="My leave"
+            description={`Track your leave requests (${page.calendarYear}).`}
+            className="rounded-none border-0 bg-card shadow-none"
+            titleSectionClassName="xl:max-w-none xl:min-w-0 xl:flex-[1_1_auto]"
+            toolbar={
+              <PermissionGate anyOf={['leave.requests.create']}>
+                <Button
+                  type="button"
+                  size="sm"
+                  className={cn('h-9 shrink-0', APPLY_BTN)}
+                  onClick={() => {
+                    page.resetApplyForm();
+                    setApplyOpen(true);
+                  }}
+                >
+                  <Plus className="size-4" aria-hidden />
+                  Apply for Leave
+                </Button>
+              </PermissionGate>
+            }
+          />
 
-      {page.balancesError ? <CrmErrorAlert message={page.balancesError} /> : null}
+          {page.balancesError ? (
+            <div className="border-border border-b px-4 sm:px-5">
+              <CrmErrorAlert message={page.balancesError} />
+            </div>
+          ) : null}
 
-      <section className={EMPLOYEE_LEAVE_SURFACE.section}>
-        <div
-          className={cn(
-            EMPLOYEE_LEAVE_SURFACE.headerBar,
-            'flex flex-wrap items-center justify-between gap-2',
-          )}
-        >
-          <h2 className="text-sm font-semibold text-[#1E293B]">Request history</h2>
-          <Tabs
-            value={page.historyTab}
-            onValueChange={(v) => page.setHistoryTab(v as typeof page.historyTab)}
-          >
-            <TabsList className="h-9 border border-[#E8E8EF] bg-[#F8F9FC] p-0.5">
-              <TabsTrigger value="PENDING" className={EMPLOYEE_LEAVE_TAB_TRIGGER}>
-                Pending
-              </TabsTrigger>
-              <TabsTrigger value="APPROVED" className={EMPLOYEE_LEAVE_TAB_TRIGGER}>
-                Approved
-              </TabsTrigger>
-              <TabsTrigger value="REJECTED" className={EMPLOYEE_LEAVE_TAB_TRIGGER}>
-                Rejected
-              </TabsTrigger>
-              <TabsTrigger value="ALL" className={EMPLOYEE_LEAVE_TAB_TRIGGER}>
-                All
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+          <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 sm:px-5">
+            <h2 className="text-foreground text-sm font-semibold">Request history</h2>
+            <Tabs
+              value={page.historyTab}
+              onValueChange={(v) => page.setHistoryTab(v as typeof page.historyTab)}
+            >
+              <TabsList className="h-9">
+                <TabsTrigger value="PENDING">Pending</TabsTrigger>
+                <TabsTrigger value="APPROVED">Approved</TabsTrigger>
+                <TabsTrigger value="REJECTED">Rejected</TabsTrigger>
+                <TabsTrigger value="ALL">All</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
 
         {page.historyError && page.history.length > 0 ? (
           <div className="border-b border-[#E8E8EF] px-4 py-2 sm:px-5">
@@ -160,40 +154,21 @@ export function EmployeeLeaveWorkspace() {
 
         <DataTable
           frame="flush"
+          frameClassName="min-h-0"
           headerVariant="plain"
           className="min-w-0 max-w-full gap-0"
-          tableClassName={EMPLOYEE_LEAVE_TABLE_CLASS}
-          tableBodyClassName={EMPLOYEE_LEAVE_TABLE_BODY}
+          tableClassName="table-fixed [&_[data-slot=table-head]]:h-auto [&_[data-slot=table-head]]:py-3 [&_[data-slot=table-cell]]:py-3"
+          tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
           phase={historyPhase}
           colSpan={5}
           skeletonColumns={HISTORY_SKELETON}
           header={
             <TableRow className="hover:bg-transparent">
-              <TableHead className={cn(EMPLOYEE_LEAVE_TABLE_HEAD, EMPLOYEE_LEAVE_TABLE_COL.type)}>
-                Leave type
-              </TableHead>
-              <TableHead className={cn(EMPLOYEE_LEAVE_TABLE_HEAD, EMPLOYEE_LEAVE_TABLE_COL.dates)}>
-                Dates
-              </TableHead>
-              <TableHead
-                className={cn(
-                  EMPLOYEE_LEAVE_TABLE_HEAD,
-                  EMPLOYEE_LEAVE_TABLE_COL.days,
-                  'text-right',
-                )}
-              >
-                Days
-              </TableHead>
-              <TableHead className={cn(EMPLOYEE_LEAVE_TABLE_HEAD, EMPLOYEE_LEAVE_TABLE_COL.status)}>
-                Status
-              </TableHead>
-              <TableHead
-                className={cn(
-                  EMPLOYEE_LEAVE_TABLE_HEAD,
-                  EMPLOYEE_LEAVE_TABLE_COL.actions,
-                  'text-right',
-                )}
-              >
+              <TableHead className={EMPLOYEE_LEAVE_TABLE_COL.type}>Leave type</TableHead>
+              <TableHead className={EMPLOYEE_LEAVE_TABLE_COL.dates}>Dates</TableHead>
+              <TableHead className={cn(EMPLOYEE_LEAVE_TABLE_COL.days, 'text-right')}>Days</TableHead>
+              <TableHead className={EMPLOYEE_LEAVE_TABLE_COL.status}>Status</TableHead>
+              <TableHead className={cn(EMPLOYEE_LEAVE_TABLE_COL.actions, 'text-right')}>
                 Actions
               </TableHead>
             </TableRow>
@@ -224,32 +199,20 @@ export function EmployeeLeaveWorkspace() {
           }
         >
           {page.history.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell className={cn(EMPLOYEE_LEAVE_TABLE_CELL, EMPLOYEE_LEAVE_TABLE_COL.type)}>
+            <TableRow key={row.id} className="border-0">
+              <TableCell className={cn(EMPLOYEE_LEAVE_TABLE_COL.type, 'min-w-0')}>
                 <span className="font-medium">{row.leaveTypeName}</span>
               </TableCell>
-              <TableCell className={cn(EMPLOYEE_LEAVE_TABLE_CELL, EMPLOYEE_LEAVE_TABLE_COL.dates)}>
+              <TableCell className={cn(EMPLOYEE_LEAVE_TABLE_COL.dates, 'min-w-0 whitespace-normal')}>
                 {formatLeaveRequestDates(row)}
               </TableCell>
-              <TableCell
-                className={cn(
-                  EMPLOYEE_LEAVE_TABLE_CELL,
-                  EMPLOYEE_LEAVE_TABLE_COL.days,
-                  'text-right tabular-nums',
-                )}
-              >
+              <TableCell className={cn(EMPLOYEE_LEAVE_TABLE_COL.days, 'text-right tabular-nums')}>
                 {row.totalDays}
               </TableCell>
-              <TableCell className={cn(EMPLOYEE_LEAVE_TABLE_CELL, EMPLOYEE_LEAVE_TABLE_COL.status)}>
+              <TableCell className={EMPLOYEE_LEAVE_TABLE_COL.status}>
                 {requestStatusBadge(row.status)}
               </TableCell>
-              <TableCell
-                className={cn(
-                  EMPLOYEE_LEAVE_TABLE_CELL,
-                  EMPLOYEE_LEAVE_TABLE_COL.actions,
-                  'text-right',
-                )}
-              >
+              <TableCell className={cn(EMPLOYEE_LEAVE_TABLE_COL.actions, 'text-right')}>
                 {row.status === 'PENDING' ? (
                   <Button
                     type="button"
@@ -271,6 +234,7 @@ export function EmployeeLeaveWorkspace() {
             </TableRow>
           ))}
         </DataTable>
+        </div>
       </section>
 
       <EmployeeApplyLeaveDialog open={applyOpen} onOpenChange={setApplyOpen} page={page} />

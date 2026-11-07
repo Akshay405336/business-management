@@ -1,20 +1,15 @@
 import type { ReactNode } from 'react';
 import { AdminAccessProvider } from '@/features/admin/auth/components/admin-access-provider';
+import { AdminShell } from '@/features/admin/auth/components/admin-shell';
 import { ToastProvider } from '@/features/admin/components/toast';
-import { PortalGate } from '@/features/auth/components/portal-gate';
-import { EmployeeAccessProvider } from '@/features/employee/components/employee-access-provider';
-import { EmployeeShell } from '@/features/employee/components/employee-shell';
 
+/** Unified shell; route access is permission-driven (same as admin). */
 export default function ProtectedEmployeeLayout({ children }: { children: ReactNode }) {
   return (
-    <PortalGate portal="employee">
-      <ToastProvider>
-        <EmployeeAccessProvider>
-          <AdminAccessProvider>
-            <EmployeeShell>{children}</EmployeeShell>
-          </AdminAccessProvider>
-        </EmployeeAccessProvider>
-      </ToastProvider>
-    </PortalGate>
+    <ToastProvider>
+      <AdminAccessProvider>
+        <AdminShell>{children}</AdminShell>
+      </AdminAccessProvider>
+    </ToastProvider>
   );
 }

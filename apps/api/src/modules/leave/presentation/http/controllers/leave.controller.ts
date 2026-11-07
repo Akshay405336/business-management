@@ -25,6 +25,7 @@ import type {
   LeaveYearAllocationItem,
   LeaveYearAllocationListResponse,
   LeaveYearConfigurationItem,
+  EmployeeLeaveRecordsResponse,
 } from '@techwin/contracts';
 import {
   adjustEmployeeLeaveBalanceRequestSchema,
@@ -35,6 +36,7 @@ import {
   createLeaveYearConfigurationRequestSchema,
   updateLeaveBalanceConfigurationRequestSchema,
   parseEmployeeLeaveBalanceListQuery,
+  parseEmployeeLeaveRecordsListQuery,
   parseLeaveAllocationListQuery,
   parseLeaveBalanceTransactionListQuery,
   parseLeaveRequestListQuery,
@@ -70,6 +72,7 @@ import {
   GetLeaveYearConfigurationHandler,
   GetMyLeaveRequestHandler,
   ListEmployeeLeaveBalancesHandler,
+  ListEmployeeLeaveRecordsHandler,
   ListLeaveAllocationsHandler,
   ListLeaveBalanceTransactionsHandler,
   ListLeaveRequestsHandler,
@@ -111,6 +114,7 @@ export class LeaveController {
     private readonly createAllocation: CreateLeaveAllocationHandler,
     private readonly updateAllocation: UpdateLeaveAllocationHandler,
     private readonly listEmployeeBalances: ListEmployeeLeaveBalancesHandler,
+    private readonly listEmployeeLeaveRecords: ListEmployeeLeaveRecordsHandler,
     private readonly getEmployeeBalance: GetEmployeeLeaveBalanceHandler,
     private readonly adjustEmployeeBalance: AdjustEmployeeLeaveBalanceHandler,
     private readonly listBalanceTransactions: ListLeaveBalanceTransactionsHandler,
@@ -203,6 +207,21 @@ export class LeaveController {
     @Param('id') id: string,
   ): Promise<LeaveYearConfigurationItem> {
     return this.getYearConfiguration.execute(actorFrom(ctx, request), id);
+  }
+
+  @Get('year-configurations/:id/employee-leave-records')
+  @ApiOperation({ summary: 'List employee leave records for a configuration' })
+  listEmployeeLeaveRecordsForConfig(
+    @CrmContext() ctx: CrmRequestContext,
+    @Req() request: PlatformAuthenticatedRequest,
+    @Param('id') id: string,
+    @Query() query: Record<string, unknown>,
+  ): Promise<EmployeeLeaveRecordsResponse> {
+    return this.listEmployeeLeaveRecords.execute(
+      actorFrom(ctx, request),
+      id,
+      parseEmployeeLeaveRecordsListQuery(query),
+    );
   }
 
   @Patch('year-configurations/:id')

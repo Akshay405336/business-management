@@ -398,34 +398,98 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       officeStartMinutes: officeHours.startMinutes,
       officeEndMinutes: officeHours.endMinutes,
     });
-    try {
-      const created = await this.prisma.attendanceRecord.create({
-        data: {
-          id: randomUUID(),
+    const attendanceDateValue = parseDateOnly(attendanceDate);
+    const punchInData = {
+      scheduleId: schedule.scheduleId,
+      scheduleSnapshot: snapshotToJson(toScheduleSnapshot(schedule)),
+      status: evaluation.status,
+      punchInAt: ctx.now,
+      lateMinutes: evaluation.lateMinutes,
+      punchInDeviceId: device?.id ?? null,
+      punchInUserAgent: ctx.userAgent?.slice(0, 512) ?? null,
+      punchInIp: ctx.ipAddress?.slice(0, 64) ?? null,
+      punchInIdempotencyKey: ctx.idempotencyKey ?? null,
+      finalizedAt: null,
+      finalizationNote: null,
+    } as const;
+
+    const existing = await this.prisma.attendanceRecord.findUnique({
+      where: {
+        organizationId_employeeId_attendanceDate: {
           organizationId: ctx.organizationId,
           employeeId: ctx.employeeId,
-          attendanceDate: parseDateOnly(attendanceDate),
-          scheduleId: schedule.scheduleId,
-          scheduleSnapshot: snapshotToJson(toScheduleSnapshot(schedule)),
-          status: evaluation.status,
-          punchInAt: ctx.now,
-          lateMinutes: evaluation.lateMinutes,
-          punchInDeviceId: device?.id ?? null,
-          punchInUserAgent: ctx.userAgent?.slice(0, 512) ?? null,
-          punchInIp: ctx.ipAddress?.slice(0, 64) ?? null,
-          punchInIdempotencyKey: ctx.idempotencyKey ?? null,
+          attendanceDate: attendanceDateValue,
         },
-        include: { employee: true },
-      });
+      },
+      include: { employee: true },
+    });
+    if (existing?.punchOutAt) {
+      throw new AttendanceConflictError('You have already completed attendance for today.');
+    }
+    if (existing?.punchInAt) {
+      throw new AttendanceConflictError('Attendance for today is already recorded.');
+    }
+
+    const persistRow = async (row: { id: string }) => {
       if (device) {
         await this.prisma.attendanceDevice.update({
           where: { id: device.id },
           data: { lastUsedAt: ctx.now },
         });
       }
+      return row;
+    };
+
+    if (existing) {
+      const updated = await this.prisma.attendanceRecord.update({
+        where: { id: existing.id },
+        data: punchInData,
+        include: { employee: true },
+      });
+      await persistRow(updated);
+      return toRecordItem(updated);
+    }
+
+    try {
+      const created = await this.prisma.attendanceRecord.create({
+        data: {
+          id: randomUUID(),
+          organizationId: ctx.organizationId,
+          employeeId: ctx.employeeId,
+          attendanceDate: attendanceDateValue,
+          ...punchInData,
+        },
+        include: { employee: true },
+      });
+      await persistRow(created);
       return toRecordItem(created);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const raced = await this.prisma.attendanceRecord.findUnique({
+          where: {
+            organizationId_employeeId_attendanceDate: {
+              organizationId: ctx.organizationId,
+              employeeId: ctx.employeeId,
+              attendanceDate: attendanceDateValue,
+            },
+          },
+          include: { employee: true },
+        });
+        if (raced?.punchInAt) {
+          if (raced.punchOutAt) {
+            throw new AttendanceConflictError('You have already completed attendance for today.');
+          }
+          throw new AttendanceConflictError('Attendance for today is already recorded.');
+        }
+        if (raced) {
+          const updated = await this.prisma.attendanceRecord.update({
+            where: { id: raced.id },
+            data: punchInData,
+            include: { employee: true },
+          });
+          await persistRow(updated);
+          return toRecordItem(updated);
+        }
         throw new AttendanceConflictError('Attendance for today is already recorded.');
       }
       throw error;
@@ -764,8 +828,8 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     employeeId: string,
     query: AttendanceHistoryQuery,
   ): Promise<AttendanceListResponse> {
-    const rangeFrom = query.date ?? query.from;
-    const rangeTo = query.date ?? query.to;
+    const rangeFrom = query.from ?? query.date;
+    const rangeTo = query.to ?? query.date;
     const dateFilter =
       rangeFrom && rangeTo
         ? {
@@ -778,7 +842,6 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     const where: Prisma.AttendanceRecordWhereInput = {
       organizationId,
       employeeId,
-      punchOutAt: { not: null },
       ...dateFilter,
       ...(query.status ? { status: query.status } : {}),
     };
