@@ -77,6 +77,7 @@ export interface AttendanceRecordItem {
   readonly employeeId: string;
   readonly employeeDisplayName: string;
   readonly employeeCode: string;
+  readonly profileImageUrl: string | null;
   readonly attendanceDate: string;
   readonly status: AttendanceStatus;
   readonly punchInAt: string | null;

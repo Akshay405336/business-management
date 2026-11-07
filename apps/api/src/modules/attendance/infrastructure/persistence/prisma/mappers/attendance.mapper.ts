@@ -1,3 +1,4 @@
+import { EMPLOYEE_ROUTES } from '@techwin/contracts';
 import type {
   AttendanceDeviceItem,
   AttendanceRecordDetail,
@@ -160,6 +161,12 @@ export function snapshotToJson(snapshot: AttendanceScheduleSnapshot): Prisma.Inp
   return JSON.parse(JSON.stringify(snapshot)) as Prisma.InputJsonValue;
 }
 
+function employeeProfileImageUrl(employee: Employee): string | null {
+  return employee.profileImageStoredObjectId
+    ? EMPLOYEE_ROUTES.employeeStoredProfileImageContent(employee.profileImageStoredObjectId)
+    : employee.profileImageUrl;
+}
+
 export function toRecordItem(
   row: AttendanceRecord & { employee: Employee },
 ): AttendanceRecordItem {
@@ -171,6 +178,7 @@ export function toRecordItem(
     employeeId: row.employeeId,
     employeeDisplayName: row.employee.displayName,
     employeeCode: row.employee.employeeCode,
+    profileImageUrl: employeeProfileImageUrl(row.employee),
     attendanceDate,
     status: row.status satisfies AttendanceStatus,
     punchInAt: row.punchInAt?.toISOString() ?? null,

@@ -29,6 +29,12 @@ import type {
 } from '@techwin/contracts';
 import type { LeaveRepository } from '../../../../domain/repositories/leave.repository.js';
 import { resolveLeaveRequestDates } from '../../../../domain/policies/leave-request-dates.policy.js';
+import { LeaveBalanceDeletionPolicy } from '../../../../modules/leave-balances/domain/policies/leave-balance-deletion.policy.js';
+import {
+  assertAllocationReductionAllowed,
+  assertLeaveTypeRemovalAllowed,
+} from '../../../../modules/leave-balances/domain/policies/leave-balance-update.policy.js';
+import type { LeaveBalanceDependencySnapshot } from '../../../../modules/leave-balances/domain/types/leave-balance-dependencies.js';
 import {
   computeAvailableDays,
   parseDateOnly,
@@ -144,18 +150,32 @@ export class PrismaLeaveRepository implements LeaveRepository {
     adminId: string,
     input: UpdateLeaveYearConfigurationRequest,
   ) {
-    const existing = await this.getYearConfiguration(organizationId, id);
-    if (existing.balancesGeneratedAt && (input.yearStartDate || input.yearEndDate)) {
-      throw new LeaveValidationError(
-        'Effective dates cannot be changed after employee balances were generated.',
+    await this.getYearConfiguration(organizationId, id);
+    if (input.yearStartDate || input.yearEndDate) {
+      const config = await this.prisma.leaveYearConfiguration.findFirst({
+        where: { id, organizationId },
+      });
+      if (!config) throw new LeaveNotFoundError('Leave year configuration');
+      const yearStart = input.yearStartDate ? parseDateOnly(input.yearStartDate) : config.yearStartDate;
+      const yearEnd = input.yearEndDate ? parseDateOnly(input.yearEndDate) : config.yearEndDate;
+      await this.assertConfigurationDatesAllowActiveRequests(
+        organizationId,
+        id,
+        yearStart,
+        yearEnd,
       );
     }
+    const yearStart = input.yearStartDate
+      ? parseDateOnly(input.yearStartDate)
+      : undefined;
+    const yearEnd = input.yearEndDate ? parseDateOnly(input.yearEndDate) : undefined;
     const row = await this.prisma.leaveYearConfiguration.update({
       where: { id },
       data: {
         name: input.name?.trim(),
-        yearStartDate: input.yearStartDate ? parseDateOnly(input.yearStartDate) : undefined,
-        yearEndDate: input.yearEndDate ? parseDateOnly(input.yearEndDate) : undefined,
+        calendarYear: yearStart ? yearStart.getUTCFullYear() : undefined,
+        yearStartDate: yearStart,
+        yearEndDate: yearEnd,
         updatedByAdminId: adminId,
       },
       include: this.yearConfigurationInclude(),
@@ -255,88 +275,98 @@ export class PrismaLeaveRepository implements LeaveRepository {
   ) {
     const existing = await this.prisma.leaveYearConfiguration.findFirst({
       where: { id, organizationId },
-      include: { allocations: true },
+      include: { allocations: { include: { leaveType: true } } },
     });
     if (!existing) throw new LeaveNotFoundError('Leave year configuration');
-    const hasGenerated = existing.balancesGeneratedAt !== null;
-    if (hasGenerated && (input.allocations || input.yearStartDate || input.yearEndDate)) {
-      throw new LeaveValidationError(
-        'Allocations and effective dates cannot be changed after employee balances were generated.',
-      );
-    }
 
     const yearStart = input.yearStartDate
       ? parseDateOnly(input.yearStartDate)
       : existing.yearStartDate;
     const yearEnd = input.yearEndDate ? parseDateOnly(input.yearEndDate) : existing.yearEndDate;
+    const calendarYear = yearStart.getUTCFullYear();
+
+    if (input.yearStartDate || input.yearEndDate) {
+      await this.assertConfigurationDatesAllowActiveRequests(
+        organizationId,
+        id,
+        yearStart,
+        yearEnd,
+      );
+    }
 
     if (input.allocations) {
       const leaveTypeIds = [...new Set(input.allocations.map((line) => line.leaveTypeId))];
-      const activeTypes = await this.prisma.leaveType.findMany({
-        where: { organizationId, id: { in: leaveTypeIds }, status: 'ACTIVE' },
+      const existingTypeIds = new Set(existing.allocations.map((row) => row.leaveTypeId));
+      const newlyAddedTypeIds = leaveTypeIds.filter((typeId) => !existingTypeIds.has(typeId));
+      if (newlyAddedTypeIds.length > 0) {
+        const activeNewTypes = await this.prisma.leaveType.findMany({
+          where: { organizationId, id: { in: newlyAddedTypeIds }, status: 'ACTIVE' },
+          select: { id: true },
+        });
+        if (activeNewTypes.length !== newlyAddedTypeIds.length) {
+          throw new LeaveValidationError('One or more leave types are invalid or inactive.');
+        }
+      }
+      const knownTypes = await this.prisma.leaveType.findMany({
+        where: { organizationId, id: { in: leaveTypeIds } },
         select: { id: true },
       });
-      if (activeTypes.length !== leaveTypeIds.length) {
-        throw new LeaveValidationError('One or more leave types are invalid or inactive.');
+      if (knownTypes.length !== leaveTypeIds.length) {
+        throw new LeaveValidationError('One or more leave types are invalid.');
       }
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      await tx.leaveYearConfiguration.update({
-        where: { id },
-        data: {
-          name: input.name?.trim(),
-          yearStartDate: input.yearStartDate ? yearStart : undefined,
-          yearEndDate: input.yearEndDate ? yearEnd : undefined,
-          updatedByAdminId: adminId,
-        },
-      });
-
-      if (input.allocations) {
-        await tx.leaveYearAllocation.deleteMany({
-          where: { leaveYearConfigurationId: id, organizationId },
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        await tx.leaveYearConfiguration.update({
+          where: { id },
+          data: {
+            name: input.name?.trim(),
+            calendarYear,
+            yearStartDate: input.yearStartDate ? yearStart : undefined,
+            yearEndDate: input.yearEndDate ? yearEnd : undefined,
+            updatedByAdminId: adminId,
+          },
         });
-        for (const line of input.allocations) {
-          await tx.leaveYearAllocation.create({
+
+        if (input.allocations) {
+          await this.syncLeaveBalanceAllocationsInTransaction({
+            tx,
+            organizationId,
+            configurationId: id,
+            adminId,
+            existing,
+            allocations: input.allocations,
+            yearStart,
+            yearEnd,
+            calendarYear,
+          });
+        } else if (input.yearStartDate || input.yearEndDate) {
+          await tx.leaveYearAllocation.updateMany({
+            where: { leaveYearConfigurationId: id, organizationId },
             data: {
-              id: randomUUID(),
-              organizationId,
-              leaveYearConfigurationId: id,
-              leaveTypeId: line.leaveTypeId,
-              annualAllocationDays: parseLeaveDays(line.annualAllocationDays),
-              accrualMethod: 'ANNUAL_FULL',
-              carryForwardEnabled: false,
-              maxCarryForwardDays: parseLeaveDays('0'),
-              eligibility: 'ALL_EMPLOYEES',
-              eligibleEmployeeIds: [],
-              eligibleDepartments: [],
-              eligibleEmploymentTypes: [],
               effectiveFrom: yearStart,
               effectiveTo: yearEnd,
-              isActive: true,
-              createdByAdminId: adminId,
               updatedByAdminId: adminId,
             },
           });
         }
-      } else if (input.yearStartDate || input.yearEndDate) {
-        await tx.leaveYearAllocation.updateMany({
-          where: { leaveYearConfigurationId: id, organizationId },
-          data: {
-            effectiveFrom: yearStart,
-            effectiveTo: yearEnd,
-            updatedByAdminId: adminId,
-          },
-        });
-      }
 
-      const full = await tx.leaveYearConfiguration.findFirst({
-        where: { id },
-        include: this.yearConfigurationInclude(),
+        const full = await tx.leaveYearConfiguration.findFirst({
+          where: { id },
+          include: this.yearConfigurationInclude(),
+        });
+        if (!full) throw new LeaveNotFoundError('Leave year configuration');
+        return toLeaveYearConfigurationItem(full);
       });
-      if (!full) throw new LeaveNotFoundError('Leave year configuration');
-      return toLeaveYearConfigurationItem(full);
-    });
+    } catch (error) {
+      if (this.isUniqueViolation(error)) {
+        throw new LeaveConflictError(
+          'A leave balance configuration already exists for this calendar year.',
+        );
+      }
+      throw error;
+    }
   }
 
   async deleteYearConfiguration(organizationId: string, id: string) {
@@ -345,21 +375,25 @@ export class PrismaLeaveRepository implements LeaveRepository {
     });
     if (!existing) throw new LeaveNotFoundError('Leave year configuration');
 
-    const [balanceCount, requestCount] = await Promise.all([
-      this.prisma.employeeLeaveBalance.count({
-        where: { organizationId, leaveYearConfigurationId: id },
-      }),
-      this.prisma.leaveRequest.count({
-        where: { organizationId, leaveYearConfigurationId: id },
-      }),
-    ]);
-    if (balanceCount > 0 || requestCount > 0) {
-      throw new LeaveConflictError(
-        'This configuration cannot be deleted because employee balances or leave requests exist.',
-      );
-    }
+    const snapshot = await this.snapshotLeaveBalanceDependencies(organizationId, id);
+    LeaveBalanceDeletionPolicy.assertCanDelete(snapshot);
 
-    await this.prisma.leaveYearConfiguration.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      const balances = await tx.employeeLeaveBalance.findMany({
+        where: { organizationId, leaveYearConfigurationId: id },
+        select: { id: true },
+      });
+      const balanceIds = balances.map((row) => row.id);
+      if (balanceIds.length > 0) {
+        await tx.leaveBalanceTransaction.deleteMany({
+          where: { employeeLeaveBalanceId: { in: balanceIds } },
+        });
+        await tx.employeeLeaveBalance.deleteMany({
+          where: { id: { in: balanceIds } },
+        });
+      }
+      await tx.leaveYearConfiguration.delete({ where: { id } });
+    });
   }
 
   async setYearConfigurationStatus(
@@ -1517,6 +1551,267 @@ export class PrismaLeaveRepository implements LeaveRepository {
     }
 
     return { created, skipped };
+  }
+
+  private async snapshotLeaveBalanceDependencies(
+    organizationId: string,
+    configurationId: string,
+  ): Promise<LeaveBalanceDependencySnapshot> {
+    const [
+      pendingRequestCount,
+      approvedRequestCount,
+      consumedBalanceCount,
+      adjustedBalanceCount,
+      protectedTransactionCount,
+    ] = await Promise.all([
+      this.prisma.leaveRequest.count({
+        where: { organizationId, leaveYearConfigurationId: configurationId, status: 'PENDING' },
+      }),
+      this.prisma.leaveRequest.count({
+        where: { organizationId, leaveYearConfigurationId: configurationId, status: 'APPROVED' },
+      }),
+      this.prisma.employeeLeaveBalance.count({
+        where: {
+          organizationId,
+          leaveYearConfigurationId: configurationId,
+          OR: [{ usedApprovedDays: { gt: 0 } }, { reservedPendingDays: { gt: 0 } }],
+        },
+      }),
+      this.prisma.employeeLeaveBalance.count({
+        where: {
+          organizationId,
+          leaveYearConfigurationId: configurationId,
+          OR: [
+            { adjustmentCreditDays: { gt: 0 } },
+            { adjustmentDebitDays: { gt: 0 } },
+            { carryForwardDays: { gt: 0 } },
+          ],
+        },
+      }),
+      this.prisma.leaveBalanceTransaction.count({
+        where: {
+          organizationId,
+          transactionType: { in: ['MANUAL_CREDIT', 'MANUAL_DEBIT', 'CARRY_FORWARD', 'POLICY_ADJUSTMENT'] },
+          employeeLeaveBalance: { leaveYearConfigurationId: configurationId },
+        },
+      }),
+    ]);
+    return {
+      pendingRequestCount,
+      approvedRequestCount,
+      consumedBalanceCount,
+      adjustedBalanceCount,
+      protectedTransactionCount,
+    };
+  }
+
+  private async assertConfigurationDatesAllowActiveRequests(
+    organizationId: string,
+    configurationId: string,
+    yearStart: Date,
+    yearEnd: Date,
+  ): Promise<void> {
+    const violating = await this.prisma.leaveRequest.findFirst({
+      where: {
+        organizationId,
+        leaveYearConfigurationId: configurationId,
+        status: { in: ['PENDING', 'APPROVED'] },
+        OR: [{ startDate: { lt: yearStart } }, { endDate: { gt: yearEnd } }],
+      },
+      select: { id: true },
+    });
+    if (violating) {
+      throw new LeaveValidationError(
+        'Effective dates cannot change because pending or approved leave requests fall outside the new range.',
+      );
+    }
+  }
+
+  private async syncLeaveBalanceAllocationsInTransaction(input: {
+    tx: Prisma.TransactionClient;
+    organizationId: string;
+    configurationId: string;
+    adminId: string;
+    existing: {
+      allocations: Array<{
+        id: string;
+        leaveTypeId: string;
+        leaveType: { name: string };
+      }>;
+    };
+    allocations: ReadonlyArray<{ leaveTypeId: string; annualAllocationDays: string }>;
+    yearStart: Date;
+    yearEnd: Date;
+    calendarYear: number;
+  }): Promise<void> {
+    const {
+      tx,
+      organizationId,
+      configurationId,
+      adminId,
+      existing,
+      allocations,
+      yearStart,
+      yearEnd,
+      calendarYear,
+    } = input;
+
+    const employeeBalances = await tx.employeeLeaveBalance.findMany({
+      where: { organizationId, leaveYearConfigurationId: configurationId },
+      include: { leaveType: { select: { name: true } } },
+    });
+
+    const usageRows = employeeBalances.map((row) => ({
+      leaveTypeId: row.leaveTypeId,
+      leaveTypeName: row.leaveType.name,
+      allocatedDays: row.allocatedDays,
+      usedApprovedDays: row.usedApprovedDays,
+      reservedPendingDays: row.reservedPendingDays,
+      adjustmentCreditDays: row.adjustmentCreditDays,
+      adjustmentDebitDays: row.adjustmentDebitDays,
+      carryForwardDays: row.carryForwardDays,
+    }));
+
+    const incomingIds = new Set(allocations.map((line) => line.leaveTypeId));
+    for (const allocation of existing.allocations) {
+      if (incomingIds.has(allocation.leaveTypeId)) continue;
+      assertLeaveTypeRemovalAllowed(usageRows, allocation.leaveTypeId, allocation.leaveType.name);
+      const balanceIds = employeeBalances
+        .filter((row) => row.leaveTypeId === allocation.leaveTypeId)
+        .map((row) => row.id);
+      if (balanceIds.length > 0) {
+        await tx.leaveBalanceTransaction.deleteMany({
+          where: { employeeLeaveBalanceId: { in: balanceIds } },
+        });
+        await tx.employeeLeaveBalance.deleteMany({ where: { id: { in: balanceIds } } });
+      }
+      await tx.leaveYearAllocation.delete({ where: { id: allocation.id } });
+    }
+
+    const typeNameById = new Map(existing.allocations.map((row) => [row.leaveTypeId, row.leaveType.name]));
+
+    for (const line of allocations) {
+      const annualAllocationDays = parseLeaveDays(line.annualAllocationDays);
+      const existingAllocation = existing.allocations.find((row) => row.leaveTypeId === line.leaveTypeId);
+      const leaveTypeName =
+        existingAllocation?.leaveType.name ??
+        (
+          await tx.leaveType.findFirst({
+            where: { id: line.leaveTypeId, organizationId },
+            select: { name: true },
+          })
+        )?.name ??
+        'Leave type';
+      typeNameById.set(line.leaveTypeId, leaveTypeName);
+
+      const balancesForType = employeeBalances.filter((row) => row.leaveTypeId === line.leaveTypeId);
+      for (const balance of balancesForType) {
+        assertAllocationReductionAllowed(
+          {
+            leaveTypeId: balance.leaveTypeId,
+            allocatedDays: balance.allocatedDays,
+            usedApprovedDays: balance.usedApprovedDays,
+            reservedPendingDays: balance.reservedPendingDays,
+            adjustmentCreditDays: balance.adjustmentCreditDays,
+            adjustmentDebitDays: balance.adjustmentDebitDays,
+            carryForwardDays: balance.carryForwardDays,
+          },
+          annualAllocationDays,
+          leaveTypeName,
+        );
+      }
+
+      if (existingAllocation) {
+        await tx.leaveYearAllocation.update({
+          where: { id: existingAllocation.id },
+          data: {
+            annualAllocationDays,
+            effectiveFrom: yearStart,
+            effectiveTo: yearEnd,
+            updatedByAdminId: adminId,
+          },
+        });
+        if (balancesForType.length > 0) {
+          await tx.employeeLeaveBalance.updateMany({
+            where: {
+              organizationId,
+              leaveYearConfigurationId: configurationId,
+              leaveTypeId: line.leaveTypeId,
+            },
+            data: { allocatedDays: annualAllocationDays },
+          });
+        }
+        continue;
+      }
+
+      await tx.leaveYearAllocation.create({
+        data: {
+          id: randomUUID(),
+          organizationId,
+          leaveYearConfigurationId: configurationId,
+          leaveTypeId: line.leaveTypeId,
+          annualAllocationDays,
+          accrualMethod: 'ANNUAL_FULL',
+          carryForwardEnabled: false,
+          maxCarryForwardDays: parseLeaveDays('0'),
+          eligibility: 'ALL_EMPLOYEES',
+          eligibleEmployeeIds: [],
+          eligibleDepartments: [],
+          eligibleEmploymentTypes: [],
+          effectiveFrom: yearStart,
+          effectiveTo: yearEnd,
+          isActive: true,
+          createdByAdminId: adminId,
+          updatedByAdminId: adminId,
+        },
+      });
+
+      const employees = await tx.employee.findMany({
+        where: {
+          organizationId,
+          employmentStatus: { in: ['ACTIVE', 'ON_LEAVE'] },
+          deactivatedAt: null,
+        },
+        select: { id: true },
+      });
+      for (const employee of employees) {
+        const exists = await tx.employeeLeaveBalance.findFirst({
+          where: {
+            organizationId,
+            employeeId: employee.id,
+            leaveTypeId: line.leaveTypeId,
+            leaveYearConfigurationId: configurationId,
+          },
+        });
+        if (exists) continue;
+        const balance = await tx.employeeLeaveBalance.create({
+          data: {
+            id: randomUUID(),
+            organizationId,
+            employeeId: employee.id,
+            leaveTypeId: line.leaveTypeId,
+            leaveYearConfigurationId: configurationId,
+            allocatedDays: annualAllocationDays,
+          },
+        });
+        await tx.leaveBalanceTransaction.create({
+          data: {
+            id: randomUUID(),
+            organizationId,
+            employeeId: employee.id,
+            leaveTypeId: line.leaveTypeId,
+            employeeLeaveBalanceId: balance.id,
+            calendarYear,
+            transactionType: 'INITIAL_ALLOCATION',
+            days: annualAllocationDays,
+            balanceBeforeDays: new Decimal(0),
+            balanceAfterDays: annualAllocationDays,
+            reason: 'Initial allocation from leave policy.',
+            performedByAdminId: adminId,
+          },
+        });
+      }
+    }
   }
 
   private isUniqueViolation(error: unknown): boolean {

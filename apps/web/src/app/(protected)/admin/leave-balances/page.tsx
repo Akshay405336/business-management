@@ -1,5 +1,5 @@
-import { AdminLeaveBalancesWorkspace } from '@/features/admin/leave/components/admin-leave-balances-workspace';
+import { LeaveBalancesPage } from '@/features/leave-balances/pages/leave-balances-page';
 
 export default function AdminLeaveBalancesPage() {
-  return <AdminLeaveBalancesWorkspace />;
+  return <LeaveBalancesPage />;
 }

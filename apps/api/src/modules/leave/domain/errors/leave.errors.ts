@@ -47,3 +47,17 @@ export class LeaveTypeHasDependenciesError extends LeaveError {
     this.name = 'LeaveTypeHasDependenciesError';
   }
 }
+
+export class LeaveBalanceHasDependenciesError extends LeaveError {
+  constructor(
+    message: string,
+    readonly pendingRequestCount: number,
+    readonly approvedRequestCount: number,
+    readonly consumedBalanceCount: number,
+    readonly adjustedBalanceCount: number,
+    readonly protectedTransactionCount: number,
+  ) {
+    super(message, 'LEAVE_BALANCE_HAS_DEPENDENCIES');
+    this.name = 'LeaveBalanceHasDependenciesError';
+  }
+}

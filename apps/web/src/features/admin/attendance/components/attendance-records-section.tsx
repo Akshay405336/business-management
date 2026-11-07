@@ -204,8 +204,11 @@ export function AttendanceRecordsSection() {
               onClick={() => void showDetail(row.id)}
             >
               <TableCell className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.employee, 'min-w-0 overflow-hidden')}>
-                <div className="flex min-w-0 items-center gap-2 sm:gap-2.5">
-                  <EmployeeAvatar displayName={row.employeeDisplayName} className="size-8 shrink-0" />
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <EmployeeAvatar
+                    displayName={row.employeeDisplayName}
+                    profileImageUrl={row.profileImageUrl}
+                  />
                   <div className="min-w-0 flex-1">
                     <Tooltip>
                       <TooltipTrigger asChild>

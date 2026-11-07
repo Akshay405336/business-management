@@ -52,7 +52,11 @@ export function AttendanceRecordDetailSheet({
           ) : detail ? (
             <>
               <div className="mb-4 flex items-center gap-3 pt-2">
-                <EmployeeAvatar displayName={detail.employeeDisplayName} className="size-11" />
+                <EmployeeAvatar
+                  displayName={detail.employeeDisplayName}
+                  profileImageUrl={detail.profileImageUrl}
+                  className="size-11"
+                />
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{detail.employeeDisplayName}</p>
                   <p className="text-muted-foreground text-sm">{detail.employeeCode}</p>

@@ -2,7 +2,11 @@ import { Catch, HttpStatus, type ArgumentsHost, type ExceptionFilter } from '@ne
 import { API_ERROR_CODES, type ApiErrorCode, type ApiErrorDetail } from '@techwin/contracts';
 import type { Request, Response } from 'express';
 import { sendApiError } from '../../../../../common/filters/api-error.response.js';
-import { LeaveError, LeaveTypeHasDependenciesError } from '../../../domain/errors/leave.errors.js';
+import {
+  LeaveBalanceHasDependenciesError,
+  LeaveError,
+  LeaveTypeHasDependenciesError,
+} from '../../../domain/errors/leave.errors.js';
 
 @Catch(LeaveError)
 export class LeaveExceptionFilter implements ExceptionFilter<LeaveError> {
@@ -32,6 +36,16 @@ export class LeaveExceptionFilter implements ExceptionFilter<LeaveError> {
         { path: 'requestCount', message: String(error.requestCount) },
         { path: 'balanceCount', message: String(error.balanceCount) },
         { path: 'allocationCount', message: String(error.allocationCount) },
+      ];
+    } else if (error instanceof LeaveBalanceHasDependenciesError) {
+      status = HttpStatus.CONFLICT;
+      code = API_ERROR_CODES.LEAVE_BALANCE_HAS_DEPENDENCIES;
+      details = [
+        { path: 'pendingRequestCount', message: String(error.pendingRequestCount) },
+        { path: 'approvedRequestCount', message: String(error.approvedRequestCount) },
+        { path: 'consumedBalanceCount', message: String(error.consumedBalanceCount) },
+        { path: 'adjustedBalanceCount', message: String(error.adjustedBalanceCount) },
+        { path: 'protectedTransactionCount', message: String(error.protectedTransactionCount) },
       ];
     }
     sendApiError(request, response, { status, code, message: error.message, details });
