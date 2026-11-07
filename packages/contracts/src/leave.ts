@@ -3,6 +3,7 @@ import { API_PREFIX } from './http.js';
 export const LEAVE_ROUTES = {
   types: `${API_PREFIX}/leave/types`,
   type: (id: string) => `${API_PREFIX}/leave/types/${id}`,
+  typeStatus: (id: string) => `${API_PREFIX}/leave/types/${id}/status`,
   yearConfigurations: `${API_PREFIX}/leave/year-configurations`,
   yearConfiguration: (id: string) => `${API_PREFIX}/leave/year-configurations/${id}`,
   yearConfigurationWithAllocations: `${API_PREFIX}/leave/year-configurations/with-allocations`,
@@ -35,6 +36,7 @@ export const LEAVE_ROUTES = {
 } as const;
 
 export type LeaveTypeStatus = 'ACTIVE' | 'INACTIVE';
+export type LeaveTypeKind = 'PAID' | 'UNPAID';
 export type LeaveAccrualMethod = 'ANNUAL_FULL' | 'MONTHLY' | 'PRORATED_JOIN' | 'NONE';
 export type LeaveYearConfigurationStatus = 'ACTIVE' | 'INACTIVE';
 export type LeaveAllocationEligibility =
@@ -49,19 +51,8 @@ export interface LeaveTypeItem {
   readonly id: string;
   readonly name: string;
   readonly code: string;
-  readonly description: string;
-  readonly isPaid: boolean;
-  readonly annualAllocationEligible: boolean;
-  readonly carryForwardEnabled: boolean;
-  readonly maxCarryForwardDays: string;
-  readonly maxConsecutiveDays: number | null;
-  readonly minApplicationDays: string;
-  readonly halfDayAllowed: boolean;
-  readonly attachmentRequired: boolean;
-  readonly attachmentRequiredAfterDays: string | null;
-  readonly appliesToAllEmployees: boolean;
-  readonly applicableEmployeeIds: readonly string[];
-  readonly applicableDepartments: readonly string[];
+  readonly description: string | null;
+  readonly kind: LeaveTypeKind;
   readonly status: LeaveTypeStatus;
   readonly createdAt: string;
   readonly updatedAt: string;

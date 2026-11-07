@@ -1997,6 +1997,11 @@ enum LeaveTypeStatus {
   INACTIVE
 }
 
+enum LeaveTypeKind {
+  PAID
+  UNPAID
+}
+
 enum LeaveAccrualMethod {
   ANNUAL_FULL
   MONTHLY
@@ -2043,36 +2048,27 @@ enum LeaveBalanceTransactionType {
 }
 
 model LeaveType {
-  id                       String           @id @db.Uuid
-  organizationId           String           @map("organization_id") @db.Uuid
-  name                     String           @db.VarChar(120)
-  code                     String           @db.VarChar(16)
-  description              String           @default("") @db.VarChar(2000)
-  isPaid                   Boolean          @default(true) @map("is_paid")
-  annualAllocationEligible Boolean          @default(true) @map("annual_allocation_eligible")
-  carryForwardEnabled      Boolean          @default(false) @map("carry_forward_enabled")
-  maxCarryForwardDays      Decimal          @default(0) @map("max_carry_forward_days") @db.Decimal(6, 1)
-  maxConsecutiveDays       Int?             @map("max_consecutive_days")
-  minApplicationDays       Decimal          @default(0.5) @map("min_application_days") @db.Decimal(6, 1)
-  halfDayAllowed           Boolean          @default(true) @map("half_day_allowed")
-  attachmentRequired       Boolean          @default(false) @map("attachment_required")
-  attachmentRequiredAfterDays Decimal?      @map("attachment_required_after_days") @db.Decimal(6, 1)
-  appliesToAllEmployees    Boolean          @default(true) @map("applies_to_all_employees")
-  applicableEmployeeIds    Json             @default("[]") @map("applicable_employee_ids")
-  applicableDepartments    Json             @default("[]") @map("applicable_departments")
-  status                   LeaveTypeStatus  @default(ACTIVE)
-  createdByAdminId         String           @map("created_by_admin_id") @db.Uuid
-  updatedByAdminId         String?          @map("updated_by_admin_id") @db.Uuid
-  createdAt                DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt                DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id               String          @id @db.Uuid
+  organizationId   String          @map("organization_id") @db.Uuid
+  name             String          @db.VarChar(120)
+  code             String          @db.VarChar(64)
+  description      String?         @db.VarChar(2000)
+  kind             LeaveTypeKind
+  status           LeaveTypeStatus @default(ACTIVE)
+  createdByAdminId String          @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId String?         @map("updated_by_admin_id") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  yearAllocations   LeaveYearAllocation[]
-  employeeBalances  EmployeeLeaveBalance[]
-  leaveRequests     LeaveRequest[]
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  yearAllocations  LeaveYearAllocation[]
+  employeeBalances EmployeeLeaveBalance[]
+  leaveRequests    LeaveRequest[]
 
   @@unique([organizationId, code], map: "leave_type_org_code_key")
+  @@unique([organizationId, name], map: "leave_type_org_name_key")
   @@index([organizationId, status], map: "leave_type_org_status_idx")
+  @@index([organizationId, kind], map: "leave_type_org_kind_idx")
   @@map("leave_types")
 }
 

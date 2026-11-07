@@ -12,15 +12,12 @@ import {
   ApproveLeaveRequestHandler,
   CancelLeaveRequestHandler,
   CreateLeaveAllocationHandler,
-  CreateLeaveTypeHandler,
   CreateLeaveBalanceConfigurationHandler,
   CreateLeaveYearConfigurationHandler,
-  DeleteLeaveTypeHandler,
   DeleteLeaveYearConfigurationHandler,
   GenerateEmployeeLeaveBalancesHandler,
   GetEmployeeLeaveBalanceHandler,
   GetLeaveRequestHandler,
-  GetLeaveTypeHandler,
   GetLeaveYearConfigurationHandler,
   GetMyLeaveRequestHandler,
   GetMyLeaveBalancesHandler,
@@ -28,14 +25,12 @@ import {
   ListLeaveAllocationsHandler,
   ListLeaveBalanceTransactionsHandler,
   ListLeaveRequestsHandler,
-  ListLeaveTypesHandler,
   ListLeaveYearConfigurationsHandler,
   ListMyLeaveRequestsHandler,
   PreviewLeaveDaysHandler,
   RejectLeaveRequestHandler,
   SetLeaveYearConfigurationStatusHandler,
   UpdateLeaveAllocationHandler,
-  UpdateLeaveTypeHandler,
   UpdateLeaveBalanceConfigurationHandler,
   UpdateLeaveYearConfigurationHandler,
 } from './application/leave.handlers.js';
@@ -43,11 +38,23 @@ import { LeaveAuthorizationService } from './application/services/leave-authoriz
 import { LeaveDayCalculationService } from './application/services/leave-day-calculation.service.js';
 import { LEAVE_REPOSITORY } from './domain/repositories/leave.repository.js';
 import { PrismaLeaveRepository } from './infrastructure/persistence/prisma/repositories/prisma-leave.repository.js';
+import {
+  ChangeLeaveTypeStatusHandler,
+  CreateLeaveTypeHandler,
+  DeleteLeaveTypeHandler,
+  GetLeaveTypeHandler,
+  LEAVE_TYPE_REPOSITORY,
+  LeaveTypesController,
+  ListLeaveTypesHandler,
+  PrismaLeaveTypeRepository,
+  UpdateLeaveTypeHandler,
+} from './modules/leave-types/index.js';
 import { LeaveController } from './presentation/http/controllers/leave.controller.js';
 import { LeaveExceptionFilter } from './presentation/http/filters/leave-exception.filter.js';
 
 export const leavePersistenceProviders: Provider[] = [
   { provide: LEAVE_REPOSITORY, useClass: PrismaLeaveRepository },
+  { provide: LEAVE_TYPE_REPOSITORY, useClass: PrismaLeaveTypeRepository },
 ];
 
 const leaveHandlers = [
@@ -57,6 +64,7 @@ const leaveHandlers = [
   GetLeaveTypeHandler,
   CreateLeaveTypeHandler,
   UpdateLeaveTypeHandler,
+  ChangeLeaveTypeStatusHandler,
   DeleteLeaveTypeHandler,
   ListLeaveYearConfigurationsHandler,
   GetLeaveYearConfigurationHandler,
@@ -90,8 +98,8 @@ const leaveHandlers = [
 
 @Module({
   imports: [DatabaseModule, AuthModule, CrmModule, OrgAccessModule, OrganizationCalendarModule],
-  controllers: [LeaveController],
+  controllers: [LeaveTypesController, LeaveController],
   providers: [...leavePersistenceProviders, ...leaveHandlers, LeaveExceptionFilter],
-  exports: [LEAVE_REPOSITORY, LeaveExceptionFilter],
+  exports: [LEAVE_REPOSITORY, LEAVE_TYPE_REPOSITORY, LeaveExceptionFilter],
 })
 export class LeaveModule {}

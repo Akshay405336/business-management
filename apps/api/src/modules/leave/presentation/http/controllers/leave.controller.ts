@@ -22,8 +22,6 @@ import type {
   LeavePreviewDaysResponse,
   LeaveRequestItem,
   LeaveRequestListResponse,
-  LeaveTypeItem,
-  LeaveTypeListResponse,
   LeaveYearAllocationItem,
   LeaveYearAllocationListResponse,
   LeaveYearConfigurationItem,
@@ -32,7 +30,6 @@ import {
   adjustEmployeeLeaveBalanceRequestSchema,
   parseApplyLeaveRequest,
   cancelLeaveRequestSchema,
-  createLeaveTypeRequestSchema,
   createLeaveYearAllocationRequestSchema,
   createLeaveBalanceConfigurationRequestSchema,
   createLeaveYearConfigurationRequestSchema,
@@ -41,11 +38,9 @@ import {
   parseLeaveAllocationListQuery,
   parseLeaveBalanceTransactionListQuery,
   parseLeaveRequestListQuery,
-  parseLeaveTypeListQuery,
   parseLeaveYearConfigurationQuery,
   parsePreviewLeaveDaysQuery,
   rejectLeaveRequestSchema,
-  updateLeaveTypeRequestSchema,
   updateLeaveYearAllocationRequestSchema,
   updateLeaveYearConfigurationRequestSchema,
   updateLeaveYearConfigurationStatusRequestSchema,
@@ -66,29 +61,24 @@ import {
   ApproveLeaveRequestHandler,
   CancelLeaveRequestHandler,
   CreateLeaveAllocationHandler,
-  CreateLeaveTypeHandler,
   CreateLeaveBalanceConfigurationHandler,
   CreateLeaveYearConfigurationHandler,
-  DeleteLeaveTypeHandler,
   DeleteLeaveYearConfigurationHandler,
   GenerateEmployeeLeaveBalancesHandler,
   GetEmployeeLeaveBalanceHandler,
   GetLeaveRequestHandler,
-  GetLeaveTypeHandler,
   GetLeaveYearConfigurationHandler,
   GetMyLeaveRequestHandler,
   ListEmployeeLeaveBalancesHandler,
   ListLeaveAllocationsHandler,
   ListLeaveBalanceTransactionsHandler,
   ListLeaveRequestsHandler,
-  ListLeaveTypesHandler,
   ListLeaveYearConfigurationsHandler,
   ListMyLeaveRequestsHandler,
   GetMyLeaveBalancesHandler,
   PreviewLeaveDaysHandler,
   RejectLeaveRequestHandler,
   UpdateLeaveAllocationHandler,
-  UpdateLeaveTypeHandler,
   UpdateLeaveBalanceConfigurationHandler,
   UpdateLeaveYearConfigurationHandler,
 } from '../../../application/leave.handlers.js';
@@ -106,11 +96,6 @@ function actorFrom(ctx: CrmRequestContext, request: PlatformAuthenticatedRequest
 @Controller('leave')
 export class LeaveController {
   constructor(
-    private readonly listLeaveTypes: ListLeaveTypesHandler,
-    private readonly getLeaveType: GetLeaveTypeHandler,
-    private readonly createLeaveType: CreateLeaveTypeHandler,
-    private readonly updateLeaveType: UpdateLeaveTypeHandler,
-    private readonly deleteLeaveType: DeleteLeaveTypeHandler,
     private readonly listYearConfigurations: ListLeaveYearConfigurationsHandler,
     private readonly getYearConfiguration: GetLeaveYearConfigurationHandler,
     private readonly createYearConfiguration: CreateLeaveYearConfigurationHandler,
@@ -140,65 +125,6 @@ export class LeaveController {
     private readonly approveLeaveRequest: ApproveLeaveRequestHandler,
     private readonly rejectLeaveRequest: RejectLeaveRequestHandler,
   ) {}
-
-  @Get('types')
-  @ApiOperation({ summary: 'List leave types' })
-  listTypes(
-    @CrmContext() ctx: CrmRequestContext,
-    @Req() request: PlatformAuthenticatedRequest,
-    @Query() query: Record<string, unknown>,
-  ): Promise<LeaveTypeListResponse> {
-    return this.listLeaveTypes.execute(actorFrom(ctx, request), parseLeaveTypeListQuery(query));
-  }
-
-  @Post('types')
-  @ApiOperation({ summary: 'Create leave type' })
-  createType(
-    @CrmContext() ctx: CrmRequestContext,
-    @Req() request: PlatformAuthenticatedRequest,
-    @Body() body: unknown,
-  ): Promise<LeaveTypeItem> {
-    return this.createLeaveType.execute(
-      actorFrom(ctx, request),
-      createLeaveTypeRequestSchema.parse(body),
-    );
-  }
-
-  @Get('types/:id')
-  @ApiOperation({ summary: 'Get leave type' })
-  oneType(
-    @CrmContext() ctx: CrmRequestContext,
-    @Req() request: PlatformAuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<LeaveTypeItem> {
-    return this.getLeaveType.execute(actorFrom(ctx, request), id);
-  }
-
-  @Patch('types/:id')
-  @ApiOperation({ summary: 'Update leave type' })
-  patchType(
-    @CrmContext() ctx: CrmRequestContext,
-    @Req() request: PlatformAuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ): Promise<LeaveTypeItem> {
-    return this.updateLeaveType.execute(
-      actorFrom(ctx, request),
-      id,
-      updateLeaveTypeRequestSchema.parse(body),
-    );
-  }
-
-  @Delete('types/:id')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete or deactivate leave type' })
-  async removeType(
-    @CrmContext() ctx: CrmRequestContext,
-    @Req() request: PlatformAuthenticatedRequest,
-    @Param('id') id: string,
-  ): Promise<void> {
-    await this.deleteLeaveType.execute(actorFrom(ctx, request), id);
-  }
 
   @Get('year-configurations')
   @ApiOperation({ summary: 'List leave year configurations' })

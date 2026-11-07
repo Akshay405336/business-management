@@ -239,14 +239,6 @@ export function useEmployeeLeavePage() {
     void refreshEarliestStartDate(leaveTypeId);
   }, [leaveTypeId, refreshEarliestStartDate]);
 
-  useEffect(() => {
-    const meta = leaveTypeMeta.get(leaveTypeId);
-    if (meta && !meta.halfDayAllowed && isHalfDay) {
-      setIsHalfDay(false);
-      setHalfDaySession('');
-    }
-  }, [leaveTypeId, leaveTypeMeta, isHalfDay]);
-
   const resetApplyForm = useCallback(() => {
     setSelectedLeaveDates([]);
     setIsHalfDay(false);
@@ -263,7 +255,6 @@ export function useEmployeeLeavePage() {
 
   const applyLeave = async (): Promise<boolean> => {
     setApplyFieldErrors({});
-    const meta = leaveTypeMeta.get(leaveTypeId);
     const errors: Record<string, string> = {};
     if (!leaveTypeId) {
       errors.leaveTypeId = 'Select a leave type.';
@@ -285,9 +276,6 @@ export function useEmployeeLeavePage() {
     if (isHalfDay && !halfDaySession) {
       toast.error('Select a half-day session.');
       return false;
-    }
-    if (meta?.attachmentRequired && !attachmentFile) {
-      errors.attachment = 'A supporting document is required.';
     }
     const balanceRow = balances.find((b) => b.leaveTypeId === leaveTypeId);
     if (!balanceRow) {

@@ -86,10 +86,7 @@ export function LeaveBalanceConfigFormDialog({
   const [typesLoading, setTypesLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const allowHalfDaySteps = useMemo(
-    () => leaveTypes.some((type) => type.halfDayAllowed),
-    [leaveTypes],
-  );
+  const allowHalfDaySteps = true;
 
   const usedTypeIds = useMemo(
     () => new Set(rows.map((row) => row.leaveTypeId).filter(Boolean)),
@@ -103,7 +100,6 @@ export function LeaveBalanceConfigFormDialog({
         page: 1,
         pageSize: 100,
         status: 'ACTIVE',
-        includeInactive: false,
       });
       setLeaveTypes(res.items);
     } catch (failure) {

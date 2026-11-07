@@ -6,8 +6,6 @@ import {
   type LeavePreviewDaysResponse,
   type LeaveRequestItem,
   type LeaveRequestListResponse,
-  type LeaveTypeItem,
-  type LeaveTypeListResponse,
   type LeaveYearAllocationItem,
   type LeaveYearAllocationListResponse,
   type LeaveYearConfigurationItem,
@@ -16,7 +14,6 @@ import type {
   AdjustEmployeeLeaveBalanceRequest,
   ApplyLeaveRequest,
   CancelLeaveRequestRequest,
-  CreateLeaveTypeRequest,
   CreateLeaveYearAllocationRequest,
   CreateLeaveBalanceConfigurationRequest,
   CreateLeaveYearConfigurationRequest,
@@ -25,17 +22,20 @@ import type {
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
-  LeaveTypeListQuery,
   LeaveYearConfigurationQuery,
   PreviewLeaveDaysQuery,
   RejectLeaveRequestRequest,
-  UpdateLeaveTypeRequest,
   UpdateLeaveYearAllocationRequest,
   UpdateLeaveYearConfigurationRequest,
   UpdateLeaveYearConfigurationStatusRequest,
 } from '@techwin/validation';
 import { apiRequest } from '@/shared/api/api-client';
 import { buildQueryString } from '@/features/admin/crm/utils/query-string';
+
+export {
+  listLeaveTypes,
+  getLeaveType,
+} from '@/features/leave-types/api/leave-type.api';
 
 export type LeaveBalanceTransactionItem = {
   readonly id: string;
@@ -59,32 +59,6 @@ export type LeaveBalanceTransactionListResponse = {
   readonly page: number;
   readonly pageSize: number;
 };
-
-export function listLeaveTypes(
-  query?: LeaveTypeListQuery,
-  signal?: AbortSignal,
-): Promise<LeaveTypeListResponse> {
-  return apiRequest<LeaveTypeListResponse>(
-    `${LEAVE_ROUTES.types}${buildQueryString(query ?? {})}`,
-    { auth: true, signal },
-  );
-}
-
-export function getLeaveType(id: string, signal?: AbortSignal): Promise<LeaveTypeItem> {
-  return apiRequest<LeaveTypeItem>(LEAVE_ROUTES.type(id), { auth: true, signal });
-}
-
-export function createLeaveType(body: CreateLeaveTypeRequest): Promise<LeaveTypeItem> {
-  return apiRequest<LeaveTypeItem>(LEAVE_ROUTES.types, { auth: true, method: 'POST', body });
-}
-
-export function updateLeaveType(id: string, body: UpdateLeaveTypeRequest): Promise<LeaveTypeItem> {
-  return apiRequest<LeaveTypeItem>(LEAVE_ROUTES.type(id), { auth: true, method: 'PATCH', body });
-}
-
-export function deleteLeaveType(id: string): Promise<void> {
-  return apiRequest<void>(LEAVE_ROUTES.type(id), { auth: true, method: 'DELETE' });
-}
 
 export function listLeaveYearConfigurations(
   signal?: AbortSignal,

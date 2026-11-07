@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -65,9 +64,6 @@ export function EmployeeApplyLeaveDialog({
   onOpenChange: (open: boolean) => void;
   page: LeavePage;
 }) {
-  const selectedMeta = page.leaveTypeMeta.get(page.leaveTypeId);
-  const halfDayAllowed = selectedMeta?.halfDayAllowed ?? true;
-  const attachmentRequired = selectedMeta?.attachmentRequired ?? false;
   const hasBalances = page.balances.length > 0;
   const emptyBalancesMessage =
     page.balancesError ??
@@ -233,8 +229,7 @@ export function EmployeeApplyLeaveDialog({
               </div>
             ) : null}
 
-            {halfDayAllowed ? (
-              <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2">
                     <Checkbox
@@ -288,7 +283,6 @@ export function EmployeeApplyLeaveDialog({
                   </div>
                 ) : null}
               </div>
-            ) : null}
 
             <div className="rounded-lg border border-[#E8E8EF] bg-[#F8F9FC] px-3 py-2.5 text-sm">
               {page.previewLoading ? (
@@ -352,28 +346,6 @@ export function EmployeeApplyLeaveDialog({
               />
             </div>
 
-            {attachmentRequired ? (
-              <div className="grid gap-1.5">
-                <CrmFieldLabel htmlFor="apply-attachment" required>
-                  Supporting document
-                </CrmFieldLabel>
-                <Input
-                  id="apply-attachment"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className={CRM_PIPELINE_FORM_FIELD_CLASS}
-                  disabled={!formEnabled}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] ?? null;
-                    page.setAttachmentFile(file);
-                  }}
-                />
-                <p className="text-muted-foreground text-xs">
-                  JPEG, PNG, or WebP. Required for this leave type before submission.
-                </p>
-                <CrmInlineFieldError message={page.applyFieldErrors.attachment} reserveSpace={false} />
-              </div>
-            ) : null}
           </div>
         </div>
 

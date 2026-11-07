@@ -1,6 +1,6 @@
 'use client';
 
-import type { LeaveTypeItem } from '@techwin/contracts';
+import type { LeaveTypeItem, LeaveTypeKind } from '@techwin/contracts';
 import {
   createLeaveTypeRequestSchema,
   updateLeaveTypeRequestSchema,
@@ -8,7 +8,7 @@ import {
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { clearFormFieldError, zodIssuesToFieldMap } from '@/shared/form/zod-field-error';
 import { Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -18,41 +18,31 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useAdminToast } from '@/features/admin/components/toast';
 import {
-  CRM_PIPELINE_FORM_DIALOG_CLASS,
+  CRM_PIPELINE_DIALOG_BODY_CLASS,
+  CRM_PIPELINE_DIALOG_FOOTER_CLASS,
+  CRM_PIPELINE_DIALOG_HEADER_CLASS,
+  CRM_PIPELINE_DIALOG_SHELL_CLASS,
+  CRM_PIPELINE_DIALOG_TITLE_CLASS,
   CRM_PIPELINE_FORM_FIELD_CLASS,
   CRM_PIPELINE_FORM_TEXTAREA_CLASS,
+  CRM_PIPELINE_PRIMARY_BUTTON_CLASS,
+  CRM_PIPELINE_SECONDARY_BUTTON_CLASS,
 } from '@/features/admin/crm/constants';
 import { CrmFieldLabel, CrmInlineFieldError } from '@/features/admin/crm/components/crm-feedback';
-import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
-import { createLeaveType, updateLeaveType } from '@/features/leave/api/leave-api';
 import { cn } from '@/shared/lib/utils';
-
-const PIPELINE_FORM_SECONDARY_BTN =
-  'h-11 shrink-0 rounded-lg border border-input bg-card px-3.5 text-sm font-medium text-foreground shadow-none hover:bg-muted/50';
-
-const PIPELINE_FORM_PRIMARY_BTN =
-  'border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900';
-
-const PIPELINE_DIALOG_SHELL_CLASS = cn(
-  CRM_PIPELINE_FORM_DIALOG_CLASS,
-  '[&>button]:text-foreground [&>button]:top-5 [&>button]:right-5 [&>button]:size-9 [&>button]:rounded-lg [&>button]:border [&>button]:border-input [&>button]:bg-card [&>button]:shadow-none [&>button]:hover:bg-muted/50',
-);
-
-/** Derive a unique-style code from the display name (API requires a code; not shown in UI). */
-function deriveLeaveCodeFromName(name: string): string {
-  const base = name
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^A-Z0-9_-]/g, '')
-    .slice(0, 16);
-  if (base.length >= 1) return base;
-  return `LT_${Date.now().toString(36).slice(-8).toUpperCase()}`;
-}
+import { useCreateLeaveType, useUpdateLeaveType } from '../hooks';
+import { previewLeaveTypeCode } from '../utils/leave-type-code-preview';
 
 export function LeaveTypeFormDialog({
   open,
@@ -63,49 +53,55 @@ export function LeaveTypeFormDialog({
   open: boolean;
   editing: LeaveTypeItem | null;
   onOpenChange: (open: boolean) => void;
-  onSaved: () => void | Promise<void>;
+  onSaved: () => void;
 }) {
   const toast = useAdminToast();
-  const { pending, run } = useAsyncAction();
+  const { createLeaveType, pending: createPending } = useCreateLeaveType();
+  const { updateLeaveType, pending: updatePending } = useUpdateLeaveType();
+  const pending = createPending || updatePending;
   const isCreate = editing === null;
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [kind, setKind] = useState<LeaveTypeKind>('PAID');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
     if (editing) {
       setName(editing.name);
-      setDescription(editing.description);
+      setDescription(editing.description ?? '');
+      setKind(editing.kind);
     } else {
       setName('');
       setDescription('');
+      setKind('PAID');
     }
     setFieldErrors({});
   }, [open, editing]);
 
+  const codePreview = useMemo(
+    () => (isCreate ? previewLeaveTypeCode(name) : editing?.code ?? ''),
+    [editing?.code, isCreate, name],
+  );
+
   const handleSubmit = useCallback(async () => {
     if (isCreate) {
-      const body = {
+      const parsed = createLeaveTypeRequestSchema.safeParse({
         name,
         description,
-        code: deriveLeaveCodeFromName(name),
-        appliesToAllEmployees: true,
-        applicableEmployeeIds: [] as string[],
-        applicableDepartments: [] as string[],
-      };
-      const parsed = createLeaveTypeRequestSchema.safeParse(body);
+        kind,
+      });
       if (!parsed.success) {
         setFieldErrors(zodIssuesToFieldMap(parsed.error));
         focusFirstInvalidField();
         return;
       }
       try {
-        await run(() => createLeaveType(parsed.data as Parameters<typeof createLeaveType>[0]));
+        await createLeaveType(parsed.data);
         toast.success('Leave type created.');
         onOpenChange(false);
-        await onSaved();
+        onSaved();
       } catch (failure) {
         toast.error(describeCrmError(failure));
       }
@@ -113,37 +109,43 @@ export function LeaveTypeFormDialog({
     }
 
     if (!editing) return;
-    const parsed = updateLeaveTypeRequestSchema.safeParse({ name, description });
+    const parsed = updateLeaveTypeRequestSchema.safeParse({
+      name,
+      description,
+      kind,
+    });
     if (!parsed.success) {
       setFieldErrors(zodIssuesToFieldMap(parsed.error));
       focusFirstInvalidField();
       return;
     }
     try {
-      await run(() => updateLeaveType(editing.id, parsed.data));
+      await updateLeaveType(editing.id, parsed.data);
       toast.success('Leave type updated.');
       onOpenChange(false);
-      await onSaved();
+      onSaved();
     } catch (failure) {
       toast.error(describeCrmError(failure));
     }
-  }, [name, description, isCreate, editing, run, toast, onSaved, onOpenChange]);
+  }, [createLeaveType, description, editing, isCreate, kind, name, onOpenChange, onSaved, toast, updateLeaveType]);
 
   const nameError = fieldErrors.name;
+  const descriptionError = fieldErrors.description;
+  const kindError = fieldErrors.kind;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={PIPELINE_DIALOG_SHELL_CLASS}>
-        <DialogHeader className="shrink-0 space-y-0 px-6 pt-6 pb-2 text-left">
-          <DialogTitle className="text-foreground pr-10 text-xl font-semibold tracking-tight">
-            {isCreate ? 'Create Leave Type' : 'Edit Leave Type'}
+      <DialogContent className={CRM_PIPELINE_DIALOG_SHELL_CLASS}>
+        <DialogHeader className={CRM_PIPELINE_DIALOG_HEADER_CLASS}>
+          <DialogTitle className={CRM_PIPELINE_DIALOG_TITLE_CLASS}>
+            {isCreate ? 'Create leave type' : 'Edit leave type'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">
+        <div className={CRM_PIPELINE_DIALOG_BODY_CLASS}>
           <div className="grid gap-4 pb-2">
             <div className="grid gap-2">
-              <CrmFieldLabel htmlFor="leave-type-name" required={isCreate}>
+              <CrmFieldLabel htmlFor="leave-type-name" required>
                 Name
               </CrmFieldLabel>
               <Input
@@ -162,28 +164,72 @@ export function LeaveTypeFormDialog({
                 }}
               />
               <CrmInlineFieldError message={nameError} reserveSpace={false} />
+              {codePreview ? (
+                <p className="text-muted-foreground text-xs">
+                  Code: <span className="text-foreground font-medium">{codePreview}</span>
+                  {isCreate ? null : ' (kept when the name changes)'}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-2">
+              <CrmFieldLabel htmlFor="leave-type-kind" required>
+                Type
+              </CrmFieldLabel>
+              <Select
+                value={kind}
+                disabled={pending}
+                onValueChange={(value) => {
+                  setKind(value as LeaveTypeKind);
+                  clearFormFieldError(setFieldErrors, 'kind');
+                }}
+              >
+                <SelectTrigger
+                  id="leave-type-kind"
+                  aria-invalid={Boolean(kindError)}
+                  className={cn(
+                    CRM_PIPELINE_FORM_FIELD_CLASS,
+                    formControlStateClass(kindError ? 'invalid' : 'neutral'),
+                  )}
+                >
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PAID">Paid</SelectItem>
+                  <SelectItem value="UNPAID">Unpaid</SelectItem>
+                </SelectContent>
+              </Select>
+              <CrmInlineFieldError message={kindError} reserveSpace={false} />
             </div>
 
             <div className="grid gap-2">
               <CrmFieldLabel htmlFor="leave-type-desc">Description</CrmFieldLabel>
               <Textarea
                 id="leave-type-desc"
-                placeholder="Optional policy summary for admins and employees"
+                placeholder="Optional summary for admins and employees"
                 value={description}
                 disabled={pending}
                 rows={3}
-                className={cn(CRM_PIPELINE_FORM_TEXTAREA_CLASS, 'min-h-[6.5rem] max-h-40 resize-y')}
-                onChange={(event) => setDescription(event.target.value)}
+                aria-invalid={Boolean(descriptionError)}
+                className={cn(
+                  CRM_PIPELINE_FORM_TEXTAREA_CLASS,
+                  formControlStateClass(descriptionError ? 'invalid' : 'neutral'),
+                )}
+                onChange={(event) => {
+                  setDescription(event.target.value);
+                  clearFormFieldError(setFieldErrors, 'description');
+                }}
               />
+              <CrmInlineFieldError message={descriptionError} reserveSpace={false} />
             </div>
           </div>
         </div>
 
-        <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-6 py-4 sm:justify-end">
+        <DialogFooter className={CRM_PIPELINE_DIALOG_FOOTER_CLASS}>
           <Button
             type="button"
             variant="outline"
-            className={PIPELINE_FORM_SECONDARY_BTN}
+            className={CRM_PIPELINE_SECONDARY_BUTTON_CLASS}
             disabled={pending}
             onClick={() => onOpenChange(false)}
           >
@@ -191,7 +237,7 @@ export function LeaveTypeFormDialog({
           </Button>
           <Button
             type="button"
-            className={cn('h-11 px-5', PIPELINE_FORM_PRIMARY_BTN)}
+            className={cn('h-11 px-5', CRM_PIPELINE_PRIMARY_BUTTON_CLASS)}
             disabled={pending}
             onClick={() => void handleSubmit()}
           >
@@ -201,7 +247,7 @@ export function LeaveTypeFormDialog({
                 {isCreate ? 'Creating…' : 'Saving…'}
               </>
             ) : isCreate ? (
-              'Create leave type'
+              'Create Leave Type'
             ) : (
               'Save leave type'
             )}

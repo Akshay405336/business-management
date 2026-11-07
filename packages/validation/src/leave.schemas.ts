@@ -2,14 +2,21 @@ import { z } from 'zod';
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a valid date (YYYY-MM-DD).');
 
-const leaveTypeCodeSchema = z
+const leaveTypeNameSchema = z
   .string()
   .trim()
-  .min(1, 'Enter a leave code.')
-  .max(16)
-  .regex(/^[A-Za-z0-9_-]+$/, 'Use letters, numbers, hyphen or underscore only.');
+  .min(1, 'Enter a leave type name.')
+  .max(120, 'Leave type name must be 120 characters or fewer.');
 
-const leaveTypeNameSchema = z.string().trim().min(1, 'Enter a leave name.').max(120);
+const leaveTypeDescriptionValueSchema = z
+  .string()
+  .max(2000, 'Description must be 2000 characters or fewer.')
+  .transform((value) => {
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  });
+
+const leaveTypeKindSchema = z.enum(['PAID', 'UNPAID']);
 
 const leaveDaysSchema = z
   .union([
@@ -32,75 +39,42 @@ const leaveAllocationEligibilitySchema = z.enum([
 const leaveHalfDaySessionSchema = z.enum(['FIRST_HALF', 'SECOND_HALF']);
 const leaveRequestStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']);
 
-const leaveTypeBodyFields = {
-  name: leaveTypeNameSchema,
-  code: leaveTypeCodeSchema,
-  description: z.string().max(2000).default(''),
-  isPaid: z.boolean().default(true),
-  annualAllocationEligible: z.boolean().default(true),
-  carryForwardEnabled: z.boolean().default(false),
-  maxCarryForwardDays: leaveDaysSchema.default('0'),
-  maxConsecutiveDays: z.number().int().min(1).max(365).nullable().optional(),
-  minApplicationDays: leaveDaysSchema.default('0.5'),
-  halfDayAllowed: z.boolean().default(true),
-  attachmentRequired: z.boolean().default(false),
-  attachmentRequiredAfterDays: leaveDaysSchema.nullable().optional(),
-  appliesToAllEmployees: z.boolean().default(true),
-  applicableEmployeeIds: z.array(z.string().uuid()).default([]),
-  applicableDepartments: z.array(z.string().trim().min(1).max(120)).default([]),
-};
-
 export const createLeaveTypeRequestSchema = z
-  .object(leaveTypeBodyFields)
-  .strict()
-  .superRefine((value, ctx) => {
-    if (!value.appliesToAllEmployees && value.applicableEmployeeIds.length === 0 && value.applicableDepartments.length === 0) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['applicableEmployeeIds'],
-        message: 'Select applicable employees or departments, or apply to all employees.',
-      });
-    }
-    if (value.carryForwardEnabled && Number(value.maxCarryForwardDays) <= 0) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['maxCarryForwardDays'],
-        message: 'Enter maximum carry-forward days when carry-forward is enabled.',
-      });
-    }
-  });
+  .object({
+    name: leaveTypeNameSchema,
+    description: leaveTypeDescriptionValueSchema.nullish().transform((value) => value ?? null),
+    kind: leaveTypeKindSchema,
+  })
+  .strict();
 
 export type CreateLeaveTypeRequest = z.infer<typeof createLeaveTypeRequestSchema>;
 
 export const updateLeaveTypeRequestSchema = z
   .object({
-    ...leaveTypeBodyFields,
-    status: leaveTypeStatusSchema.optional(),
+    name: leaveTypeNameSchema.optional(),
+    description: z
+      .union([leaveTypeDescriptionValueSchema, z.null()])
+      .optional(),
+    kind: leaveTypeKindSchema.optional(),
   })
-  .partial()
-  .strict()
-  .superRefine((value, ctx) => {
-    if (
-      value.appliesToAllEmployees === false &&
-      (value.applicableEmployeeIds?.length ?? 0) === 0 &&
-      (value.applicableDepartments?.length ?? 0) === 0
-    ) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['applicableEmployeeIds'],
-        message: 'Select applicable employees or departments, or apply to all employees.',
-      });
-    }
-  });
+  .strict();
 
 export type UpdateLeaveTypeRequest = z.infer<typeof updateLeaveTypeRequestSchema>;
+
+export const changeLeaveTypeStatusRequestSchema = z
+  .object({
+    status: leaveTypeStatusSchema,
+  })
+  .strict();
+
+export type ChangeLeaveTypeStatusRequest = z.infer<typeof changeLeaveTypeStatusRequestSchema>;
 
 export const leaveTypeListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   search: z.string().max(120).optional(),
   status: leaveTypeStatusSchema.optional(),
-  includeInactive: z.coerce.boolean().optional(),
+  kind: leaveTypeKindSchema.optional(),
 });
 
 export type LeaveTypeListQuery = z.infer<typeof leaveTypeListQuerySchema>;

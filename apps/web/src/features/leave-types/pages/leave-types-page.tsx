@@ -4,7 +4,6 @@ import type { LeaveTypeItem } from '@techwin/contracts';
 import {
   ArrowUpDown,
   Download,
-  Eye,
   ListFilter,
   Loader2,
   Plus,
@@ -14,7 +13,7 @@ import {
   ToggleRight,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,11 +29,9 @@ import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InputGroup, inputGroupPaddingClass } from '@/components/ui/input-group';
@@ -55,20 +52,33 @@ import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
 import { useAdminToast } from '@/features/admin/components/toast';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
-import { CRM_HEADER_SEARCH_FORM_CLASS, CrmToolbarHeader } from '@/features/admin/crm/components/crm-toolbar-header';
-import { CRM_PIPELINE_SEARCH_INPUT_CLASS } from '@/features/admin/crm/constants';
-import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
+import {
+  CRM_HEADER_SEARCH_FORM_CLASS,
+  CrmToolbarHeader,
+} from '@/features/admin/crm/components/crm-toolbar-header';
+import {
+  CRM_PIPELINE_DESTRUCTIVE_ACTION_CLASS,
+  CRM_PIPELINE_SEARCH_INPUT_CLASS,
+  CRM_PIPELINE_STATUS_ACTION_CLASS,
+} from '@/features/admin/crm/constants';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { usePortalNavigation } from '@/features/auth/portal/use-portal-navigation';
-import { deleteLeaveType, listLeaveTypes, updateLeaveType } from '@/features/leave/api/leave-api';
-import { isAbortError } from '@/shared/lib/abort-error';
 import { cn } from '@/shared/lib/utils';
-import { LeaveTypeFormDialog } from './leave-type-form-dialog';
-import { LeaveTypeViewDialog } from './leave-type-view-dialog';
+import { LeaveTypeFormDialog } from '../components/leave-type-form-dialog';
+import {
+  useChangeLeaveTypeStatus,
+  useDeleteLeaveType,
+  useLeaveTypes,
+} from '../hooks';
+import {
+  isLeaveTypeDeleteBlockedError,
+  leaveTypeDeleteBlockedMessage,
+  leaveTypeDependencyCountsFromError,
+  type LeaveTypeDependencyCounts,
+} from '../utils/leave-type-delete-messages';
 
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
-type PaidFilter = 'ALL' | 'PAID' | 'UNPAID';
-type YesNoFilter = 'ALL' | 'YES' | 'NO';
+type KindFilter = 'ALL' | 'PAID' | 'UNPAID';
 type LeaveTypeSortKey = 'default' | 'name-asc' | 'name-desc' | 'code-asc' | 'code-desc';
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -82,13 +92,12 @@ function escapeCsvCell(value: string): string {
 }
 
 function downloadLeaveTypesCsv(items: readonly LeaveTypeItem[], filename = 'leave-types.csv') {
-  const headers = ['Name', 'Code', 'Paid', 'Attachment', 'Status'];
+  const headers = ['Leave Type', 'Code', 'Paid/Unpaid', 'Status'];
   const rows = items.map((row) =>
     [
       escapeCsvCell(row.name),
       escapeCsvCell(row.code),
-      row.isPaid ? 'Paid' : 'Unpaid',
-      row.attachmentRequired ? 'Yes' : 'No',
+      row.kind === 'PAID' ? 'Paid' : 'Unpaid',
       row.status,
     ].join(','),
   );
@@ -102,20 +111,6 @@ function downloadLeaveTypesCsv(items: readonly LeaveTypeItem[], filename = 'leav
   URL.revokeObjectURL(url);
 }
 
-function applyClientFilters(
-  items: readonly LeaveTypeItem[],
-  paidFilter: PaidFilter,
-  attachmentFilter: YesNoFilter,
-): LeaveTypeItem[] {
-  return items.filter((row) => {
-    if (paidFilter === 'PAID' && !row.isPaid) return false;
-    if (paidFilter === 'UNPAID' && row.isPaid) return false;
-    if (attachmentFilter === 'YES' && !row.attachmentRequired) return false;
-    if (attachmentFilter === 'NO' && row.attachmentRequired) return false;
-    return true;
-  });
-}
-
 function sortLeaveTypes(items: LeaveTypeItem[], sortKey: LeaveTypeSortKey): LeaveTypeItem[] {
   const next = [...items];
   switch (sortKey) {
@@ -126,65 +121,44 @@ function sortLeaveTypes(items: LeaveTypeItem[], sortKey: LeaveTypeSortKey): Leav
     case 'code-desc':
       return next.sort((a, b) => b.code.localeCompare(a.code) || a.name.localeCompare(b.name));
     case 'name-asc':
-      return next.sort((a, b) => a.name.localeCompare(b.name));
     default:
       return next.sort((a, b) => a.name.localeCompare(b.name));
   }
 }
 
-export function AdminLeaveTypesWorkspace() {
+export function LeaveTypesPage() {
   const toast = useAdminToast();
-  const { pending, run } = useAsyncAction();
   const { dashboardBreadcrumb } = usePortalNavigation();
+  const { changeLeaveTypeStatus, pending: statusPending } = useChangeLeaveTypeStatus();
+  const { deleteLeaveType, pending: deletePending } = useDeleteLeaveType();
+  const pending = statusPending || deletePending;
 
-  const [allItems, setAllItems] = useState<readonly LeaveTypeItem[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-
   const [searchDraft, setSearchDraft] = useState('');
   const [search, setSearch] = useState('');
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
-  const [paidFilter, setPaidFilter] = useState<PaidFilter>('ALL');
-  const [attachmentFilter, setAttachmentFilter] = useState<YesNoFilter>('ALL');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('ALL');
   const [sortKey, setSortKey] = useState<LeaveTypeSortKey>('default');
-
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<LeaveTypeItem | null>(null);
-  const [viewItem, setViewItem] = useState<LeaveTypeItem | null>(null);
+  const [statusTarget, setStatusTarget] = useState<LeaveTypeItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<LeaveTypeItem | null>(null);
+  const [deleteBlockedTarget, setDeleteBlockedTarget] = useState<{
+    name: string;
+    counts: LeaveTypeDependencyCounts;
+  } | null>(null);
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    try {
-      const res = await listLeaveTypes(
-        {
-          page: 1,
-          pageSize: LIST_PAGE_SIZE,
-          search: search.trim() || undefined,
-          status: statusFilter === 'ALL' ? undefined : statusFilter,
-          includeInactive: statusFilter === 'ALL' ? true : undefined,
-        },
-        signal,
-      );
-      setAllItems(res.items);
-      setError(null);
-    } catch (failure) {
-      if (isAbortError(failure)) return;
-      setError(describeCrmError(failure));
-    } finally {
-      setLoading(false);
-    }
-  }, [search, statusFilter]);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+  const { leaveTypes, loading, error, refetch } = useLeaveTypes({
+    query: {
+      page: 1,
+      pageSize: LIST_PAGE_SIZE,
+      search: search.trim() || undefined,
+      status: statusFilter === 'ALL' ? undefined : statusFilter,
+      kind: kindFilter === 'ALL' ? undefined : kindFilter,
+    },
+  });
 
   useEffect(() => {
     setSearchDraft(search);
@@ -204,25 +178,21 @@ export function AdminLeaveTypesWorkspace() {
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, paidFilter, attachmentFilter, sortKey]);
+  }, [statusFilter, kindFilter, sortKey]);
 
-  const sortedFiltered = useMemo(() => {
-    const base = allItems ?? [];
-    const filtered = applyClientFilters(base, paidFilter, attachmentFilter);
-    return sortLeaveTypes(filtered, sortKey);
-  }, [allItems, paidFilter, attachmentFilter, sortKey]);
+  const sortedFiltered = useMemo(
+    () => sortLeaveTypes([...(leaveTypes ?? [])], sortKey),
+    [leaveTypes, sortKey],
+  );
 
-  const hasAnyItems = (allItems?.length ?? 0) > 0;
+  const hasAnyItems = (leaveTypes?.length ?? 0) > 0;
   const searchActive = search.trim().length > 0;
-  const dropdownFiltersActive =
-    statusFilter !== 'ALL' || paidFilter !== 'ALL' || attachmentFilter !== 'ALL';
+  const dropdownFiltersActive = statusFilter !== 'ALL' || kindFilter !== 'ALL';
   const filtersActive = dropdownFiltersActive || searchActive;
   const sortActive = sortKey !== 'default';
-
   const totalItems = sortedFiltered.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
-
   const pagedItems = useMemo(() => {
     const start = (safePage - 1) * pageSize;
     return sortedFiltered.slice(start, start + pageSize);
@@ -238,6 +208,7 @@ export function AdminLeaveTypesWorkspace() {
     rowCount: hasAnyItems ? sortedFiltered.length : 0,
   });
   const tableRefreshing = isDataTableRefreshing({ loading, rowCount: sortedFiltered.length });
+  const statusChangeIsDeactivate = statusTarget?.status === 'ACTIVE';
 
   const emptyTitle = searchActive
     ? 'No leave types match your search.'
@@ -255,8 +226,7 @@ export function AdminLeaveTypesWorkspace() {
     setSearchDraft('');
     setSearch('');
     setStatusFilter('ALL');
-    setPaidFilter('ALL');
-    setAttachmentFilter('ALL');
+    setKindFilter('ALL');
     setPage(1);
   };
 
@@ -273,12 +243,20 @@ export function AdminLeaveTypesWorkspace() {
     setFormOpen(true);
   };
 
-  const toggleStatus = async (row: LeaveTypeItem) => {
+  const openEdit = (row: LeaveTypeItem) => {
+    setEditing(row);
+    setFormOpen(true);
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusTarget) return;
+    const row = statusTarget;
     const next = row.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    setStatusTarget(null);
     try {
-      await run(() => updateLeaveType(row.id, { status: next }));
+      await changeLeaveTypeStatus(row.id, next);
       toast.success(next === 'ACTIVE' ? 'Leave type activated.' : 'Leave type deactivated.');
-      await load();
+      refetch();
     } catch (failure) {
       toast.error(describeCrmError(failure));
     }
@@ -289,10 +267,17 @@ export function AdminLeaveTypesWorkspace() {
     const target = deleteTarget;
     setDeleteTarget(null);
     try {
-      await run(() => deleteLeaveType(target.id));
-      toast.success('Leave type deleted.');
-      await load();
+      await deleteLeaveType(target.id);
+      toast.success(`Leave type "${target.name}" deleted.`);
+      refetch();
     } catch (failure) {
+      if (isLeaveTypeDeleteBlockedError(failure)) {
+        setDeleteBlockedTarget({
+          name: target.name,
+          counts: leaveTypeDependencyCountsFromError(failure),
+        });
+        return;
+      }
       toast.error(describeCrmError(failure));
     }
   };
@@ -310,7 +295,7 @@ export function AdminLeaveTypesWorkspace() {
         <div className="rounded-lg">
           <CrmToolbarHeader
             title="Leave Types"
-            description="Manage leave categories, eligibility and leave policies for your organization."
+            description="Define paid and unpaid leave categories for your organization."
             className="rounded-none border-0 bg-card shadow-none"
             descriptionTruncate
             titleSectionClassName="basis-auto sm:max-w-none lg:max-w-[min(100%,28rem)] xl:max-w-[min(100%,32rem)]"
@@ -360,50 +345,31 @@ export function AdminLeaveTypesWorkspace() {
                     </TooltipTrigger>
                     <TooltipContent side="bottom">Filter</TooltipContent>
                   </Tooltip>
-                  <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuContent align="end" className="w-44">
                     <DropdownMenuLabel>Status</DropdownMenuLabel>
                     <DropdownMenuRadioGroup
                       value={statusFilter}
-                      onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+                      onValueChange={(value) => {
+                        setStatusFilter(value as StatusFilter);
+                        setPage(1);
+                      }}
                     >
                       <DropdownMenuRadioItem value="ALL">All statuses</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="ACTIVE">Active</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="INACTIVE">Inactive</DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Paid / unpaid</DropdownMenuLabel>
+                    <DropdownMenuLabel>Type</DropdownMenuLabel>
                     <DropdownMenuRadioGroup
-                      value={paidFilter}
-                      onValueChange={(value) => setPaidFilter(value as PaidFilter)}
+                      value={kindFilter}
+                      onValueChange={(value) => {
+                        setKindFilter(value as KindFilter);
+                        setPage(1);
+                      }}
                     >
-                      <DropdownMenuRadioItem value="ALL">All</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="ALL">All types</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="PAID">Paid</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="UNPAID">Unpaid</DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Attachment required</DropdownMenuLabel>
-                    <DropdownMenuRadioGroup
-                      value={attachmentFilter}
-                      onValueChange={(value) => setAttachmentFilter(value as YesNoFilter)}
-                    >
-                      <DropdownMenuRadioItem value="ALL">All</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="YES">Yes</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="NO">No</DropdownMenuRadioItem>
-                    </DropdownMenuRadioGroup>
-                    {dropdownFiltersActive ? (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-muted-foreground"
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            clearFilters();
-                          }}
-                        >
-                          Clear filters
-                        </DropdownMenuItem>
-                      </>
-                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <DropdownMenu>
@@ -427,9 +393,13 @@ export function AdminLeaveTypesWorkspace() {
                     <DropdownMenuLabel>Sort by</DropdownMenuLabel>
                     <DropdownMenuRadioGroup
                       value={sortKey}
-                      onValueChange={(value) => setSortKey(value as LeaveTypeSortKey)}
+                      onValueChange={(value) => {
+                        setSortKey(value as LeaveTypeSortKey);
+                        setPage(1);
+                      }}
                     >
-                      <DropdownMenuRadioItem value="default">Name (A–Z)</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="default">Default order</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="name-asc">Name (A–Z)</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="name-desc">Name (Z–A)</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="code-asc">Code (A–Z)</DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="code-desc">Code (Z–A)</DropdownMenuRadioItem>
@@ -453,13 +423,13 @@ export function AdminLeaveTypesWorkspace() {
                   onClick={openCreate}
                 >
                   <Plus aria-hidden="true" />
-                  Add Leave Type
+                  Add leave type
                 </Button>
               </>
             }
           />
 
-          {error && (allItems?.length ?? 0) > 0 ? (
+          {error && (leaveTypes?.length ?? 0) > 0 ? (
             <div className="border-border border-b px-4 sm:px-5">
               <CrmErrorAlert message={error} />
             </div>
@@ -474,24 +444,19 @@ export function AdminLeaveTypesWorkspace() {
             tableClassName="table-fixed [&_[data-slot=table-head]]:h-auto [&_[data-slot=table-head]]:py-3 [&_[data-slot=table-cell]]:py-3"
             tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
             phase={tablePhase}
-            colSpan={6}
+            colSpan={5}
             skeletonColumns={CRM_LEAVE_TYPES_TABLE_SKELETON}
             header={
               <TableRow className="hover:bg-transparent">
-                <TableHead className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.name}>Leave type</TableHead>
+                <TableHead className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.name}>Leave Type</TableHead>
                 <TableHead className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.code}>Code</TableHead>
                 <TableHead className={cn(CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.paid, 'whitespace-nowrap')}>
-                  Paid / unpaid
-                </TableHead>
-                <TableHead className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.attachment}>
-                  Attachment
+                  Paid/Unpaid
                 </TableHead>
                 <TableHead className={cn(CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.status, 'whitespace-nowrap')}>
                   Status
                 </TableHead>
-                <TableHead
-                  className={cn(CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.actions, 'text-right')}
-                >
+                <TableHead className={cn(CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.actions, 'text-right')}>
                   Actions
                 </TableHead>
               </TableRow>
@@ -499,15 +464,10 @@ export function AdminLeaveTypesWorkspace() {
             empty={{
               title: emptyTitle,
               description: emptyDescription,
-              action: !filtersActive
-                ? { label: 'Add Leave Type', onClick: openCreate }
-                : undefined,
-              secondaryAction: filtersActive
-                ? { label: 'Clear filters', onClick: clearFilters }
-                : undefined,
+              secondaryAction: filtersActive ? { label: 'Clear filters', onClick: clearFilters } : undefined,
             }}
             errorMessage={error}
-            onRetry={() => void load()}
+            onRetry={() => refetch()}
             refreshing={tableRefreshing}
             footer={
               <TablePagination
@@ -537,14 +497,11 @@ export function AdminLeaveTypesWorkspace() {
                     <TooltipContent side="top">{row.name}</TooltipContent>
                   </Tooltip>
                 </TableCell>
-                <TableCell className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.code}>{row.code}</TableCell>
-                <TableCell className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.paid}>
-                  <Badge variant="outline" className="font-normal">
-                    {row.isPaid ? 'Paid' : 'Unpaid'}
-                  </Badge>
+                <TableCell className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.code}>
+                  <span className="text-muted-foreground font-mono text-sm">{row.code}</span>
                 </TableCell>
-                <TableCell className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.attachment}>
-                  {row.attachmentRequired ? 'Yes' : 'No'}
+                <TableCell className={CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.paid}>
+                  {row.kind === 'PAID' ? 'Paid' : 'Unpaid'}
                 </TableCell>
                 <TableCell className={cn(CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.status, 'text-left')}>
                   {row.status === 'ACTIVE' ? (
@@ -559,16 +516,12 @@ export function AdminLeaveTypesWorkspace() {
                 </TableCell>
                 <TableCell className={cn(CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.actions, 'min-w-0 pl-4')}>
                   <div className="flex w-full shrink-0 items-center justify-end gap-1">
-                    <TableIconButton label={`View ${row.name}`} onClick={() => setViewItem(row)}>
-                      <Eye className="size-4" aria-hidden="true" />
-                    </TableIconButton>
                     <TableIconButton
                       label={`Edit ${row.name}`}
-                      tone="primary"
-                      onClick={() => {
-                        setEditing(row);
-                        setFormOpen(true);
-                      }}
+                      tone="default"
+                      className="text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                      disabled={pending}
+                      onClick={() => openEdit(row)}
                     >
                       <SquarePen className="size-4" aria-hidden="true" />
                     </TableIconButton>
@@ -585,17 +538,18 @@ export function AdminLeaveTypesWorkspace() {
                           : 'text-emerald-800 hover:bg-emerald-800/10 hover:text-emerald-900'
                       }
                       disabled={pending}
-                      onClick={() => void toggleStatus(row)}
+                      onClick={() => setStatusTarget(row)}
                     >
                       {row.status === 'ACTIVE' ? (
-                        <ToggleRight className="size-4" aria-hidden="true" />
+                        <ToggleRight className="size-4 stroke-[2]" aria-hidden="true" />
                       ) : (
-                        <ToggleLeft className="size-4" aria-hidden="true" />
+                        <ToggleLeft className="size-4 stroke-[2]" aria-hidden="true" />
                       )}
                     </TableIconButton>
                     <TableIconButton
                       label={`Delete ${row.name}`}
-                      tone="danger"
+                      tone="default"
+                      className="text-neutral-900 hover:bg-neutral-900/10 hover:text-black disabled:opacity-100 disabled:hover:bg-transparent"
                       disabled={pending}
                       onClick={() => setDeleteTarget(row)}
                     >
@@ -613,38 +567,96 @@ export function AdminLeaveTypesWorkspace() {
         open={formOpen}
         editing={editing}
         onOpenChange={setFormOpen}
-        onSaved={() => load()}
+        onSaved={refetch}
       />
 
-      <LeaveTypeViewDialog
-        open={viewItem !== null}
-        item={viewItem}
-        onOpenChange={(open) => {
-          if (!open) setViewItem(null);
-        }}
-        onEdit={() => {
-          if (!viewItem) return;
-          setEditing(viewItem);
-          setViewItem(null);
-          setFormOpen(true);
-        }}
-      />
-
-      <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+      <AlertDialog
+        open={statusTarget !== null}
+        onOpenChange={(open) => !open && setStatusTarget(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete leave type?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {statusChangeIsDeactivate ? 'Deactivate leave type?' : 'Activate leave type?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteTarget
-                ? `Permanently delete "${deleteTarget.name}" only if it has no balances or requests. Otherwise deactivate it.`
+              {statusTarget
+                ? statusChangeIsDeactivate
+                  ? `“${statusTarget.name}” will be marked inactive. Existing leave requests stay on record, but employees will not be able to select it for new applications until you activate it again.`
+                  : `“${statusTarget.name}” will be marked active and available for new leave applications.`
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void confirmDelete()} disabled={pending}>
-              {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
-              Delete
+            <AlertDialogAction
+              disabled={!statusTarget || pending}
+              className={statusChangeIsDeactivate ? CRM_PIPELINE_STATUS_ACTION_CLASS : undefined}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmStatusChange();
+              }}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  {statusChangeIsDeactivate ? 'Deactivating…' : 'Activating…'}
+                </>
+              ) : statusChangeIsDeactivate ? (
+                'Deactivate'
+              ) : (
+                'Activate'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deleteBlockedTarget !== null}
+        onOpenChange={(open) => !open && setDeleteBlockedTarget(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cannot Delete Leave Type</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteBlockedTarget ? leaveTypeDeleteBlockedMessage(deleteBlockedTarget.counts) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setDeleteBlockedTarget(null)}>Close</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete leave type?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `“${deleteTarget.name}” will be permanently removed. This action cannot be undone.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!deleteTarget || pending}
+              className={CRM_PIPELINE_DESTRUCTIVE_ACTION_CLASS}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmDelete();
+              }}
+            >
+              {pending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Deleting…
+                </>
+              ) : (
+                'Delete'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

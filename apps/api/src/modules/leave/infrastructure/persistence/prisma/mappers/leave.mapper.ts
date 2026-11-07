@@ -11,17 +11,11 @@ import type {
 import type {
   EmployeeLeaveBalanceItem,
   LeaveRequestItem,
-  LeaveTypeItem,
   LeaveYearAllocationItem,
   LeaveYearConfigurationItem,
 } from '@techwin/contracts';
 import type { LeaveBalanceTransactionItem } from '../../../../domain/repositories/leave.repository.js';
 import { expandInclusiveCalendarRange } from '../../../../domain/policies/leave-request-dates.policy.js';
-
-function readStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === 'string');
-}
 
 export function formatLeaveDays(value: Decimal): string {
   const fixed = value.toFixed(1);
@@ -55,32 +49,6 @@ export function computeAvailableDays(balance: {
     .sub(balance.usedApprovedDays)
     .sub(balance.reservedPendingDays);
   return formatLeaveDays(available);
-}
-
-export function toLeaveTypeItem(row: LeaveType): LeaveTypeItem {
-  return {
-    id: row.id,
-    name: row.name,
-    code: row.code,
-    description: row.description,
-    isPaid: row.isPaid,
-    annualAllocationEligible: row.annualAllocationEligible,
-    carryForwardEnabled: row.carryForwardEnabled,
-    maxCarryForwardDays: formatLeaveDays(row.maxCarryForwardDays),
-    maxConsecutiveDays: row.maxConsecutiveDays,
-    minApplicationDays: formatLeaveDays(row.minApplicationDays),
-    halfDayAllowed: row.halfDayAllowed,
-    attachmentRequired: row.attachmentRequired,
-    attachmentRequiredAfterDays: row.attachmentRequiredAfterDays
-      ? formatLeaveDays(row.attachmentRequiredAfterDays)
-      : null,
-    appliesToAllEmployees: row.appliesToAllEmployees,
-    applicableEmployeeIds: readStringArray(row.applicableEmployeeIds),
-    applicableDepartments: readStringArray(row.applicableDepartments),
-    status: row.status,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  };
 }
 
 type LeaveYearConfigurationWithAllocations = LeaveYearConfiguration & {
@@ -138,7 +106,7 @@ export function toLeaveYearAllocationItem(
     leaveTypeId: row.leaveTypeId,
     leaveTypeName: row.leaveType.name,
     leaveTypeCode: row.leaveType.code,
-    isPaid: row.leaveType.isPaid,
+    isPaid: row.leaveType.kind === 'PAID',
     annualAllocationDays: formatLeaveDays(row.annualAllocationDays),
     accrualMethod: row.accrualMethod,
     carryForwardEnabled: row.carryForwardEnabled,
@@ -165,7 +133,7 @@ export function toEmployeeLeaveBalanceItem(
     leaveTypeId: row.leaveTypeId,
     leaveTypeName: row.leaveType.name,
     leaveTypeCode: row.leaveType.code,
-    leaveTypeIsPaid: row.leaveType.isPaid,
+    leaveTypeIsPaid: row.leaveType.kind === 'PAID',
     calendarYear: row.leaveYearConfiguration.calendarYear,
     allocatedDays: formatLeaveDays(row.allocatedDays),
     carryForwardDays: formatLeaveDays(row.carryForwardDays),

@@ -35,3 +35,15 @@ export class LeaveValidationError extends LeaveError {
     this.name = 'LeaveValidationError';
   }
 }
+
+export class LeaveTypeHasDependenciesError extends LeaveError {
+  constructor(
+    message: string,
+    readonly requestCount: number,
+    readonly balanceCount: number,
+    readonly allocationCount: number,
+  ) {
+    super(message, 'LEAVE_TYPE_HAS_DEPENDENCIES');
+    this.name = 'LeaveTypeHasDependenciesError';
+  }
+}

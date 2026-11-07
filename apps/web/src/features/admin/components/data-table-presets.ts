@@ -84,19 +84,17 @@ export const CRM_PIPELINES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = 
 
 /** Width classes for the HR leave types listing table (`table-fixed`). */
 export const CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS = {
-  name: 'w-[24%] min-w-[9rem]',
-  code: 'w-[12%] min-w-[5rem]',
-  paid: 'w-[14%] min-w-[6rem]',
-  attachment: 'w-[14%] min-w-[6.5rem]',
-  status: 'w-[12%] min-w-[5.75rem]',
-  actions: 'w-[16%] min-w-[10rem]',
+  name: 'w-[32%] min-w-[10rem]',
+  code: 'w-[18%] min-w-[7rem]',
+  paid: 'w-[16%] min-w-[6.5rem]',
+  status: 'w-[14%] min-w-[5.75rem]',
+  actions: 'w-[20%] min-w-[10rem]',
 } as const;
 
 export const CRM_LEAVE_TYPES_TABLE_SKELETON: readonly DataTableSkeletonColumn[] = [
   { variant: 'textWide', className: CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.name },
   { variant: 'text', className: CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.code },
   { variant: 'badge', className: CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.paid },
-  { variant: 'text', className: CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.attachment },
   { variant: 'badge', className: CRM_LEAVE_TYPES_TABLE_COLUMN_CLASS.status },
   {
     variant: 'actions',

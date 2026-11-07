@@ -3,7 +3,6 @@ import { Injectable } from '@nestjs/common';
 import { Decimal } from '@prisma/client/runtime/client';
 import type { Prisma } from '../../../../../../generated/prisma/client.js';
 import type {
-  CreateLeaveTypeRequest,
   CreateLeaveYearAllocationRequest,
   CreateLeaveBalanceConfigurationRequest,
   CreateLeaveYearConfigurationRequest,
@@ -12,8 +11,6 @@ import type {
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
-  LeaveTypeListQuery,
-  UpdateLeaveTypeRequest,
   UpdateLeaveYearAllocationRequest,
   UpdateLeaveYearConfigurationRequest,
   UpdateLeaveYearConfigurationStatusRequest,
@@ -39,7 +36,6 @@ import {
   toEmployeeLeaveBalanceItem,
   toLeaveBalanceTransactionItem,
   toLeaveRequestItem,
-  toLeaveTypeItem,
   toLeaveYearAllocationItem,
   toLeaveYearConfigurationItem,
 } from '../mappers/leave.mapper.js';
@@ -76,144 +72,6 @@ export class PrismaLeaveRepository implements LeaveRepository {
       select: { id: true },
     });
     return row?.id ?? null;
-  }
-
-  async listLeaveTypes(organizationId: string, query: LeaveTypeListQuery) {
-    const where: Prisma.LeaveTypeWhereInput = { organizationId };
-    if (query.status) {
-      where.status = query.status;
-    } else if (!query.includeInactive) {
-      where.status = 'ACTIVE';
-    }
-    if (query.search) {
-      const q = query.search.trim();
-      where.OR = [
-        { name: { contains: q, mode: 'insensitive' } },
-        { code: { contains: q, mode: 'insensitive' } },
-      ];
-    }
-    const skip = (query.page - 1) * query.pageSize;
-    const [rows, total] = await Promise.all([
-      this.prisma.leaveType.findMany({
-        where,
-        orderBy: [{ status: 'asc' }, { name: 'asc' }],
-        skip,
-        take: query.pageSize,
-      }),
-      this.prisma.leaveType.count({ where }),
-    ]);
-    return {
-      items: rows.map(toLeaveTypeItem),
-      total,
-      page: query.page,
-      pageSize: query.pageSize,
-    };
-  }
-
-  async getLeaveType(organizationId: string, leaveTypeId: string) {
-    const row = await this.prisma.leaveType.findFirst({
-      where: { id: leaveTypeId, organizationId },
-    });
-    if (!row) throw new LeaveNotFoundError('Leave type');
-    return toLeaveTypeItem(row);
-  }
-
-  async createLeaveType(organizationId: string, adminId: string, input: CreateLeaveTypeRequest) {
-    try {
-      const row = await this.prisma.leaveType.create({
-        data: {
-          id: randomUUID(),
-          organizationId,
-          name: input.name,
-          code: input.code.toUpperCase(),
-          description: input.description,
-          isPaid: input.isPaid,
-          annualAllocationEligible: input.annualAllocationEligible,
-          carryForwardEnabled: input.carryForwardEnabled,
-          maxCarryForwardDays: parseLeaveDays(input.maxCarryForwardDays),
-          maxConsecutiveDays: input.maxConsecutiveDays ?? null,
-          minApplicationDays: parseLeaveDays(input.minApplicationDays),
-          halfDayAllowed: input.halfDayAllowed,
-          attachmentRequired: input.attachmentRequired,
-          attachmentRequiredAfterDays: input.attachmentRequiredAfterDays
-            ? parseLeaveDays(input.attachmentRequiredAfterDays)
-            : null,
-          appliesToAllEmployees: input.appliesToAllEmployees,
-          applicableEmployeeIds: input.applicableEmployeeIds,
-          applicableDepartments: input.applicableDepartments,
-          createdByAdminId: adminId,
-          updatedByAdminId: adminId,
-        },
-      });
-      return toLeaveTypeItem(row);
-    } catch (error) {
-      if (this.isUniqueViolation(error)) {
-        throw new LeaveConflictError('A leave type with this code already exists.');
-      }
-      throw error;
-    }
-  }
-
-  async updateLeaveType(
-    organizationId: string,
-    leaveTypeId: string,
-    adminId: string,
-    input: UpdateLeaveTypeRequest,
-  ) {
-    await this.getLeaveType(organizationId, leaveTypeId);
-    try {
-      const row = await this.prisma.leaveType.update({
-        where: { id: leaveTypeId },
-        data: {
-          name: input.name,
-          code: input.code?.toUpperCase(),
-          description: input.description,
-          isPaid: input.isPaid,
-          annualAllocationEligible: input.annualAllocationEligible,
-          carryForwardEnabled: input.carryForwardEnabled,
-          maxCarryForwardDays: input.maxCarryForwardDays
-            ? parseLeaveDays(input.maxCarryForwardDays)
-            : undefined,
-          maxConsecutiveDays: input.maxConsecutiveDays,
-          minApplicationDays: input.minApplicationDays
-            ? parseLeaveDays(input.minApplicationDays)
-            : undefined,
-          halfDayAllowed: input.halfDayAllowed,
-          attachmentRequired: input.attachmentRequired,
-          attachmentRequiredAfterDays:
-            input.attachmentRequiredAfterDays === undefined
-              ? undefined
-              : input.attachmentRequiredAfterDays === null
-                ? null
-                : parseLeaveDays(input.attachmentRequiredAfterDays),
-          appliesToAllEmployees: input.appliesToAllEmployees,
-          applicableEmployeeIds: input.applicableEmployeeIds,
-          applicableDepartments: input.applicableDepartments,
-          status: input.status,
-          updatedByAdminId: adminId,
-        },
-      });
-      return toLeaveTypeItem(row);
-    } catch (error) {
-      if (this.isUniqueViolation(error)) {
-        throw new LeaveConflictError('A leave type with this code already exists.');
-      }
-      throw error;
-    }
-  }
-
-  async deleteLeaveType(organizationId: string, leaveTypeId: string) {
-    await this.getLeaveType(organizationId, leaveTypeId);
-    const [requests, balances] = await Promise.all([
-      this.prisma.leaveRequest.count({ where: { organizationId, leaveTypeId } }),
-      this.prisma.employeeLeaveBalance.count({ where: { organizationId, leaveTypeId } }),
-    ]);
-    if (requests > 0 || balances > 0) {
-      throw new LeaveConflictError(
-        'This leave type is referenced by balances or leave requests. Deactivate it instead of deleting.',
-      );
-    }
-    await this.prisma.leaveType.delete({ where: { id: leaveTypeId } });
   }
 
   private yearConfigurationInclude() {
@@ -618,7 +476,11 @@ export class PrismaLeaveRepository implements LeaveRepository {
     input: CreateLeaveYearAllocationRequest,
   ) {
     await this.getYearConfiguration(organizationId, input.leaveYearConfigurationId);
-    await this.getLeaveType(organizationId, input.leaveTypeId);
+    const leaveType = await this.prisma.leaveType.findFirst({
+      where: { id: input.leaveTypeId, organizationId, status: 'ACTIVE' },
+      select: { id: true },
+    });
+    if (!leaveType) throw new LeaveNotFoundError('Leave type');
     try {
       const row = await this.prisma.leaveYearAllocation.create({
         data: {
@@ -1051,38 +913,9 @@ export class PrismaLeaveRepository implements LeaveRepository {
 
     const leaveType = await this.prisma.leaveType.findFirst({
       where: { id: input.leaveTypeId, organizationId, status: 'ACTIVE' },
+      select: { id: true },
     });
     if (!leaveType) throw new LeaveNotFoundError('Leave type');
-
-    if (input.isHalfDay && !leaveType.halfDayAllowed) {
-      throw new LeaveValidationError('Half-day leave is not allowed for this leave type.');
-    }
-    const usingExplicitDates = (input.selectedDates?.length ?? 0) > 0;
-    if (
-      !usingExplicitDates &&
-      leaveType.maxConsecutiveDays !== null &&
-      leaveType.maxConsecutiveDays !== undefined &&
-      !input.isHalfDay &&
-      parseDateOnly(resolved.endDate).getTime() - parseDateOnly(resolved.startDate).getTime() >
-        (leaveType.maxConsecutiveDays - 1) * 24 * 60 * 60 * 1000
-    ) {
-      throw new LeaveValidationError(
-        `This leave type allows at most ${leaveType.maxConsecutiveDays} consecutive calendar days per request.`,
-      );
-    }
-    if (leaveType.attachmentRequired && !input.attachmentStoredObjectId) {
-      throw new LeaveValidationError('A supporting attachment is required for this leave type.');
-    }
-
-    if (
-      leaveType.maxConsecutiveDays !== null &&
-      leaveType.maxConsecutiveDays !== undefined &&
-      totalDays.greaterThan(new Decimal(leaveType.maxConsecutiveDays))
-    ) {
-      throw new LeaveValidationError(
-        `This leave type allows at most ${leaveType.maxConsecutiveDays} working days per request.`,
-      );
-    }
 
     const overlappingDate = await this.prisma.leaveRequestDate.findFirst({
       where: {
@@ -1587,7 +1420,6 @@ export class PrismaLeaveRepository implements LeaveRepository {
     return allocations.filter(
       (allocation) =>
         this.isAllocationEffectiveOnDate(allocation, asOfDate) &&
-        this.isLeaveTypeApplicable(allocation.leaveType, employee) &&
         this.isAllocationEligible(allocation, employee),
     ).length;
   }
@@ -1637,7 +1469,6 @@ export class PrismaLeaveRepository implements LeaveRepository {
     let skipped = 0;
 
     for (const allocation of allocations) {
-      if (!this.isLeaveTypeApplicable(allocation.leaveType, employee)) continue;
       if (!this.isAllocationEligible(allocation, employee)) continue;
 
       const existing = await this.prisma.employeeLeaveBalance.findFirst({
@@ -1695,18 +1526,6 @@ export class PrismaLeaveRepository implements LeaveRepository {
       'code' in error &&
       (error as { code: string }).code === 'P2002'
     );
-  }
-
-  private isLeaveTypeApplicable(
-    leaveType: { appliesToAllEmployees: boolean; applicableEmployeeIds: unknown; applicableDepartments: unknown },
-    employee: EmployeeRow,
-  ): boolean {
-    if (leaveType.appliesToAllEmployees) return true;
-    const employeeIds = this.readJsonStringArray(leaveType.applicableEmployeeIds);
-    if (employeeIds.includes(employee.id)) return true;
-    const departments = this.readJsonStringArray(leaveType.applicableDepartments);
-    if (employee.department && departments.includes(employee.department)) return true;
-    return false;
   }
 
   private isAllocationEligible(

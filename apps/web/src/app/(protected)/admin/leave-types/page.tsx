@@ -1,5 +1,5 @@
-import { AdminLeaveTypesWorkspace } from '@/features/admin/leave/components/admin-leave-types-workspace';
+import { LeaveTypesPage } from '@/features/leave-types/pages/leave-types-page';
 
 export default function AdminLeaveTypesPage() {
-  return <AdminLeaveTypesWorkspace />;
+  return <LeaveTypesPage />;
 }

@@ -29,7 +29,7 @@ function addDaysToDateKey(dateKey: string, days: number): string {
 }
 
 function parseMinNoticeWorkingDays(minApplicationDays: string | undefined): number {
-  const parsed = Number.parseFloat(minApplicationDays ?? '0.5');
+  const parsed = Number.parseFloat(minApplicationDays ?? '0');
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
   return Math.ceil(parsed);
 }

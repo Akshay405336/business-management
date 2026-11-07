@@ -6,8 +6,6 @@ import type {
   LeavePreviewDaysResponse,
   LeaveRequestItem,
   LeaveRequestListResponse,
-  LeaveTypeItem,
-  LeaveTypeListResponse,
   LeaveYearAllocationItem,
   LeaveYearAllocationListResponse,
   LeaveYearConfigurationItem,
@@ -15,7 +13,6 @@ import type {
 import type {
   AdjustEmployeeLeaveBalanceRequest,
   ApplyLeaveRequest,
-  CreateLeaveTypeRequest,
   CreateLeaveYearAllocationRequest,
   CreateLeaveBalanceConfigurationRequest,
   CreateLeaveYearConfigurationRequest,
@@ -24,9 +21,7 @@ import type {
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
-  LeaveTypeListQuery,
   PreviewLeaveDaysQuery,
-  UpdateLeaveTypeRequest,
   UpdateLeaveYearAllocationRequest,
   UpdateLeaveYearConfigurationRequest,
   UpdateLeaveYearConfigurationStatusRequest,
@@ -40,79 +35,6 @@ import {
 import { LeaveAuthorizationService } from './services/leave-authorization.service.js';
 import { resolveLeaveRequestDates } from '../domain/policies/leave-request-dates.policy.js';
 import { LeaveDayCalculationService } from './services/leave-day-calculation.service.js';
-
-@Injectable()
-export class ListLeaveTypesHandler {
-  constructor(
-    @Inject(LEAVE_REPOSITORY) private readonly repository: LeaveRepository,
-    private readonly authz: LeaveAuthorizationService,
-  ) {}
-
-  async execute(actor: OrgAccessActor, query: LeaveTypeListQuery): Promise<LeaveTypeListResponse> {
-    await this.authz.requireAnyPermission(actor, [
-      'leave.types.read',
-      'leave.types.manage',
-      'leave.requests.create',
-    ]);
-    return this.repository.listLeaveTypes(actor.organizationId, query);
-  }
-}
-
-@Injectable()
-export class GetLeaveTypeHandler {
-  constructor(
-    @Inject(LEAVE_REPOSITORY) private readonly repository: LeaveRepository,
-    private readonly authz: LeaveAuthorizationService,
-  ) {}
-
-  async execute(actor: OrgAccessActor, leaveTypeId: string): Promise<LeaveTypeItem> {
-    await this.authz.requireAnyPermission(actor, ['leave.types.read', 'leave.types.manage']);
-    return this.repository.getLeaveType(actor.organizationId, leaveTypeId);
-  }
-}
-
-@Injectable()
-export class CreateLeaveTypeHandler {
-  constructor(
-    @Inject(LEAVE_REPOSITORY) private readonly repository: LeaveRepository,
-    private readonly authz: LeaveAuthorizationService,
-  ) {}
-
-  async execute(actor: OrgAccessActor, input: CreateLeaveTypeRequest): Promise<LeaveTypeItem> {
-    await this.authz.requireAnyPermission(actor, ['leave.types.create', 'leave.types.manage']);
-    return this.repository.createLeaveType(actor.organizationId, actor.adminId, input);
-  }
-}
-
-@Injectable()
-export class UpdateLeaveTypeHandler {
-  constructor(
-    @Inject(LEAVE_REPOSITORY) private readonly repository: LeaveRepository,
-    private readonly authz: LeaveAuthorizationService,
-  ) {}
-
-  async execute(
-    actor: OrgAccessActor,
-    leaveTypeId: string,
-    input: UpdateLeaveTypeRequest,
-  ): Promise<LeaveTypeItem> {
-    await this.authz.requireAnyPermission(actor, ['leave.types.update', 'leave.types.manage']);
-    return this.repository.updateLeaveType(actor.organizationId, leaveTypeId, actor.adminId, input);
-  }
-}
-
-@Injectable()
-export class DeleteLeaveTypeHandler {
-  constructor(
-    @Inject(LEAVE_REPOSITORY) private readonly repository: LeaveRepository,
-    private readonly authz: LeaveAuthorizationService,
-  ) {}
-
-  async execute(actor: OrgAccessActor, leaveTypeId: string): Promise<void> {
-    await this.authz.requireAnyPermission(actor, ['leave.types.manage']);
-    await this.repository.deleteLeaveType(actor.organizationId, leaveTypeId);
-  }
-}
 
 @Injectable()
 export class ListLeaveYearConfigurationsHandler {
@@ -501,11 +423,6 @@ export class PreviewLeaveDaysHandler {
   async execute(actor: OrgAccessActor, query: PreviewLeaveDaysQuery): Promise<LeavePreviewDaysResponse> {
     await this.authz.requireAnyPermission(actor, ['leave.requests.create']);
     const employeeId = await this.authz.requireEmployeeId(actor);
-    let minApplicationDays: string | undefined;
-    if (query.leaveTypeId) {
-      const leaveType = await this.repository.getLeaveType(actor.organizationId, query.leaveTypeId);
-      minApplicationDays = leaveType.minApplicationDays;
-    }
     const applicationDateKey = await this.leaveDays.resolveApplicationDateKey(actor.organizationId);
     const policyWindow = await this.repository.getActiveLeavePolicyWindow(
       actor.organizationId,
@@ -519,7 +436,7 @@ export class PreviewLeaveDaysHandler {
       query.selectedDates,
       query.isHalfDay,
       query.halfDayDate ?? null,
-      minApplicationDays,
+      undefined,
       policyWindow,
       query.skipDuration,
     );
@@ -537,7 +454,6 @@ export class ApplyForLeaveHandler {
   async execute(actor: OrgAccessActor, input: ApplyLeaveRequest): Promise<LeaveRequestItem> {
     await this.authz.requireAnyPermission(actor, ['leave.requests.create']);
     const employeeId = await this.authz.requireEmployeeId(actor);
-    const leaveType = await this.repository.getLeaveType(actor.organizationId, input.leaveTypeId);
     const applicationDateKey = await this.leaveDays.resolveApplicationDateKey(actor.organizationId);
     const policyWindow = await this.repository.getActiveLeavePolicyWindow(
       actor.organizationId,
@@ -554,7 +470,7 @@ export class ApplyForLeaveHandler {
       actor.organizationId,
       employeeId,
       resolved,
-      leaveType.minApplicationDays,
+      undefined,
       policyWindow,
     );
     const totalDays = await this.leaveDays.countLeaveDaysForSelectedDates(

@@ -4,8 +4,6 @@ import type {
   GenerateEmployeeBalancesResponse,
   LeaveRequestItem,
   LeaveRequestListResponse,
-  LeaveTypeItem,
-  LeaveTypeListResponse,
   LeaveYearAllocationItem,
   LeaveYearAllocationListResponse,
   LeaveYearConfigurationItem,
@@ -13,7 +11,6 @@ import type {
 import type {
   AdjustEmployeeLeaveBalanceRequest,
   ApplyLeaveRequest,
-  CreateLeaveTypeRequest,
   CreateLeaveYearAllocationRequest,
   CreateLeaveBalanceConfigurationRequest,
   CreateLeaveYearConfigurationRequest,
@@ -22,8 +19,6 @@ import type {
   LeaveAllocationListQuery,
   LeaveBalanceTransactionListQuery,
   LeaveRequestListQuery,
-  LeaveTypeListQuery,
-  UpdateLeaveTypeRequest,
   UpdateLeaveYearAllocationRequest,
   UpdateLeaveYearConfigurationRequest,
   UpdateLeaveYearConfigurationStatusRequest,
@@ -61,21 +56,6 @@ export interface LeaveRepository {
     organizationId: string,
     asOfDateKey: string,
   ): Promise<{ yearStartDate: string; yearEndDate: string } | null>;
-
-  listLeaveTypes(organizationId: string, query: LeaveTypeListQuery): Promise<LeaveTypeListResponse>;
-  getLeaveType(organizationId: string, leaveTypeId: string): Promise<LeaveTypeItem>;
-  createLeaveType(
-    organizationId: string,
-    adminId: string,
-    input: CreateLeaveTypeRequest,
-  ): Promise<LeaveTypeItem>;
-  updateLeaveType(
-    organizationId: string,
-    leaveTypeId: string,
-    adminId: string,
-    input: UpdateLeaveTypeRequest,
-  ): Promise<LeaveTypeItem>;
-  deleteLeaveType(organizationId: string, leaveTypeId: string): Promise<void>;
 
   listYearConfigurations(organizationId: string): Promise<readonly LeaveYearConfigurationItem[]>;
   getYearConfiguration(organizationId: string, id: string): Promise<LeaveYearConfigurationItem>;
