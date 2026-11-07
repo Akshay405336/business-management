@@ -10,7 +10,6 @@ export type AttendanceScheduleConfig = {
   readonly officeStartMinutes: number;
   readonly officeEndMinutes: number;
   readonly lateGraceMinutes: number;
-  readonly attendanceCutoffMinutes: number;
   readonly minFullDayMinutes: number;
   readonly minHalfDayMinutes: number;
   readonly weeklyOffDays: readonly number[];

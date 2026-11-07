@@ -19,6 +19,7 @@ import { GetMyAttendanceSummaryHandler } from './application/get-my-summary/get-
 import { GetMyTodayAttendanceHandler } from './application/get-my-today/get-my-today.handler.js';
 import { GetAttendanceSettingsHandler } from './application/get-settings/get-settings.handler.js';
 import { ListAttendanceRecordsHandler } from './application/list-records/list-records.handler.js';
+import { ReconcileDailyAttendanceHandler } from './application/reconcile-daily-attendance/reconcile-daily-attendance.handler.js';
 import { PunchInHandler } from './application/punch-in/punch-in.handler.js';
 import { PunchOutHandler } from './application/punch-out/punch-out.handler.js';
 import { AttendanceAuthorizationService } from './application/services/attendance-authorization.service.js';
@@ -44,6 +45,7 @@ const attendanceHandlers = [
   GetAttendanceSettingsHandler,
   UpsertAttendanceSettingsHandler,
   ListAttendanceRecordsHandler,
+  ReconcileDailyAttendanceHandler,
   GetAttendanceCalendarHandler,
   GetAttendanceRecordDetailHandler,
   CreateAttendanceRecordHandler,

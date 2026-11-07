@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CRM_PIPELINE_FORM_FIELD_CLASS } from '@/features/admin/crm/constants';
@@ -19,6 +20,13 @@ import { useAdminToast } from '@/features/admin/components/toast';
 import { fetchAttendanceSettings, saveAttendanceSettings } from '@/features/attendance/api/attendance';
 import { zodIssuesToFieldMap } from '@/shared/form/zod-field-error';
 import { cn } from '@/shared/lib/utils';
+import {
+  QUOTATION_FORM_FOOTER_CLASS,
+  QUOTATION_FORM_PRIMARY_BTN,
+  QUOTATION_FORM_SCROLL_CLASS,
+  QUOTATION_FORM_SECONDARY_BTN,
+} from '@/features/crm/quotations/components/quotation-dialog-shell';
+import { minutesToLabel } from '@/features/attendance/utils/time';
 import { AttendanceTimePicker } from './attendance-time-picker';
 import { AttendanceTimezoneSelect } from './attendance-timezone-select';
 import {
@@ -26,16 +34,12 @@ import {
   formStateFromSettings,
   formStateToPayload,
   serializeFormState,
+  joinDurationMinutes,
+  parseNonNegativeInt,
   time12ToMinutes,
   type AttendanceSettingsFormState,
   type DayScheduleRow,
 } from '../utils/attendance-settings-time';
-
-const PRIMARY_BTN =
-  'h-11 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 px-5 text-sm font-medium text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900';
-
-const SECONDARY_BTN =
-  'h-11 rounded-lg border border-input bg-card px-4 text-sm font-medium text-foreground shadow-none hover:bg-muted/50';
 
 function SettingsSection({
   icon: Icon,
@@ -49,14 +53,14 @@ function SettingsSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl border border-border/80 bg-card p-6 shadow-sm">
-      <div className="mb-5 flex gap-3">
-        <div className="bg-muted/60 text-foreground flex size-10 shrink-0 items-center justify-center rounded-lg">
-          <Icon className="size-5" aria-hidden />
+    <section className="min-w-0 rounded-lg border border-border/70 p-3">
+      <div className="mb-3 flex gap-2">
+        <div className="bg-muted/60 text-foreground flex size-8 shrink-0 items-center justify-center rounded-md">
+          <Icon className="size-4" aria-hidden />
         </div>
         <div className="min-w-0 grid gap-0.5">
-          <h2 className="text-base font-semibold tracking-tight">{title}</h2>
-          <p className="text-muted-foreground text-sm leading-snug">{description}</p>
+          <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+          <p className="text-muted-foreground text-xs leading-snug">{description}</p>
         </div>
       </div>
       {children}
@@ -133,20 +137,24 @@ export function AttendanceSettingsPanel() {
     const payload = formStateToPayload(form);
     const parsed = upsertAttendanceSettingsRequestSchema.safeParse(payload);
     if (!parsed.success) {
-      setFieldErrors(zodIssuesToFieldMap(parsed.error));
-      toast.error('Fix validation errors before saving.');
+      const errors = zodIssuesToFieldMap(parsed.error);
+      for (const issue of parsed.error.issues) {
+        if (issue.path[0] === 'daySchedules' && typeof issue.path[1] === 'number') {
+          const day = payload.daySchedules[issue.path[1]]?.day;
+          if (day != null && issue.message) errors[`day.${day}.end`] = issue.message;
+        }
+        if (issue.path[0] === 'earlyPunchInAllowanceMinutes' && issue.message) {
+          errors.earlyPunchInAllowanceMinutes = issue.message;
+        }
+      }
+      setFieldErrors(errors);
+      toast.error(parsed.error.issues[0]?.message ?? 'Fix validation errors before saving.');
       return;
     }
     const officeStart = time12ToMinutes(form.officeStart);
     const officeEnd = time12ToMinutes(form.officeEnd);
     if (officeEnd <= officeStart) {
       setFieldErrors({ officeEndMinutes: 'Office end must be after office start.' });
-      return;
-    }
-    if (time12ToMinutes(form.attendanceCutoff) < officeStart) {
-      setFieldErrors({
-        attendanceCutoffMinutes: 'Cutoff must be on or after office start.',
-      });
       return;
     }
     for (const row of form.dayRows) {
@@ -175,21 +183,24 @@ export function AttendanceSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-border/80 bg-card shadow-sm">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" aria-label="Loading settings" />
+      <div className={QUOTATION_FORM_SCROLL_CLASS}>
+        <div className="flex min-h-40 items-center justify-center">
+          <Loader2 className="text-muted-foreground size-5 animate-spin" aria-label="Loading settings" />
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      <div className="grid gap-5 pb-24">
+      <div className={QUOTATION_FORM_SCROLL_CLASS}>
+      <div className="grid min-w-0 gap-3">
         <SettingsSection
           icon={CalendarClock}
           title="Effective date & time zone"
           description="New rules apply from the effective date. Past attendance keeps the schedule snapshot stored on each record."
         >
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <CrmFieldLabel htmlFor="effectiveFrom" required>
                 Effective from
@@ -222,7 +233,7 @@ export function AttendanceSettingsPanel() {
           title="Office schedule"
           description="Default office hours used as the template for working days. Adjust per-day times in the section below."
         >
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <CrmFieldLabel required>Office start time</CrmFieldLabel>
               <AttendanceTimePicker
@@ -249,72 +260,61 @@ export function AttendanceSettingsPanel() {
           title="Working days & weekly off"
           description="Enable any day as a working day—including weekends. Disabled days are treated as weekly off for attendance."
         >
-          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
-            <Button type="button" variant="outline" className={SECONDARY_BTN} onClick={applyOfficeHoursToWorkingDays}>
+          <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(QUOTATION_FORM_SECONDARY_BTN, 'h-9 px-3 text-xs')}
+              onClick={applyOfficeHoursToWorkingDays}
+            >
               Apply office hours to all working days
             </Button>
           </div>
-          <div className="overflow-x-auto rounded-lg border border-border/70">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="bg-muted/40 text-muted-foreground border-b text-left text-xs font-medium uppercase tracking-wide">
-                  <th className="px-4 py-3">Day</th>
-                  <th className="px-4 py-3">Working day</th>
-                  <th className="px-4 py-3">Start</th>
-                  <th className="px-4 py-3">End</th>
-                </tr>
-              </thead>
-              <tbody>
-                {form.dayRows.map((row) => (
-                  <tr key={row.day} className="border-b last:border-0">
-                    <td className="px-4 py-3 font-medium">{row.label}</td>
-                    <td className="px-4 py-3">
-                      <Checkbox
-                        checked={row.isWorking}
-                        onCheckedChange={(checked: boolean | 'indeterminate') =>
-                          updateDayRow(row.day, {
-                            isWorking: checked === true,
-                            ...(checked === true
-                              ? {
-                                  start: { ...form.officeStart },
-                                  end: { ...form.officeEnd },
-                                }
-                              : {}),
-                          })
-                        }
-                        aria-label={`${row.label} working day`}
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.isWorking ? (
-                        <AttendanceTimePicker
-                          value={row.start}
-                          onChange={(start) => updateDayRow(row.day, { start })}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground text-xs font-medium">Weekly off</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.isWorking ? (
-                        <>
-                          <AttendanceTimePicker
-                            value={row.end}
-                            onChange={(end) => updateDayRow(row.day, { end })}
-                          />
-                          <CrmInlineFieldError
-                            message={fieldErrors[`day.${row.day}.end`]}
-                            reserveSpace={false}
-                          />
-                        </>
-                      ) : (
-                        <span className="text-muted-foreground text-xs font-medium">Weekly off</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="min-w-0 overflow-x-hidden rounded-lg border border-border/70">
+            {form.dayRows.map((row) => (
+              <div key={row.day} className="border-b px-3 py-2 last:border-0">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="text-sm font-medium">{row.label}</span>
+                  <Checkbox
+                    checked={row.isWorking}
+                    onCheckedChange={(checked: boolean | 'indeterminate') =>
+                      updateDayRow(row.day, {
+                        isWorking: checked === true,
+                        ...(checked === true
+                          ? {
+                              start: { ...form.officeStart },
+                              end: { ...form.officeEnd },
+                            }
+                          : {}),
+                      })
+                    }
+                    aria-label={`${row.label} working day`}
+                    className="border-2 border-neutral-950 data-[state=checked]:border-neutral-950"
+                  />
+                </div>
+                {row.isWorking ? (
+                  <div className="mt-2 flex flex-nowrap items-center gap-3">
+                    <AttendanceTimePicker
+                      value={row.start}
+                      onChange={(start) => updateDayRow(row.day, { start })}
+                      className="flex-nowrap"
+                    />
+                    <span className="text-muted-foreground text-sm">to</span>
+                    <AttendanceTimePicker
+                      value={row.end}
+                      onChange={(end) => updateDayRow(row.day, { end })}
+                      className="flex-nowrap"
+                    />
+                    <CrmInlineFieldError
+                      message={fieldErrors[`day.${row.day}.end`]}
+                      reserveSpace={false}
+                    />
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground mt-2 text-xs font-medium">Weekly off</p>
+                )}
+              </div>
+            ))}
           </div>
           <CrmInlineFieldError message={fieldErrors.workingDays} />
         </SettingsSection>
@@ -322,9 +322,9 @@ export function AttendanceSettingsPanel() {
         <SettingsSection
           icon={ShieldCheck}
           title="Attendance rules"
-          description="Late grace, cutoff, minimum hours, and punch behavior."
+          description="Late grace, minimum hours, and punch behavior. Absence is marked after office end."
         >
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <CrmFieldLabel>Late grace period (minutes)</CrmFieldLabel>
               <Input
@@ -333,32 +333,32 @@ export function AttendanceSettingsPanel() {
                 max={240}
                 value={form.lateGraceMinutes}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, lateGraceMinutes: Number(e.target.value) || 0 }))
+                  setForm((f) => ({ ...f, lateGraceMinutes: parseNonNegativeInt(e.target.value, 240) }))
                 }
                 className={CRM_PIPELINE_FORM_FIELD_CLASS}
               />
-              <p className="text-muted-foreground text-xs">Minutes after office start still counted as on time.</p>
+              <p className="text-muted-foreground text-xs">
+                Earliest punch-in{' '}
+                {minutesToLabel(
+                  time12ToMinutes(form.officeStart) -
+                    joinDurationMinutes(form.earlyPunchInHours, form.earlyPunchInMinutes),
+                )}
+                . On time through{' '}
+                {minutesToLabel(time12ToMinutes(form.officeStart) + form.lateGraceMinutes)}. Enter 30
+                for a 30-minute grace. This value is minutes and is separate from the half-day minimum.
+              </p>
               <CrmInlineFieldError message={fieldErrors.lateGraceMinutes} />
             </div>
             <div className="grid gap-1.5">
-              <CrmFieldLabel required>Attendance cutoff</CrmFieldLabel>
-              <AttendanceTimePicker
-                value={form.attendanceCutoff}
-                onChange={(attendanceCutoff) => setForm((f) => ({ ...f, attendanceCutoff }))}
-              />
-              <p className="text-muted-foreground text-xs">Latest time employees may punch in without being absent.</p>
-              <CrmInlineFieldError message={fieldErrors.attendanceCutoffMinutes} />
-            </div>
-            <div className="grid gap-1.5">
               <CrmFieldLabel>Full-day minimum</CrmFieldLabel>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Input
                   type="number"
                   min={0}
                   max={24}
                   value={form.fullDayHours}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, fullDayHours: Number(e.target.value) || 0 }))
+                    setForm((f) => ({ ...f, fullDayHours: parseNonNegativeInt(e.target.value, 24) }))
                   }
                   className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'w-24')}
                   aria-label="Full day hours"
@@ -370,25 +370,28 @@ export function AttendanceSettingsPanel() {
                   max={59}
                   value={form.fullDayMinutes}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, fullDayMinutes: Number(e.target.value) || 0 }))
+                    setForm((f) => ({ ...f, fullDayMinutes: parseNonNegativeInt(e.target.value, 59) }))
                   }
                   className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'w-24')}
                   aria-label="Full day minutes"
                 />
                 <span className="text-muted-foreground self-center text-sm">m</span>
               </div>
+              <p className="text-muted-foreground text-xs">
+                Saved as {joinDurationMinutes(form.fullDayHours, form.fullDayMinutes)} minutes.
+              </p>
               <CrmInlineFieldError message={fieldErrors.minFullDayMinutes} />
             </div>
             <div className="grid gap-1.5">
               <CrmFieldLabel>Half-day minimum</CrmFieldLabel>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Input
                   type="number"
                   min={0}
                   max={24}
                   value={form.halfDayHours}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, halfDayHours: Number(e.target.value) || 0 }))
+                    setForm((f) => ({ ...f, halfDayHours: parseNonNegativeInt(e.target.value, 24) }))
                   }
                   className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'w-24')}
                 />
@@ -399,24 +402,28 @@ export function AttendanceSettingsPanel() {
                   max={59}
                   value={form.halfDayMinutes}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, halfDayMinutes: Number(e.target.value) || 0 }))
+                    setForm((f) => ({ ...f, halfDayMinutes: parseNonNegativeInt(e.target.value, 59) }))
                   }
                   className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'w-24')}
                 />
                 <span className="text-muted-foreground self-center text-sm">m</span>
               </div>
+              <p className="text-muted-foreground text-xs">
+                Saved as {joinDurationMinutes(form.halfDayHours, form.halfDayMinutes)} minutes. Completed
+                work below this duration is Half Day.
+              </p>
               <CrmInlineFieldError message={fieldErrors.minHalfDayMinutes} />
             </div>
             <div className="grid gap-1.5 sm:col-span-2">
               <CrmFieldLabel>Early punch-in allowance</CrmFieldLabel>
-              <div className="flex gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <Input
                   type="number"
                   min={0}
                   max={8}
                   value={form.earlyPunchInHours}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, earlyPunchInHours: Number(e.target.value) || 0 }))
+                    setForm((f) => ({ ...f, earlyPunchInHours: parseNonNegativeInt(e.target.value, 8) }))
                   }
                   className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'w-24')}
                 />
@@ -427,12 +434,13 @@ export function AttendanceSettingsPanel() {
                   max={59}
                   value={form.earlyPunchInMinutes}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, earlyPunchInMinutes: Number(e.target.value) || 0 }))
+                    setForm((f) => ({ ...f, earlyPunchInMinutes: parseNonNegativeInt(e.target.value, 59) }))
                   }
                   className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'w-24')}
                 />
                 <span className="text-muted-foreground self-center text-sm">m before office start</span>
               </div>
+              <CrmInlineFieldError message={fieldErrors.earlyPunchInAllowanceMinutes} />
             </div>
             <label className="flex items-center gap-3 sm:col-span-2">
               <Checkbox
@@ -467,7 +475,7 @@ export function AttendanceSettingsPanel() {
               </span>
             </span>
           </label>
-          <p className="text-muted-foreground mt-4 text-xs">
+          <p className="text-muted-foreground mt-2 text-xs">
             Status:{' '}
             <span className="text-foreground font-medium">
               {form.requireRegisteredDevice ? 'Trusted device required' : 'Desktop browser only (default)'}
@@ -475,25 +483,33 @@ export function AttendanceSettingsPanel() {
           </p>
         </SettingsSection>
       </div>
-
-      <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky bottom-0 z-10 -mx-1 border-t border-border/80 px-1 py-4 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button type="button" variant="outline" className={SECONDARY_BTN} disabled={!dirty || saving} onClick={onCancel}>
-            Cancel
-          </Button>
-          <Button type="button" className={PRIMARY_BTN} disabled={!dirty || saving} onClick={() => void onSave()}>
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 size-4 animate-spin" aria-hidden />
-                Saving…
-              </>
-            ) : (
-              'Save settings'
-            )}
-          </Button>
-        </div>
       </div>
-
+      <DialogFooter className={QUOTATION_FORM_FOOTER_CLASS}>
+        <Button
+          type="button"
+          variant="outline"
+          className={QUOTATION_FORM_SECONDARY_BTN}
+          disabled={!dirty || saving}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          className={cn('h-11 px-5', QUOTATION_FORM_PRIMARY_BTN)}
+          disabled={!dirty || saving}
+          onClick={() => void onSave()}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+              Saving…
+            </>
+          ) : (
+            'Save settings'
+          )}
+        </Button>
+      </DialogFooter>
     </>
   );
 }

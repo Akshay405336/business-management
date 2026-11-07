@@ -14,11 +14,17 @@ import type {
   Employee,
 } from '../../../../../../generated/prisma/client.js';
 import { Prisma } from '../../../../../../generated/prisma/client.js';
+import { evaluateAttendance } from '../../../../domain/policies/attendance-status.policy.js';
 import type {
   AttendanceDaySchedule,
   AttendanceScheduleConfig,
 } from '../../../../domain/types/attendance-schedule.types.js';
-import { normalizeDaySchedules } from '../../../../domain/services/attendance-time.service.js';
+import {
+  calendarDateKey,
+  normalizeDaySchedules,
+  resolveOfficeHoursForWeekday,
+  getZonedParts,
+} from '../../../../domain/services/attendance-time.service.js';
 
 export function toScheduleConfig(row: AttendanceSchedule): AttendanceScheduleConfig {
   const workingDays = parseNumberArray(row.workingDays);
@@ -35,7 +41,6 @@ export function toScheduleConfig(row: AttendanceSchedule): AttendanceScheduleCon
     officeStartMinutes: row.officeStartMinutes,
     officeEndMinutes: row.officeEndMinutes,
     lateGraceMinutes: row.lateGraceMinutes,
-    attendanceCutoffMinutes: row.attendanceCutoffMinutes,
     minFullDayMinutes: row.minFullDayMinutes,
     minHalfDayMinutes: row.minHalfDayMinutes,
     weeklyOffDays: parseNumberArray(row.weeklyOffDays),
@@ -55,7 +60,6 @@ export function toScheduleSnapshot(config: AttendanceScheduleConfig): Attendance
     officeStartMinutes: config.officeStartMinutes,
     officeEndMinutes: config.officeEndMinutes,
     lateGraceMinutes: config.lateGraceMinutes,
-    attendanceCutoffMinutes: config.attendanceCutoffMinutes,
     minFullDayMinutes: config.minFullDayMinutes,
     minHalfDayMinutes: config.minHalfDayMinutes,
     weeklyOffDays: [...config.weeklyOffDays],
@@ -70,12 +74,11 @@ export function toScheduleSnapshot(config: AttendanceScheduleConfig): Attendance
 export function toScheduleSettings(row: AttendanceSchedule): AttendanceScheduleSettings {
   return {
     id: row.id,
-    effectiveFrom: row.effectiveFrom.toISOString().slice(0, 10),
+    effectiveFrom: calendarDateKey(row.effectiveFrom),
     timeZone: row.timeZone,
     officeStartMinutes: row.officeStartMinutes,
     officeEndMinutes: row.officeEndMinutes,
     lateGraceMinutes: row.lateGraceMinutes,
-    attendanceCutoffMinutes: row.attendanceCutoffMinutes,
     minFullDayMinutes: row.minFullDayMinutes,
     minHalfDayMinutes: row.minHalfDayMinutes,
     weeklyOffDays: parseNumberArray(row.weeklyOffDays),
@@ -114,7 +117,43 @@ function parseDaySchedules(value: Prisma.JsonValue | null): AttendanceDaySchedul
 }
 
 export function snapshotFromJson(value: Prisma.JsonValue): AttendanceScheduleSnapshot {
-  return value as unknown as AttendanceScheduleSnapshot;
+  const raw = (value ?? {}) as Partial<AttendanceScheduleSnapshot> & {
+    attendanceCutoffMinutes?: number;
+  };
+  return {
+    scheduleId: raw.scheduleId ?? '',
+    timeZone: raw.timeZone ?? 'UTC',
+    officeStartMinutes: raw.officeStartMinutes ?? 0,
+    officeEndMinutes: raw.officeEndMinutes ?? 0,
+    lateGraceMinutes: raw.lateGraceMinutes ?? 0,
+    minFullDayMinutes: raw.minFullDayMinutes ?? 0,
+    minHalfDayMinutes: raw.minHalfDayMinutes ?? 0,
+    weeklyOffDays: raw.weeklyOffDays ?? [],
+    workingDays: raw.workingDays ?? [],
+    daySchedules: raw.daySchedules ?? [],
+    earlyPunchInAllowanceMinutes: raw.earlyPunchInAllowanceMinutes ?? 0,
+    requireRegisteredDevice: raw.requireRegisteredDevice ?? false,
+    allowPunchOutAfterOfficeEnd: raw.allowPunchOutAfterOfficeEnd ?? true,
+  };
+}
+
+export function snapshotToScheduleConfig(snapshot: AttendanceScheduleSnapshot): AttendanceScheduleConfig {
+  return {
+    scheduleId: snapshot.scheduleId,
+    timeZone: snapshot.timeZone,
+    officeStartMinutes: snapshot.officeStartMinutes,
+    officeEndMinutes: snapshot.officeEndMinutes,
+    lateGraceMinutes: snapshot.lateGraceMinutes,
+    minFullDayMinutes: snapshot.minFullDayMinutes,
+    minHalfDayMinutes: snapshot.minHalfDayMinutes,
+    weeklyOffDays: snapshot.weeklyOffDays ?? [],
+    workingDays: snapshot.workingDays ?? [],
+    daySchedules: snapshot.daySchedules ?? [],
+    earlyPunchInAllowanceMinutes: snapshot.earlyPunchInAllowanceMinutes ?? 0,
+    requireRegisteredDevice: snapshot.requireRegisteredDevice ?? false,
+    allowPunchOutAfterOfficeEnd: snapshot.allowPunchOutAfterOfficeEnd ?? true,
+    ipAllowlist: [],
+  };
 }
 
 export function snapshotToJson(snapshot: AttendanceScheduleSnapshot): Prisma.InputJsonValue {
@@ -124,20 +163,45 @@ export function snapshotToJson(snapshot: AttendanceScheduleSnapshot): Prisma.Inp
 export function toRecordItem(
   row: AttendanceRecord & { employee: Employee },
 ): AttendanceRecordItem {
+  const snapshot = snapshotFromJson(row.scheduleSnapshot);
+  const attendanceDate = calendarDateKey(row.attendanceDate);
+  const timing = recordTiming(snapshot, attendanceDate, row.punchInAt, row.punchOutAt);
   return {
     id: row.id,
     employeeId: row.employeeId,
     employeeDisplayName: row.employee.displayName,
     employeeCode: row.employee.employeeCode,
-    attendanceDate: row.attendanceDate.toISOString().slice(0, 10),
+    attendanceDate,
     status: row.status satisfies AttendanceStatus,
     punchInAt: row.punchInAt?.toISOString() ?? null,
     punchOutAt: row.punchOutAt?.toISOString() ?? null,
     lateMinutes: row.lateMinutes,
+    earlyMinutes: timing.earlyMinutes,
+    leftEarlyMinutes: timing.leftEarlyMinutes,
+    stayedLateMinutes: timing.stayedLateMinutes,
     workingMinutes: row.workingMinutes,
-    scheduleSnapshot: snapshotFromJson(row.scheduleSnapshot),
+    scheduleSnapshot: snapshot,
     finalizedAt: row.finalizedAt?.toISOString() ?? null,
   };
+}
+
+function recordTiming(
+  snapshot: AttendanceScheduleSnapshot,
+  attendanceDate: string,
+  punchInAt: Date | null,
+  punchOutAt: Date | null,
+) {
+  const schedule = snapshotToScheduleConfig(snapshot);
+  const weekday = getZonedParts(new Date(`${attendanceDate}T12:00:00.000Z`), schedule.timeZone).weekday;
+  const officeHours = resolveOfficeHoursForWeekday(schedule, weekday);
+  return evaluateAttendance({
+    schedule,
+    attendanceDate,
+    punchInAt,
+    punchOutAt,
+    officeStartMinutes: officeHours.startMinutes,
+    officeEndMinutes: officeHours.endMinutes,
+  });
 }
 
 export function toRecordDetail(

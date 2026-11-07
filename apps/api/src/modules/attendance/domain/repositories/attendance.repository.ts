@@ -90,6 +90,8 @@ export type AttendanceRepository = {
   ): Promise<AttendanceDeviceItem>;
   revokeDevice(organizationId: string, employeeId: string, deviceId: string): Promise<void>;
   processAbsentForOrganization(organizationId: string, now: Date): Promise<number>;
+  /** Idempotent reconciliation for one organization date. No-ops for future dates and unfinished working days. */
+  reconcileOrganizationDate(organizationId: string, attendanceDate: string, now: Date): Promise<number>;
   processIncompleteForOrganization(organizationId: string, now: Date): Promise<number>;
   listOrganizationIdsWithSchedules(): Promise<readonly string[]>;
 };

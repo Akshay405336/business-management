@@ -1,16 +1,14 @@
 import type { AttendanceScheduleSnapshot } from '../read-models/attendance.models.js';
 import { AttendancePolicyError } from '../errors/attendance.errors.js';
 import type { AttendanceStatus } from '../enums/attendance-status.enum.js';
-import {
-  calculateFinalStatus,
-  calculatePunchInStatus,
-} from './attendance-status.policy.js';
+import { assertPunchInAllowed, evaluateAttendance } from './attendance-status.policy.js';
 import {
   getZonedParts,
   resolveOfficeHoursForWeekday,
 } from '../services/attendance-time.service.js';
 import type { AttendanceScheduleConfig } from '../types/attendance-schedule.types.js';
 import type { CorrectAttendanceRecordInput } from '../types/attendance-inputs.js';
+import type { ApprovedLeaveCoverage } from './attendance-reconciliation.policy.js';
 
 export type AttendanceCorrectionResult = {
   readonly punchInAt: Date | null;
@@ -18,16 +16,10 @@ export type AttendanceCorrectionResult = {
   readonly status: AttendanceStatus;
   readonly workingMinutes: number | null;
   readonly lateMinutes: number;
+  readonly earlyMinutes: number;
+  readonly leftEarlyMinutes: number;
+  readonly stayedLateMinutes: number;
 };
-
-const SCHEDULE_INDEPENDENT_STATUSES: readonly AttendanceStatus[] = [
-  'HOLIDAY',
-  'WEEKLY_OFF',
-  'ON_LEAVE',
-  'PENDING',
-];
-
-const PUNCH_REQUIRED_STATUSES: readonly AttendanceStatus[] = ['PRESENT', 'LATE', 'HALF_DAY'];
 
 function snapshotToScheduleConfig(snapshot: AttendanceScheduleSnapshot): AttendanceScheduleConfig {
   return {
@@ -36,7 +28,6 @@ function snapshotToScheduleConfig(snapshot: AttendanceScheduleSnapshot): Attenda
     officeStartMinutes: snapshot.officeStartMinutes,
     officeEndMinutes: snapshot.officeEndMinutes,
     lateGraceMinutes: snapshot.lateGraceMinutes,
-    attendanceCutoffMinutes: snapshot.attendanceCutoffMinutes,
     minFullDayMinutes: snapshot.minFullDayMinutes,
     minHalfDayMinutes: snapshot.minHalfDayMinutes,
     weeklyOffDays: snapshot.weeklyOffDays,
@@ -66,6 +57,12 @@ function weekdayForAttendanceDate(attendanceDate: string, timeZone: string): num
   return getZonedParts(anchor, timeZone).weekday;
 }
 
+/**
+ * Admin create and edit. Status is derived; a client-supplied status is ignored.
+ * Approved full-day or half-day leave applies only when there is no punch-in.
+ * A punch is rejected before the earliest allowed time. Historical admin
+ * corrections may still record a punch after office end.
+ */
 export function applyAttendanceCorrection(input: {
   readonly attendanceDate: string;
   readonly scheduleSnapshot: AttendanceScheduleSnapshot;
@@ -75,79 +72,50 @@ export function applyAttendanceCorrection(input: {
     readonly status: AttendanceStatus;
   };
   readonly patch: CorrectAttendanceRecordInput;
+  readonly leave?: ApprovedLeaveCoverage;
+  readonly dayKind?: 'WORKING' | 'HOLIDAY' | 'WEEKLY_OFF';
+  /** False only while today's office end is still ahead. */
+  readonly officeEnded?: boolean;
 }): AttendanceCorrectionResult {
   const punchInAt = resolveTimestamp(input.patch.punchInAt, input.current.punchInAt);
-  const punchOutAt = resolveTimestamp(input.patch.punchOutAt, input.current.punchOutAt);
-  const requestedStatus = input.patch.status;
+  const punchOutAt = punchInAt
+    ? resolveTimestamp(input.patch.punchOutAt, input.current.punchOutAt)
+    : null;
 
   if (punchInAt && punchOutAt && punchOutAt.getTime() <= punchInAt.getTime()) {
     throw new AttendancePolicyError('Punch out must be after punch in.');
   }
 
-  if (requestedStatus && SCHEDULE_INDEPENDENT_STATUSES.includes(requestedStatus)) {
-    return {
-      punchInAt,
-      punchOutAt,
-      status: requestedStatus,
-      workingMinutes:
-        punchInAt && punchOutAt
-          ? Math.max(0, Math.floor((punchOutAt.getTime() - punchInAt.getTime()) / 60_000))
-          : null,
-      lateMinutes: 0,
-    };
-  }
-
-  if (requestedStatus === 'ABSENT') {
-    const clearedIn = input.patch.punchInAt === null ? null : punchInAt;
-    const clearedOut = input.patch.punchOutAt === null ? null : punchOutAt;
-    if (clearedIn && clearedOut && clearedOut.getTime() <= clearedIn.getTime()) {
-      throw new AttendancePolicyError('Punch out must be after punch in.');
-    }
-    return {
-      punchInAt: clearedIn,
-      punchOutAt: clearedOut,
-      status: 'ABSENT',
-      workingMinutes: null,
-      lateMinutes: 0,
-    };
-  }
-
+  const schedule = snapshotToScheduleConfig(input.scheduleSnapshot);
   if (!punchInAt) {
-    if (requestedStatus && PUNCH_REQUIRED_STATUSES.includes(requestedStatus)) {
-      throw new AttendancePolicyError('Punch in is required for the selected status.');
-    }
     return {
       punchInAt: null,
-      punchOutAt: punchOutAt,
-      status: requestedStatus ?? 'ABSENT',
-      workingMinutes: null,
-      lateMinutes: 0,
+      punchOutAt: null,
+      earlyMinutes: 0,
+      leftEarlyMinutes: 0,
+      stayedLateMinutes: 0,
+      ...statusWithoutPunch(input.leave ?? 'none', input.dayKind ?? 'WORKING', input.officeEnded !== false),
     };
   }
 
-  const schedule = snapshotToScheduleConfig(input.scheduleSnapshot);
-  const timeZone = schedule.timeZone;
-  const weekday = weekdayForAttendanceDate(input.attendanceDate, timeZone);
+  const weekday = weekdayForAttendanceDate(input.attendanceDate, schedule.timeZone);
   const officeHours = resolveOfficeHoursForWeekday(schedule, weekday);
-  const punchInParts = getZonedParts(punchInAt, timeZone);
-  const punchInEval = calculatePunchInStatus(
+  const punchInParts = getZonedParts(punchInAt, schedule.timeZone);
+  assertPunchInAllowed(
     schedule,
     punchInParts.minutesFromMidnight,
     officeHours.startMinutes,
+    officeHours.endMinutes,
+    { allowAfterOfficeEnd: true },
   );
-  const derived = calculateFinalStatus(
+  const derived = evaluateAttendance({
     schedule,
+    attendanceDate: input.attendanceDate,
     punchInAt,
     punchOutAt,
-    punchInEval.lateMinutes,
-    punchInEval.status,
-  );
-
-  if (requestedStatus && requestedStatus !== derived.status) {
-    throw new AttendancePolicyError(
-      `The selected status does not match punch times. Expected ${derived.status.replace('_', ' ')}.`,
-    );
-  }
+    officeStartMinutes: officeHours.startMinutes,
+    officeEndMinutes: officeHours.endMinutes,
+  });
 
   return {
     punchInAt,
@@ -155,5 +123,31 @@ export function applyAttendanceCorrection(input: {
     status: derived.status,
     workingMinutes: derived.workingMinutes,
     lateMinutes: derived.lateMinutes,
+    earlyMinutes: derived.earlyMinutes,
+    leftEarlyMinutes: derived.leftEarlyMinutes,
+    stayedLateMinutes: derived.stayedLateMinutes,
   };
+}
+
+function statusWithoutPunch(
+  leave: ApprovedLeaveCoverage,
+  dayKind: 'WORKING' | 'HOLIDAY' | 'WEEKLY_OFF',
+  officeEnded: boolean,
+): Pick<AttendanceCorrectionResult, 'status' | 'workingMinutes' | 'lateMinutes'> {
+  if (dayKind === 'HOLIDAY') {
+    return { status: 'HOLIDAY', workingMinutes: null, lateMinutes: 0 };
+  }
+  if (dayKind === 'WEEKLY_OFF') {
+    return { status: 'WEEKLY_OFF', workingMinutes: null, lateMinutes: 0 };
+  }
+  if (leave === 'full') {
+    return { status: 'ON_LEAVE', workingMinutes: null, lateMinutes: 0 };
+  }
+  if (leave === 'half') {
+    return { status: 'HALF_DAY', workingMinutes: null, lateMinutes: 0 };
+  }
+  if (!officeEnded) {
+    return { status: 'PENDING', workingMinutes: null, lateMinutes: 0 };
+  }
+  return { status: 'ABSENT', workingMinutes: null, lateMinutes: 0 };
 }

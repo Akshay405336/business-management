@@ -29,9 +29,15 @@ import {
 } from '../../../../domain/errors/attendance.errors.js';
 import { isIpAllowed, isMobileOrTabletUserAgent } from '../../../../domain/policies/device-eligibility.policy.js';
 import { applyAttendanceCorrection } from '../../../../domain/policies/attendance-correction.policy.js';
+import { assertAttendanceSettings } from '../../../../domain/policies/attendance-settings.policy.js';
 import {
-  calculateFinalStatus,
-  calculatePunchInStatus,
+  classifyApprovedLeaveForDate,
+  decideAbsenceReconciliation,
+  type ApprovedLeaveDay,
+} from '../../../../domain/policies/attendance-reconciliation.policy.js';
+import {
+  assertPunchInAllowed,
+  evaluateAttendance,
 } from '../../../../domain/policies/attendance-status.policy.js';
 import type {
   AttendanceRepository,
@@ -44,7 +50,9 @@ import {
 import { resolveScheduleDayFlags } from '../../../../../organization-calendar/domain/services/org-calendar-classification.service.js';
 import { calendarDateAnchor } from '../../../../../organization-calendar/infrastructure/persistence/prisma/mappers/org-calendar.mapper.js';
 import {
+  calendarDateKey,
   formatDateOnly,
+  formatMinutesClock,
   getZonedParts,
   normalizeDaySchedules,
   resolveDayKind,
@@ -52,6 +60,7 @@ import {
 } from '../../../../domain/services/attendance-time.service.js';
 import {
   snapshotFromJson,
+  snapshotToScheduleConfig,
   toDeviceItem,
   toRecordDetail,
   toRecordItem,
@@ -186,7 +195,11 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       orderBy: { effectiveFrom: 'desc' },
     });
     const history = rows.map(toScheduleSettings);
-    return { current: history[0] ?? null, history };
+    const zone = history[0]?.timeZone ?? 'UTC';
+    const today = formatDateOnly(getZonedParts(new Date(), zone));
+    const current =
+      history.find((schedule) => schedule.effectiveFrom <= today) ?? history[0] ?? null;
+    return { current, history };
   }
 
   async upsertSettings(
@@ -194,16 +207,24 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     adminId: string,
     input: UpsertAttendanceSettingsInput,
   ): Promise<AttendanceSettingsResponse> {
+    assertAttendanceSettings(input);
     const effectiveFrom = parseDateOnly(input.effectiveFrom);
-    const existing = await this.prisma.attendanceSchedule.findFirst({
+    const existingExact = await this.prisma.attendanceSchedule.findFirst({
       where: { organizationId, effectiveFrom },
+      orderBy: { createdAt: 'desc' },
     });
+    const latest = await this.prisma.attendanceSchedule.findFirst({
+      where: { organizationId },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    const existing =
+      existingExact ??
+      (latest && calendarDateKey(latest.effectiveFrom) === input.effectiveFrom ? latest : null);
     const data = {
       timeZone: input.timeZone,
       officeStartMinutes: input.officeStartMinutes,
       officeEndMinutes: input.officeEndMinutes,
       lateGraceMinutes: input.lateGraceMinutes,
-      attendanceCutoffMinutes: input.attendanceCutoffMinutes,
       minFullDayMinutes: input.minFullDayMinutes,
       minHalfDayMinutes: input.minHalfDayMinutes,
       weeklyOffDays: input.weeklyOffDays,
@@ -219,20 +240,24 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       ipAllowlist: input.ipAllowlist.length > 0 ? input.ipAllowlist : Prisma.DbNull,
       allowPunchOutAfterOfficeEnd: input.allowPunchOutAfterOfficeEnd,
     };
-    if (existing) {
-      await this.prisma.attendanceSchedule.update({ where: { id: existing.id }, data });
-    } else {
-      await this.prisma.attendanceSchedule.create({
-        data: {
-          id: randomUUID(),
-          organizationId,
-          effectiveFrom,
-          createdByAdminId: adminId,
-          ...data,
-        },
-      });
-    }
-    return this.getSettings(organizationId);
+    const saved = existing
+      ? await this.prisma.attendanceSchedule.update({ where: { id: existing.id }, data })
+      : await this.prisma.attendanceSchedule.create({
+          data: {
+            id: randomUUID(),
+            organizationId,
+            effectiveFrom,
+            createdByAdminId: adminId,
+            ...data,
+          },
+        });
+    const history = (
+      await this.prisma.attendanceSchedule.findMany({
+        where: { organizationId },
+        orderBy: { effectiveFrom: 'desc' },
+      })
+    ).map(toScheduleSettings);
+    return { current: toScheduleSettings(saved), history };
   }
 
   async resolveScheduleForDate(
@@ -252,12 +277,14 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     now: Date,
     desktopSession: boolean,
   ): Promise<AttendanceMyTodayResponse> {
-    const scheduleRow = await this.prisma.attendanceSchedule.findFirst({
+    const latestRow = await this.prisma.attendanceSchedule.findFirst({
       where: { organizationId },
       orderBy: { effectiveFrom: 'desc' },
     });
-    const schedule = scheduleRow ? toScheduleConfig(scheduleRow) : null;
-    const parts = schedule ? getZonedParts(now, schedule.timeZone) : getZonedParts(now, 'UTC');
+    const zone = latestRow?.timeZone ?? 'UTC';
+    const todayKey = formatDateOnly(getZonedParts(now, zone));
+    const schedule = latestRow ? await this.resolveScheduleForDate(organizationId, todayKey) : null;
+    const parts = schedule ? getZonedParts(now, schedule.timeZone) : getZonedParts(now, zone);
     const attendanceDate = formatDateOnly(parts);
     const scheduleDayKind = schedule ? resolveDayKind(schedule, parts) : 'WORKING';
     const dayKind = schedule
@@ -294,10 +321,16 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       canPunchOut = true;
     } else if (record?.punchOutAt) {
       punchBlockedReason = 'You have already completed attendance for today.';
-    } else if (parts.minutesFromMidnight > schedule.attendanceCutoffMinutes) {
-      punchBlockedReason = 'The punch-in window for today has closed.';
     } else {
-      canPunchIn = true;
+      const hours = resolveOfficeHoursForWeekday(schedule, parts.weekday);
+      const earliest = hours.startMinutes - schedule.earlyPunchInAllowanceMinutes;
+      if (parts.minutesFromMidnight < earliest) {
+        punchBlockedReason = `Punch-in is not allowed before ${formatMinutesClock(earliest)}.`;
+      } else if (parts.minutesFromMidnight > hours.endMinutes) {
+        punchBlockedReason = `Punch-in is not allowed after office end (${formatMinutesClock(hours.endMinutes)}).`;
+      } else {
+        canPunchIn = true;
+      }
     }
     if (schedule?.requireRegisteredDevice && activeDevice === 0) {
       canPunchIn = false;
@@ -349,16 +382,22 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     if (attendanceDayKind === 'HOLIDAY') {
       throw new AttendancePolicyError('Cannot punch in on a holiday or non-working day.');
     }
-    if (parts.minutesFromMidnight > schedule.attendanceCutoffMinutes) {
-      throw new AttendancePolicyError('Punch-in is not allowed after the attendance cutoff time.');
-    }
     const device = await this.resolveActiveDevice(ctx);
     const officeHours = resolveOfficeHoursForWeekday(schedule, parts.weekday);
-    const { status, lateMinutes } = calculatePunchInStatus(
+    assertPunchInAllowed(
       schedule,
       parts.minutesFromMidnight,
       officeHours.startMinutes,
+      officeHours.endMinutes,
     );
+    const evaluation = evaluateAttendance({
+      schedule,
+      attendanceDate,
+      punchInAt: ctx.now,
+      punchOutAt: null,
+      officeStartMinutes: officeHours.startMinutes,
+      officeEndMinutes: officeHours.endMinutes,
+    });
     try {
       const created = await this.prisma.attendanceRecord.create({
         data: {
@@ -368,9 +407,9 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
           attendanceDate: parseDateOnly(attendanceDate),
           scheduleId: schedule.scheduleId,
           scheduleSnapshot: snapshotToJson(toScheduleSnapshot(schedule)),
-          status,
+          status: evaluation.status,
           punchInAt: ctx.now,
-          lateMinutes,
+          lateMinutes: evaluation.lateMinutes,
           punchInDeviceId: device?.id ?? null,
           punchInUserAgent: ctx.userAgent?.slice(0, 512) ?? null,
           punchInIp: ctx.ipAddress?.slice(0, 64) ?? null,
@@ -426,15 +465,19 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       throw new AttendanceConflictError('You have already punched out for today.');
     }
     const device = await this.resolveActiveDevice(ctx);
-    const snapshot = snapshotFromJson(record.scheduleSnapshot);
-    const punchInStatus = record.status as 'PRESENT' | 'LATE' | 'PENDING';
-    const final = calculateFinalStatus(
-      { ...schedule, ...snapshot, scheduleId: snapshot.scheduleId },
-      record.punchInAt,
-      ctx.now,
-      record.lateMinutes,
-      punchInStatus === 'PENDING' ? 'PRESENT' : punchInStatus,
+    const punchedSchedule = snapshotToScheduleConfig(snapshotFromJson(record.scheduleSnapshot));
+    const officeHours = resolveOfficeHoursForWeekday(
+      punchedSchedule,
+      getZonedParts(new Date(`${attendanceDate}T12:00:00.000Z`), punchedSchedule.timeZone).weekday,
     );
+    const final = evaluateAttendance({
+      schedule: punchedSchedule,
+      attendanceDate,
+      punchInAt: record.punchInAt,
+      punchOutAt: ctx.now,
+      officeStartMinutes: officeHours.startMinutes,
+      officeEndMinutes: officeHours.endMinutes,
+    });
     const updated = await this.prisma.attendanceRecord.update({
       where: { id: record.id },
       data: {
@@ -558,6 +601,54 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     return { from: query.from, to: query.to, days };
   }
 
+  private async attendanceDerivationContext(
+    organizationId: string,
+    employeeId: string,
+    attendanceDateKey: string,
+    schedule: NonNullable<Awaited<ReturnType<PrismaAttendanceRepository['resolveScheduleForDate']>>>,
+  ) {
+    const nowParts = getZonedParts(new Date(), schedule.timeZone);
+    const today = formatDateOnly(nowParts);
+    const weekday = getZonedParts(new Date(`${attendanceDateKey}T12:00:00.000Z`), schedule.timeZone).weekday;
+    const officeHours = resolveOfficeHoursForWeekday(schedule, weekday);
+    const officeEnded =
+      attendanceDateKey < today ||
+      (attendanceDateKey === today && nowParts.minutesFromMidnight >= officeHours.endMinutes);
+    const [dayKind, leave] = await Promise.all([
+      this.resolveAttendanceDayKind(organizationId, attendanceDateKey, schedule, employeeId),
+      this.approvedLeaveCoverage(organizationId, employeeId, attendanceDateKey),
+    ]);
+    return { dayKind, leave, officeEnded };
+  }
+
+  private async approvedLeaveCoverage(
+    organizationId: string,
+    employeeId: string,
+    attendanceDateKey: string,
+  ) {
+    const attendanceDate = parseDateOnly(attendanceDateKey);
+    const requests = await this.prisma.leaveRequest.findMany({
+      where: {
+        organizationId,
+        employeeId,
+        status: 'APPROVED',
+        startDate: { lte: attendanceDate },
+        endDate: { gte: attendanceDate },
+      },
+      select: {
+        isHalfDay: true,
+        halfDayDate: true,
+        selectedDates: { select: { leaveDate: true } },
+      },
+    });
+    const days: ApprovedLeaveDay[] = requests.map((request) => ({
+      isHalfDay: request.isHalfDay,
+      halfDayDate: request.halfDayDate ? request.halfDayDate.toISOString().slice(0, 10) : null,
+      selectedDates: request.selectedDates.map((date) => date.leaveDate.toISOString().slice(0, 10)),
+    }));
+    return classifyApprovedLeaveForDate(days, attendanceDateKey);
+  }
+
   async createManualRecord(
     organizationId: string,
     adminId: string,
@@ -597,6 +688,12 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       throw new AttendancePolicyError('Attendance cannot be recorded for a future date.');
     }
     const snapshot = toScheduleSnapshot(schedule);
+    const derivation = await this.attendanceDerivationContext(
+      organizationId,
+      input.employeeId,
+      input.attendanceDate,
+      schedule,
+    );
     const corrected = applyAttendanceCorrection({
       attendanceDate: input.attendanceDate,
       scheduleSnapshot: snapshot,
@@ -605,8 +702,8 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
         reason: input.reason,
         punchInAt: input.punchInAt,
         punchOutAt: input.punchOutAt,
-        status: input.status,
       },
+      ...derivation,
     });
     const created = await this.prisma.$transaction(async (tx) => {
       const record = await tx.attendanceRecord.create({
@@ -744,7 +841,15 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       include: { employee: true, corrections: true },
     });
     if (!row) throw new AttendanceNotFoundError();
-    const snapshot = snapshotFromJson(row.scheduleSnapshot);
+    const attendanceDateKey = calendarDateKey(row.attendanceDate);
+    const liveSchedule = await this.resolveScheduleForDate(organizationId, attendanceDateKey);
+    const schedule = liveSchedule ?? snapshotToScheduleConfig(snapshotFromJson(row.scheduleSnapshot));
+    const derivation = await this.attendanceDerivationContext(
+      organizationId,
+      row.employeeId,
+      attendanceDateKey,
+      schedule,
+    );
     const previousValues = {
       punchInAt: row.punchInAt?.toISOString() ?? null,
       punchOutAt: row.punchOutAt?.toISOString() ?? null,
@@ -753,19 +858,22 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
       lateMinutes: row.lateMinutes,
     };
     const corrected = applyAttendanceCorrection({
-      attendanceDate: row.attendanceDate.toISOString().slice(0, 10),
-      scheduleSnapshot: snapshot,
+      attendanceDate: attendanceDateKey,
+      scheduleSnapshot: toScheduleSnapshot(schedule),
       current: {
         punchInAt: row.punchInAt,
         punchOutAt: row.punchOutAt,
         status: row.status,
       },
       patch: input,
+      ...derivation,
     });
     const updated = await this.prisma.$transaction(async (tx) => {
       const next = await tx.attendanceRecord.update({
         where: { id: row.id },
         data: {
+          scheduleId: schedule.scheduleId,
+          scheduleSnapshot: snapshotToJson(toScheduleSnapshot(schedule)),
           punchInAt: corrected.punchInAt,
           punchOutAt: corrected.punchOutAt,
           status: corrected.status,
@@ -869,109 +977,124 @@ export class PrismaAttendanceRepository implements AttendanceRepository {
     });
     if (!scheduleRow) return 0;
     const schedule = toScheduleConfig(scheduleRow);
-    const parts = getZonedParts(now, schedule.timeZone);
-    if (parts.minutesFromMidnight < schedule.attendanceCutoffMinutes) return 0;
-    const attendanceDate = parseDateOnly(formatDateOnly(parts));
-    const attendanceDateKey = formatDateOnly(parts);
-    if (
-      (await this.resolveAttendanceDayKind(organizationId, attendanceDateKey, schedule)) !== 'WORKING'
-    ) {
-      return 0;
-    }
-    const employees = await this.prisma.employee.findMany({
-      where: { organizationId, employmentStatus: 'ACTIVE', deactivatedAt: null },
-      select: { id: true },
-    });
-    let marked = 0;
-    for (const employee of employees) {
-      const existing = await this.prisma.attendanceRecord.findUnique({
-        where: {
-          organizationId_employeeId_attendanceDate: {
-            organizationId,
-            employeeId: employee.id,
-            attendanceDate,
-          },
-        },
-      });
-      if (existing?.punchInAt) continue;
-      if (existing?.status === 'ABSENT' && existing.finalizedAt) continue;
-      await this.prisma.attendanceRecord.upsert({
-        where: {
-          organizationId_employeeId_attendanceDate: {
-            organizationId,
-            employeeId: employee.id,
-            attendanceDate,
-          },
-        },
-        create: {
-          id: randomUUID(),
-          organizationId,
-          employeeId: employee.id,
-          attendanceDate,
-          scheduleId: schedule.scheduleId,
-          scheduleSnapshot: snapshotToJson(toScheduleSnapshot(schedule)),
-          status: 'ABSENT',
-          finalizedAt: now,
-          finalizationNote: 'Marked absent after attendance cutoff.',
-        },
-        update: {
-          status: 'ABSENT',
-          finalizedAt: now,
-          finalizationNote: 'Marked absent after attendance cutoff.',
-        },
-      });
-      marked += 1;
-    }
-    return marked;
+    const today = formatDateOnly(getZonedParts(now, schedule.timeZone));
+    return this.reconcileOrganizationDate(organizationId, today, now);
   }
 
-  async processIncompleteForOrganization(organizationId: string, now: Date): Promise<number> {
-    const scheduleRow = await this.prisma.attendanceSchedule.findFirst({
-      where: { organizationId },
-      orderBy: { effectiveFrom: 'desc' },
-    });
-    if (!scheduleRow) return 0;
-    const schedule = toScheduleConfig(scheduleRow);
+  async reconcileOrganizationDate(
+    organizationId: string,
+    attendanceDateKey: string,
+    now: Date,
+  ): Promise<number> {
+    const schedule = await this.resolveScheduleForDate(organizationId, attendanceDateKey);
+    if (!schedule) return 0;
     const parts = getZonedParts(now, schedule.timeZone);
-    const officeHours = resolveOfficeHoursForWeekday(schedule, parts.weekday);
-    const attendanceDateKey = formatDateOnly(parts);
-    if (
-      (await this.resolveAttendanceDayKind(organizationId, attendanceDateKey, schedule)) !== 'WORKING'
-    ) {
+    const today = formatDateOnly(parts);
+    if (attendanceDateKey > today) return 0;
+    const dayKind = await this.resolveAttendanceDayKind(organizationId, attendanceDateKey, schedule);
+    const officeHours = resolveOfficeHoursForWeekday(
+      schedule,
+      getZonedParts(new Date(`${attendanceDateKey}T12:00:00.000Z`), schedule.timeZone).weekday,
+    );
+    if (attendanceDateKey === today && parts.minutesFromMidnight < officeHours.endMinutes) {
       return 0;
     }
-    if (parts.minutesFromMidnight < officeHours.endMinutes) return 0;
-    const attendanceDate = parseDateOnly(formatDateOnly(parts));
-    const rows = await this.prisma.attendanceRecord.findMany({
-      where: {
-        organizationId,
-        attendanceDate,
-        punchInAt: { not: null },
-        punchOutAt: null,
-        finalizedAt: null,
-      },
-    });
-    let count = 0;
-    for (const row of rows) {
-      const snapshot = snapshotFromJson(row.scheduleSnapshot);
-      const final = calculateFinalStatus(
-        { ...schedule, ...snapshot, scheduleId: snapshot.scheduleId },
-        row.punchInAt,
-        null,
-        row.lateMinutes,
-        row.status === 'LATE' ? 'LATE' : 'PRESENT',
-      );
-      await this.prisma.attendanceRecord.update({
-        where: { id: row.id },
-        data: {
-          status: final.status,
-          finalizedAt: now,
-          finalizationNote: 'Finalized without punch-out.',
+    if (dayKind !== 'WORKING') return 0;
+
+    const attendanceDate = parseDateOnly(attendanceDateKey);
+    const [employees, records, leaveRequests] = await Promise.all([
+      this.prisma.employee.findMany({
+        where: { organizationId, employmentStatus: 'ACTIVE', deactivatedAt: null },
+        select: { id: true },
+      }),
+      this.prisma.attendanceRecord.findMany({
+        where: { organizationId, attendanceDate },
+        select: {
+          employeeId: true,
+          status: true,
+          punchInAt: true,
+          finalizedAt: true,
+          finalizationNote: true,
+          _count: { select: { corrections: true } },
         },
-      });
-      count += 1;
+      }),
+      this.prisma.leaveRequest.findMany({
+        where: {
+          organizationId,
+          status: 'APPROVED',
+          startDate: { lte: attendanceDate },
+          endDate: { gte: attendanceDate },
+        },
+        select: {
+          employeeId: true,
+          isHalfDay: true,
+          halfDayDate: true,
+          selectedDates: { select: { leaveDate: true } },
+        },
+      }),
+    ]);
+
+    const recordByEmployee = new Map(records.map((row) => [row.employeeId, row]));
+    const leaveByEmployee = new Map<string, ApprovedLeaveDay[]>();
+    for (const request of leaveRequests) {
+      const day: ApprovedLeaveDay = {
+        isHalfDay: request.isHalfDay,
+        halfDayDate: request.halfDayDate ? request.halfDayDate.toISOString().slice(0, 10) : null,
+        selectedDates: request.selectedDates.map((date) => date.leaveDate.toISOString().slice(0, 10)),
+      };
+      const list = leaveByEmployee.get(request.employeeId) ?? [];
+      list.push(day);
+      leaveByEmployee.set(request.employeeId, list);
     }
-    return count;
+
+    const snapshot = snapshotToJson(toScheduleSnapshot(schedule));
+    const writes: Prisma.PrismaPromise<unknown>[] = [];
+    for (const employee of employees) {
+      const existing = recordByEmployee.get(employee.id);
+      const decision = decideAbsenceReconciliation({
+        hasPunchIn: Boolean(existing?.punchInAt),
+        hasCorrections: (existing?._count.corrections ?? 0) > 0,
+        status: existing?.status ?? null,
+        finalizationNote: existing?.finalizationNote ?? null,
+        finalized: Boolean(existing?.finalizedAt),
+        leave: classifyApprovedLeaveForDate(leaveByEmployee.get(employee.id) ?? [], attendanceDateKey),
+      });
+      if (decision.action !== 'upsert') continue;
+      writes.push(
+        this.prisma.attendanceRecord.upsert({
+          where: {
+            organizationId_employeeId_attendanceDate: {
+              organizationId,
+              employeeId: employee.id,
+              attendanceDate,
+            },
+          },
+          create: {
+            id: randomUUID(),
+            organizationId,
+            employeeId: employee.id,
+            attendanceDate,
+            scheduleId: schedule.scheduleId,
+            scheduleSnapshot: snapshot,
+            status: decision.status,
+            finalizedAt: now,
+            finalizationNote: decision.note,
+          },
+          update: {
+            status: decision.status,
+            finalizedAt: now,
+            finalizationNote: decision.note,
+          },
+        }),
+      );
+    }
+    if (writes.length === 0) return 0;
+    await this.prisma.$transaction(writes);
+    return writes.length;
+  }
+
+  async processIncompleteForOrganization(_organizationId: string, _now: Date): Promise<number> {
+    return 0;
   }
 
   private async requireSchedule(organizationId: string, now: Date) {

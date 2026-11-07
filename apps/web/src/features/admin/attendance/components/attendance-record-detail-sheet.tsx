@@ -5,12 +5,11 @@ import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
-import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
+import { AttendanceResult } from '@/features/attendance/components/attendance-result';
 import {
   formatAttendanceDate,
-  formatDurationMinutes,
+  formatAttendanceWorkingHours,
   formatIsoTime,
-  formatLateDuration,
   minutesToLabel,
 } from '@/features/attendance/utils/time';
 
@@ -63,19 +62,18 @@ export function AttendanceRecordDetailSheet({
                 <DetailRow label="Date">
                   {formatAttendanceDate(detail.attendanceDate, timeZone)}
                 </DetailRow>
-                <DetailRow label="Status">
-                  <AttendanceStatusBadge status={detail.status} />
-                </DetailRow>
                 <DetailRow label="Punch in">
                   {formatIsoTime(detail.punchInAt, timeZone)}
                 </DetailRow>
                 <DetailRow label="Punch out">
-                  {formatIsoTime(detail.punchOutAt, timeZone)}
+                  {detail.punchOutAt ? formatIsoTime(detail.punchOutAt, timeZone) : 'Not recorded'}
                 </DetailRow>
                 <DetailRow label="Working hours">
-                  {formatDurationMinutes(detail.workingMinutes)}
+                  {formatAttendanceWorkingHours(detail.workingMinutes, detail.punchInAt, detail.punchOutAt)}
                 </DetailRow>
-                <DetailRow label="Late by">{formatLateDuration(detail.lateMinutes)}</DetailRow>
+                <DetailRow label="Result">
+                  <AttendanceResult row={detail} />
+                </DetailRow>
                 <DetailRow label="Office schedule (snapshot)">
                   {minutesToLabel(detail.scheduleSnapshot.officeStartMinutes)} –{' '}
                   {minutesToLabel(detail.scheduleSnapshot.officeEndMinutes)}

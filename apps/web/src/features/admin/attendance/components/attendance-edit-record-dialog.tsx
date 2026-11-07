@@ -1,6 +1,6 @@
 'use client';
 
-import type { AttendanceRecordDetail, AttendanceStatus } from '@techwin/contracts';
+import type { AttendanceRecordDetail, AttendanceScheduleSettings } from '@techwin/contracts';
 import { correctAttendanceRecordRequestSchema } from '@techwin/validation';
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { isApiError } from '@/shared/api/api-error';
@@ -10,7 +10,7 @@ import {
   zodIssuesToFieldMap,
 } from '@/shared/form/zod-field-error';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,13 +20,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAdminToast } from '@/features/admin/components/toast';
@@ -41,10 +34,13 @@ import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import {
   correctAttendanceRecord,
   fetchAttendanceRecordDetail,
+  fetchAttendanceSettings,
 } from '@/features/attendance/api/attendance';
-import { formatDurationMinutes, formatLateDuration } from '@/features/attendance/utils/time';
+import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
+import { previewPunchAttendance } from '@/features/attendance/utils/attendance-preview';
+import { attendanceResultDetail, describeRecordResult } from '@/features/attendance/utils/attendance-result';
+import { formatAttendanceWorkingHours } from '@/features/attendance/utils/time';
 import { cn } from '@/shared/lib/utils';
-import { ATTENDANCE_STATUS_OPTIONS } from '../constants/attendance-status-options';
 import { AttendanceTimePicker } from './attendance-time-picker';
 import {
   instantFromDateAndTime12,
@@ -52,10 +48,12 @@ import {
 } from '../utils/attendance-correction-time';
 import {
   minutesToTime12,
+  scheduleEffectiveOn,
+  time12ToMinutes,
   type Time12Parts,
 } from '../utils/attendance-settings-time';
 
-const DIALOG_SHELL = cn(
+export const ATTENDANCE_RECORD_DIALOG_SHELL = cn(
   CRM_PIPELINE_FORM_DIALOG_CLASS,
   'max-w-[720px] sm:w-[min(720px,calc(100vw-2rem))]',
   '[&>button]:text-foreground [&>button]:top-5 [&>button]:right-5 [&>button]:size-9 [&>button]:rounded-lg [&>button]:border [&>button]:border-input [&>button]:bg-card [&>button]:shadow-none [&>button]:hover:bg-muted/50',
@@ -67,15 +65,7 @@ const SECONDARY_BTN =
 const PRIMARY_BTN =
   'h-11 border-0 bg-gradient-to-r from-neutral-950 via-neutral-800 to-neutral-950 text-white shadow-xs hover:from-neutral-900 hover:via-neutral-700 hover:to-neutral-900';
 
-const SCHEDULE_INDEPENDENT: readonly AttendanceStatus[] = [
-  'HOLIDAY',
-  'WEEKLY_OFF',
-  'ON_LEAVE',
-  'PENDING',
-];
-
 type FormState = {
-  status: AttendanceStatus;
   hasPunchIn: boolean;
   punchIn: Time12Parts;
   hasPunchOut: boolean;
@@ -89,7 +79,6 @@ function detailToForm(detail: AttendanceRecordDetail): FormState {
   const punchOut = isoToTime12(detail.punchOutAt, tz);
   const defaultStart = minutesToTime12(detail.scheduleSnapshot.officeStartMinutes);
   return {
-    status: detail.status,
     hasPunchIn: punchIn != null,
     punchIn: punchIn ?? defaultStart,
     hasPunchOut: punchOut != null,
@@ -98,12 +87,37 @@ function detailToForm(detail: AttendanceRecordDetail): FormState {
   };
 }
 
+const WEEKDAYS: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+function editPreview(
+  detail: AttendanceRecordDetail,
+  form: FormState,
+  schedule: AttendanceScheduleSettings | null,
+) {
+  const source = schedule ?? detail.scheduleSnapshot;
+  const label = new Intl.DateTimeFormat('en-US', {
+    timeZone: source.timeZone,
+    weekday: 'short',
+    hourCycle: 'h23',
+  }).format(new Date(`${detail.attendanceDate}T12:00:00.000Z`));
+  const weekday = WEEKDAYS[label] ?? 1;
+  const day = source.daySchedules?.find((entry) => entry.day === weekday);
+  return previewPunchAttendance({
+    officeStartMinutes: day?.startMinutes ?? source.officeStartMinutes,
+    officeEndMinutes: day?.endMinutes ?? source.officeEndMinutes,
+    lateGraceMinutes: source.lateGraceMinutes,
+    earlyPunchInAllowanceMinutes: source.earlyPunchInAllowanceMinutes,
+    minHalfDayMinutes: source.minHalfDayMinutes,
+    punchInMinutes: form.hasPunchIn ? time12ToMinutes(form.punchIn) : null,
+    punchOutMinutes: form.hasPunchOut ? time12ToMinutes(form.punchOut) : null,
+  });
+}
+
 function buildPayload(form: FormState, detail: AttendanceRecordDetail) {
   const tz = detail.scheduleSnapshot.timeZone;
   const date = detail.attendanceDate;
   return {
     reason: form.reason.trim(),
-    status: form.status,
     punchInAt: form.hasPunchIn
       ? instantFromDateAndTime12(date, form.punchIn, tz)
       : null,
@@ -129,6 +143,7 @@ export function AttendanceEditRecordDialog({
   const [detail, setDetail] = useState<AttendanceRecordDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
+  const [schedules, setSchedules] = useState<readonly AttendanceScheduleSettings[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -139,6 +154,9 @@ export function AttendanceEditRecordDialog({
       return;
     }
     setLoading(true);
+    void fetchAttendanceSettings()
+      .then((loaded) => setSchedules(loaded.history))
+      .catch(() => setSchedules([]));
     void fetchAttendanceRecordDetail(recordId)
       .then((loaded) => {
         setDetail(loaded);
@@ -152,22 +170,12 @@ export function AttendanceEditRecordDialog({
       .finally(() => setLoading(false));
   }, [open, recordId, onOpenChange, toast]);
 
-  const punchesOptional = useMemo(
-    () => form != null && (SCHEDULE_INDEPENDENT.includes(form.status) || form.status === 'ABSENT'),
-    [form],
-  );
-
   const onSubmit = async () => {
     if (!detail || !form || !recordId) return;
     const payload = buildPayload(form, detail);
     const parsed = correctAttendanceRecordRequestSchema.safeParse(payload);
     if (!parsed.success) {
       setFieldErrors(zodIssuesToFieldMap(parsed.error));
-      focusFirstInvalidField();
-      return;
-    }
-    if (!form.hasPunchIn && ['PRESENT', 'LATE', 'HALF_DAY'].includes(form.status)) {
-      setFieldErrors({ punchInAt: 'Punch in is required for the selected status.' });
       focusFirstInvalidField();
       return;
     }
@@ -186,9 +194,14 @@ export function AttendanceEditRecordDialog({
     }
   };
 
+  const preview =
+    detail && form
+      ? editPreview(detail, form, scheduleEffectiveOn(schedules, detail.attendanceDate))
+      : null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={DIALOG_SHELL}>
+      <DialogContent className={ATTENDANCE_RECORD_DIALOG_SHELL}>
         <DialogHeader className="shrink-0 space-y-0 px-6 pt-6 pb-2 text-left">
           <DialogTitle className="text-foreground pr-10 text-xl font-semibold tracking-tight">
             Edit Attendance Record
@@ -233,42 +246,35 @@ export function AttendanceEditRecordDialog({
                 </div>
               </section>
 
-              <section className="grid gap-3">
-                <h3 className="text-foreground text-sm font-semibold">Attendance status</h3>
-                <div className="grid gap-1.5 sm:max-w-xs">
-                  <CrmFieldLabel htmlFor="attendance-status" required>
-                    Status
-                  </CrmFieldLabel>
-                  <Select
-                    value={form.status}
-                    onValueChange={(value) => {
-                      setForm((current) =>
-                        current ? { ...current, status: value as AttendanceStatus } : current,
-                      );
-                      clearFormFieldError(setFieldErrors, 'status');
-                    }}
-                    disabled={pending}
-                  >
-                    <SelectTrigger
-                      id="attendance-status"
-                      aria-invalid={Boolean(fieldErrors.status)}
-                      className={cn(
-                        CRM_PIPELINE_FORM_FIELD_CLASS,
-                        formControlStateClass(fieldErrors.status ? 'invalid' : 'neutral'),
-                      )}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ATTENDANCE_STATUS_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <CrmInlineFieldError message={fieldErrors.status} reserveSpace={false} />
+              <section className="grid gap-2">
+                <h3 className="text-foreground text-sm font-semibold">Calculated result</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  {preview?.rejection ? (
+                    <span className="text-destructive text-xs">{preview.rejection}</span>
+                  ) : preview ? (
+                    <>
+                      <AttendanceStatusBadge status={preview.status} />
+                      {attendanceResultDetail({
+                        ...preview,
+                        punchInAt: form.hasPunchIn ? 'preview' : null,
+                        punchOutAt: form.hasPunchOut ? 'preview' : null,
+                      }) ? (
+                        <span className="text-muted-foreground text-xs">
+                          {attendanceResultDetail({
+                            ...preview,
+                            punchInAt: form.hasPunchIn ? 'preview' : null,
+                            punchOutAt: form.hasPunchOut ? 'preview' : null,
+                          })}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : null}
                 </div>
+                <p className="text-muted-foreground text-xs leading-snug">
+                  Saving recalculates status from these punch times and the attendance settings effective
+                  on this date. A punch before the earliest allowed time is rejected. Approved leave can
+                  replace Absent when there is no punch-in.
+                </p>
               </section>
 
               <section className="grid gap-3">
@@ -325,16 +331,10 @@ export function AttendanceEditRecordDialog({
                     <CrmInlineFieldError message={fieldErrors.punchOutAt} reserveSpace={false} />
                   </div>
                 </div>
-                {punchesOptional ? (
-                  <p className="text-muted-foreground text-xs leading-snug">
-                    Punch times are optional for {form.status.replace('_', ' ').toLowerCase()} records.
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground text-xs leading-snug">
-                    Provide punch in for present, late, or half-day records. Punch out may be left empty for
-                    incomplete attendance.
-                  </p>
-                )}
+                <p className="text-muted-foreground text-xs leading-snug">
+                  Leave punch-out empty while the employee is still in progress. A missing punch-in is
+                  Absent only after office end, unless approved leave covers the date.
+                </p>
               </section>
 
               <section className="grid gap-3 sm:grid-cols-2">
@@ -342,7 +342,11 @@ export function AttendanceEditRecordDialog({
                   <CrmFieldLabel>Working hours (current)</CrmFieldLabel>
                   <Input
                     readOnly
-                    value={formatDurationMinutes(detail.workingMinutes)}
+                    value={formatAttendanceWorkingHours(
+                      detail.workingMinutes,
+                      detail.punchInAt,
+                      detail.punchOutAt,
+                    )}
                     className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'bg-muted/40 tabular-nums')}
                   />
                   <p className="text-muted-foreground text-[11px]">
@@ -350,14 +354,14 @@ export function AttendanceEditRecordDialog({
                   </p>
                 </div>
                 <div className="grid gap-1.5">
-                  <CrmFieldLabel>Late by (current)</CrmFieldLabel>
+                  <CrmFieldLabel>Result (saved)</CrmFieldLabel>
                   <Input
                     readOnly
-                    value={formatLateDuration(detail.lateMinutes)}
+                    value={describeRecordResult(detail) || detail.status.replace('_', ' ')}
                     className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, 'bg-muted/40')}
                   />
                   <p className="text-muted-foreground text-[11px]">
-                    Based on office schedule and grace period at save time.
+                    Saved result. Editing punch times recalculates it from the current settings.
                   </p>
                 </div>
               </section>

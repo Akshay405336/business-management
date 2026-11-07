@@ -4,12 +4,11 @@ import type { AttendanceRecordItem } from '@techwin/contracts';
 import { Eye, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
-import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
+import { AttendanceResult } from '@/features/attendance/components/attendance-result';
 import {
   formatAttendanceDate,
-  formatDurationMinutes,
+  formatAttendanceWorkingHours,
   formatIsoTime,
-  formatLateDuration,
 } from '@/features/attendance/utils/time';
 
 export function AttendanceRecordsMobileList({
@@ -52,7 +51,7 @@ export function AttendanceRecordsMobileList({
                       {row.employeeCode}
                     </p>
                   </div>
-                  <AttendanceStatusBadge status={row.status} className="shrink-0 text-[10px]" />
+                  <AttendanceResult row={row} className="max-w-[50%] items-end" />
                 </div>
                 <dl className="text-muted-foreground grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                   <div>
@@ -64,7 +63,7 @@ export function AttendanceRecordsMobileList({
                   <div>
                     <dt className="text-[10px] font-medium uppercase tracking-wide">Hours</dt>
                     <dd className="text-foreground tabular-nums">
-                      {formatDurationMinutes(row.workingMinutes)}
+                      {formatAttendanceWorkingHours(row.workingMinutes, row.punchInAt, row.punchOutAt)}
                     </dd>
                   </div>
                   <div>
@@ -78,10 +77,6 @@ export function AttendanceRecordsMobileList({
                     <dd className="text-foreground tabular-nums">
                       {formatIsoTime(row.punchOutAt, timeZone)}
                     </dd>
-                  </div>
-                  <div className="col-span-2">
-                    <dt className="text-[10px] font-medium uppercase tracking-wide">Late by</dt>
-                    <dd className="text-foreground">{formatLateDuration(row.lateMinutes)}</dd>
                   </div>
                 </dl>
               </div>

@@ -11,18 +11,18 @@ import { AttendanceHeaderActions } from './attendance-header-actions';
 import { AttendancePageToolbar } from './attendance-page-toolbar';
 import { AttendanceRecordsProvider } from './attendance-records-context';
 import { AttendanceRecordsSection } from './attendance-records-section';
-import { AttendanceSettingsPanel } from './attendance-settings-panel';
+import { AttendanceSettingsDialog } from './attendance-settings-dialog';
 import type { AttendanceWorkspaceTab } from './attendance-workspace-tabs';
 
 export function AdminAttendanceWorkspace() {
-  const [tab, setTab] = useState<AttendanceWorkspaceTab>('records');
-  const recordsActive = tab === 'records';
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const tab: AttendanceWorkspaceTab = settingsOpen ? 'settings' : 'records';
 
   return (
     <div className="grid w-full min-w-0 max-w-full gap-3 pt-1 pb-8">
       <AdminBreadcrumb breadcrumbs={[{ label: 'Attendance' }]} className="mb-0.5" />
 
-      <AttendanceRecordsProvider active={recordsActive}>
+      <AttendanceRecordsProvider active>
         <section aria-label="Attendance" className="workspace-surface min-w-0 max-w-full overflow-hidden">
           <div className="min-w-0 max-w-full rounded-lg">
             <CrmToolbarHeader
@@ -34,21 +34,19 @@ export function AdminAttendanceWorkspace() {
               descriptionClassName="max-w-3xl"
               headerRowClassName="flex-wrap items-center justify-between gap-x-4 gap-y-3 sm:flex-nowrap"
               toolbarRowClassName="shrink-0"
-              toolbar={<AttendanceHeaderActions onShowRecords={() => setTab('records')} />}
+              toolbar={<AttendanceHeaderActions onShowRecords={() => setSettingsOpen(false)} />}
               bottomRow={
                 <div className={cn(CRM_HEADER_TOOLBAR_ROW_CLASS, 'lg:flex-nowrap')}>
-                  <AttendancePageToolbar tab={tab} onTabChange={setTab} />
+                  <AttendancePageToolbar
+                    tab={tab}
+                    onTabChange={(next) => setSettingsOpen(next === 'settings')}
+                  />
                 </div>
               }
             />
 
-            {tab === 'records' ? (
-              <AttendanceRecordsSection />
-            ) : (
-              <div className="p-4 sm:p-5">
-                <AttendanceSettingsPanel />
-              </div>
-            )}
+            <AttendanceRecordsSection />
+            <AttendanceSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
           </div>
         </section>
       </AttendanceRecordsProvider>

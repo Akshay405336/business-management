@@ -25,11 +25,11 @@ import { ATTENDANCE_STATUS_FILTER_OPTIONS } from '@/features/admin/attendance/co
 import type { AttendanceStatusFilter } from '@/features/admin/attendance/constants/attendance-status-filter-options';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
 import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
+import { describeRecordResult } from '@/features/attendance/utils/attendance-result';
 import {
   formatAttendanceDate,
   formatWorkingHoursClock,
   formatIsoTime,
-  formatLateDuration,
   weekdayLabel,
 } from '@/features/attendance/utils/time';
 import { cn } from '@/shared/lib/utils';
@@ -237,7 +237,7 @@ export function EmployeeAttendanceHistorySection({
             <TableHead className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.hours, EMPLOYEE_ATTENDANCE_TABLE_HEAD)}>
               Working Hours
             </TableHead>
-            <TableHead className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.late, EMPLOYEE_ATTENDANCE_TABLE_HEAD)}>Late By</TableHead>
+            <TableHead className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.late, EMPLOYEE_ATTENDANCE_TABLE_HEAD)}>Result</TableHead>
             <TableHead className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.status, EMPLOYEE_ATTENDANCE_TABLE_HEAD)}>Status</TableHead>
           </TableRow>
         }
@@ -278,8 +278,8 @@ export function EmployeeAttendanceHistorySection({
               <TableCell className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.hours, EMPLOYEE_ATTENDANCE_TABLE_CELL)}>
                 {formatWorkingHoursClock(row.workingMinutes)}
               </TableCell>
-              <TableCell className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.late, EMPLOYEE_ATTENDANCE_TABLE_CELL, 'text-[#64748B]')}>
-                {formatLateDuration(row.lateMinutes)}
+              <TableCell className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.late, 'whitespace-normal px-3 py-2.5 text-[#64748B]')}>
+                {describeRecordResult(row) || '—'}
               </TableCell>
               <TableCell className={cn(EMPLOYEE_ATTENDANCE_TABLE_COL.status, 'px-3 py-2.5')}>
                 <AttendanceStatusBadge status={row.status} className="h-5 text-[10px]" />

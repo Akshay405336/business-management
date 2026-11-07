@@ -27,6 +27,37 @@ export function formatDateOnly(parts: Pick<ZonedDateParts, 'year' | 'month' | 'd
   return `${parts.year}-${month}-${day}`;
 }
 
+/**
+ * Calendar key for a Prisma DATE. UTC midnight stays on that UTC date.
+ * A session-timezone midnight (hours !== 0 in UTC) uses the local calendar date
+ * so Asia/Calcutta DATE values do not shift back one day.
+ */
+export function calendarDateKey(value: Date): string {
+  if (
+    value.getUTCHours() === 0 &&
+    value.getUTCMinutes() === 0 &&
+    value.getUTCSeconds() === 0 &&
+    value.getUTCMilliseconds() === 0
+  ) {
+    return value.toISOString().slice(0, 10);
+  }
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function hourFromZonedParts(parts: Intl.DateTimeFormatPart[]): number {
+  const read = (type: Intl.DateTimeFormatPartTypes): string | undefined =>
+    parts.find((part) => part.type === type)?.value;
+  const rawHour = Number(read('hour') ?? '0');
+  const hour = rawHour === 24 ? 0 : rawHour;
+  const dayPeriod = read('dayPeriod');
+  if (!dayPeriod) return hour;
+  const isPm = /^p/i.test(dayPeriod);
+  return (hour % 12) + (isPm ? 12 : 0);
+}
+
 export function getZonedParts(instant: Date, timeZone: string): ZonedDateParts {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -34,14 +65,15 @@ export function getZonedParts(instant: Date, timeZone: string): ZonedDateParts {
     month: '2-digit',
     day: '2-digit',
     weekday: 'short',
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
     hour12: false,
+    hourCycle: 'h23',
   });
   const parts = formatter.formatToParts(instant);
   const read = (type: Intl.DateTimeFormatPartTypes): string =>
     parts.find((p) => p.type === type)?.value ?? '0';
-  const hour = Number(read('hour'));
+  const hour = hourFromZonedParts(parts);
   const minute = Number(read('minute'));
   const weekdayLabel = read('weekday');
   return {
@@ -92,4 +124,15 @@ export function normalizeDaySchedules(
 
 export function diffMinutes(start: Date, end: Date): number {
   return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60_000));
+}
+
+/** 12-hour clock label for a minutes-from-midnight value, used in policy errors. */
+export function formatMinutesClock(minutes: number): string {
+  const day = 24 * 60;
+  const normalized = ((minutes % day) + day) % day;
+  const hour24 = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  const period = hour24 >= 12 ? 'PM' : 'AM';
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
 }

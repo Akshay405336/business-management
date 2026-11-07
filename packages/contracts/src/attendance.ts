@@ -38,7 +38,6 @@ export interface AttendanceScheduleSnapshot {
   readonly officeStartMinutes: number;
   readonly officeEndMinutes: number;
   readonly lateGraceMinutes: number;
-  readonly attendanceCutoffMinutes: number;
   readonly minFullDayMinutes: number;
   readonly minHalfDayMinutes: number;
   readonly weeklyOffDays: readonly number[];
@@ -61,7 +60,6 @@ export interface AttendanceScheduleSettings {
   readonly officeStartMinutes: number;
   readonly officeEndMinutes: number;
   readonly lateGraceMinutes: number;
-  readonly attendanceCutoffMinutes: number;
   readonly minFullDayMinutes: number;
   readonly minHalfDayMinutes: number;
   readonly weeklyOffDays: readonly number[];
@@ -84,6 +82,9 @@ export interface AttendanceRecordItem {
   readonly punchInAt: string | null;
   readonly punchOutAt: string | null;
   readonly lateMinutes: number;
+  readonly earlyMinutes: number;
+  readonly leftEarlyMinutes: number;
+  readonly stayedLateMinutes: number;
   readonly workingMinutes: number | null;
   readonly scheduleSnapshot: AttendanceScheduleSnapshot;
   readonly finalizedAt: string | null;

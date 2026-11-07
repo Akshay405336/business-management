@@ -21,7 +21,6 @@ export type AttendanceSettingsFormState = {
   officeStart: Time12Parts;
   officeEnd: Time12Parts;
   lateGraceMinutes: number;
-  attendanceCutoff: Time12Parts;
   fullDayHours: number;
   fullDayMinutes: number;
   halfDayHours: number;
@@ -67,6 +66,12 @@ export function joinDurationMinutes(hours: number, minutes: number): number {
   return Math.max(0, hours) * 60 + Math.max(0, Math.min(59, minutes));
 }
 
+export function parseNonNegativeInt(raw: string, max: number): number {
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(max, parsed);
+}
+
 export function defaultFormState(): AttendanceSettingsFormState {
   const today = new Date().toISOString().slice(0, 10);
   const officeStart = minutesToTime12(9 * 60 + 30);
@@ -76,8 +81,7 @@ export function defaultFormState(): AttendanceSettingsFormState {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     officeStart,
     officeEnd,
-    lateGraceMinutes: 15,
-    attendanceCutoff: minutesToTime12(11 * 60),
+    lateGraceMinutes: 30,
     fullDayHours: 8,
     fullDayMinutes: 0,
     halfDayHours: 4,
@@ -117,7 +121,6 @@ export function formStateFromSettings(current: AttendanceScheduleSettings): Atte
     officeStart,
     officeEnd,
     lateGraceMinutes: current.lateGraceMinutes,
-    attendanceCutoff: minutesToTime12(current.attendanceCutoffMinutes),
     fullDayHours: fullDay.hours,
     fullDayMinutes: fullDay.minutes,
     halfDayHours: halfDay.hours,
@@ -152,7 +155,6 @@ export function formStateToPayload(form: AttendanceSettingsFormState): UpsertAtt
     officeStartMinutes,
     officeEndMinutes,
     lateGraceMinutes: form.lateGraceMinutes,
-    attendanceCutoffMinutes: time12ToMinutes(form.attendanceCutoff),
     minFullDayMinutes: joinDurationMinutes(form.fullDayHours, form.fullDayMinutes),
     minHalfDayMinutes: joinDurationMinutes(form.halfDayHours, form.halfDayMinutes),
     weeklyOffDays,
@@ -176,4 +178,16 @@ export function formStateToPayload(form: AttendanceSettingsFormState): UpsertAtt
 
 export function serializeFormState(form: AttendanceSettingsFormState): string {
   return JSON.stringify(form);
+}
+
+/** Latest schedule whose effective date is on or before the attendance date. */
+export function scheduleEffectiveOn<T extends { effectiveFrom: string }>(
+  history: readonly T[],
+  attendanceDate: string,
+): T | null {
+  return (
+    history
+      .filter((schedule) => schedule.effectiveFrom <= attendanceDate)
+      .sort((left, right) => right.effectiveFrom.localeCompare(left.effectiveFrom))[0] ?? null
+  );
 }

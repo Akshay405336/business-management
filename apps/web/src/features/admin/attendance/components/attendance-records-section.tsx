@@ -15,12 +15,11 @@ import { TableIconButton } from '@/features/admin/components/table-icon-button';
 import { TablePagination } from '@/features/admin/components/table-pagination';
 import { EmployeeAvatar } from '@/features/employees/components/employee-avatar';
 import { CrmErrorAlert } from '@/features/admin/crm/components/crm-feedback';
-import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
+import { AttendanceResult } from '@/features/attendance/components/attendance-result';
 import {
   formatAttendanceDate,
-  formatDurationMinutes,
+  formatAttendanceWorkingHours,
   formatIsoTime,
-  formatLateDuration,
 } from '@/features/attendance/utils/time';
 import { useMyPermissions } from '@/features/admin/org-access/hooks/use-my-permissions';
 import { cn } from '@/shared/lib/utils';
@@ -125,7 +124,7 @@ export function AttendanceRecordsSection() {
         )}
         tableBodyClassName="[&_[data-slot=table-row]]:border-0 [&_[data-slot=table-row]:hover]:bg-[#f5f5f5]"
         phase={tablePhase}
-        colSpan={8}
+        colSpan={7}
         skeletonColumns={ATTENDANCE_TABLE_SKELETON}
         header={
           <TableRow className="hover:bg-transparent">
@@ -160,15 +159,10 @@ export function AttendanceRecordsSection() {
               <span className="xl:hidden">Hours</span>
             </TableHead>
             <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.late, ATTENDANCE_TABLE_HEAD_CLASS)}
-              title="Late by"
+              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.result, ATTENDANCE_TABLE_HEAD_CLASS)}
+              title="Result"
             >
-              Late by
-            </TableHead>
-            <TableHead
-              className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.status, ATTENDANCE_TABLE_HEAD_CLASS)}
-            >
-              Status
+              Result
             </TableHead>
             <TableHead
               className={cn(
@@ -250,18 +244,10 @@ export function AttendanceRecordsSection() {
               <TableCell
                 className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.hours, ATTENDANCE_TABLE_COMPACT_CELL, 'text-sm')}
               >
-                {formatDurationMinutes(row.workingMinutes)}
+                {formatAttendanceWorkingHours(row.workingMinutes, row.punchInAt, row.punchOutAt)}
               </TableCell>
-              <TableCell
-                className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.late, ATTENDANCE_TABLE_COMPACT_CELL, 'text-sm')}
-              >
-                {formatLateDuration(row.lateMinutes)}
-              </TableCell>
-              <TableCell className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.status, 'overflow-hidden px-2')}>
-                <AttendanceStatusBadge
-                  status={row.status}
-                  className="max-w-full truncate text-[10px] sm:text-xs"
-                />
+              <TableCell className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.result, 'whitespace-normal px-2 py-2')}>
+                <AttendanceResult row={row} />
               </TableCell>
               <TableCell
                 className={cn(ATTENDANCE_TABLE_COLUMN_CLASS.actions, 'text-right')}

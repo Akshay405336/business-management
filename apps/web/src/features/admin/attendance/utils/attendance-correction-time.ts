@@ -18,20 +18,32 @@ const weekdayMap: Record<string, number> = {
   Sat: 6,
 };
 
+function hourFromZonedParts(parts: Intl.DateTimeFormatPart[]): number {
+  const read = (type: Intl.DateTimeFormatPartTypes): string | undefined =>
+    parts.find((part) => part.type === type)?.value;
+  const rawHour = Number(read('hour') ?? '0');
+  const hour = rawHour === 24 ? 0 : rawHour;
+  const dayPeriod = read('dayPeriod');
+  if (!dayPeriod) return hour;
+  const isPm = /^p/i.test(dayPeriod);
+  return (hour % 12) + (isPm ? 12 : 0);
+}
+
 export function getZonedParts(instant: Date, timeZone: string): ZonedParts {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
     hour12: false,
+    hourCycle: 'h23',
   });
   const parts = formatter.formatToParts(instant);
   const read = (type: Intl.DateTimeFormatPartTypes): string =>
     parts.find((p) => p.type === type)?.value ?? '0';
-  const hour = Number(read('hour'));
+  const hour = hourFromZonedParts(parts);
   const minute = Number(read('minute'));
   return {
     year: Number(read('year')),

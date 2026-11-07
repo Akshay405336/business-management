@@ -22,7 +22,6 @@ export const upsertAttendanceSettingsRequestSchema = z
     officeStartMinutes: timeMinutes,
     officeEndMinutes: timeMinutes,
     lateGraceMinutes: z.number().int().min(0).max(240),
-    attendanceCutoffMinutes: timeMinutes,
     minFullDayMinutes: z.number().int().min(1).max(24 * 60),
     minHalfDayMinutes: z.number().int().min(1).max(24 * 60),
     weeklyOffDays: z.array(z.number().int().min(0).max(6)).default([]),
@@ -40,10 +39,6 @@ export const upsertAttendanceSettingsRequestSchema = z
   .refine((v) => v.minFullDayMinutes >= v.minHalfDayMinutes, {
     message: 'Full-day minimum must be at least half-day minimum.',
     path: ['minFullDayMinutes'],
-  })
-  .refine((v) => v.attendanceCutoffMinutes >= v.officeStartMinutes, {
-    message: 'Attendance cutoff must be on or after office start.',
-    path: ['attendanceCutoffMinutes'],
   });
 
 export type UpsertAttendanceSettingsRequest = z.infer<typeof upsertAttendanceSettingsRequestSchema>;

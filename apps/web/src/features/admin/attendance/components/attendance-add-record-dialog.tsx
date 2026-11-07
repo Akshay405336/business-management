@@ -1,6 +1,6 @@
 'use client';
 
-import type { AttendanceStatus } from '@techwin/contracts';
+import type { AttendanceScheduleSettings } from '@techwin/contracts';
 import { createAttendanceRecordRequestSchema } from '@techwin/validation';
 import { focusFirstInvalidField, formControlStateClass } from '@/shared/form/form-control-state';
 import { isApiError } from '@/shared/api/api-error';
@@ -20,13 +20,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAdminToast } from '@/features/admin/components/toast';
@@ -39,13 +32,20 @@ import { CrmFieldLabel, CrmInlineFieldError } from '@/features/admin/crm/compone
 import { useAsyncAction } from '@/features/admin/crm/hooks/use-async-action';
 import { describeCrmError } from '@/features/admin/crm/utils/errors';
 import { createAttendanceRecord, fetchAttendanceSettings } from '@/features/attendance/api/attendance';
+import { AttendanceStatusBadge } from '@/features/attendance/components/attendance-status-badge';
+import { previewPunchAttendance } from '@/features/attendance/utils/attendance-preview';
+import { attendanceResultDetail } from '@/features/attendance/utils/attendance-result';
 import { cn } from '@/shared/lib/utils';
-import { ATTENDANCE_STATUS_OPTIONS } from '../constants/attendance-status-options';
 import { AttendanceEmployeeSelect } from './attendance-employee-select';
 import { AttendanceTimePicker } from './attendance-time-picker';
 import { instantFromDateAndTime12 } from '../utils/attendance-correction-time';
 import { localTodayKey } from '../utils/calendar-month';
-import { minutesToTime12, type Time12Parts } from '../utils/attendance-settings-time';
+import {
+  minutesToTime12,
+  scheduleEffectiveOn,
+  time12ToMinutes,
+  type Time12Parts,
+} from '../utils/attendance-settings-time';
 
 const DIALOG_SHELL = cn(
   CRM_PIPELINE_FORM_DIALOG_CLASS,
@@ -62,7 +62,6 @@ const PRIMARY_BTN =
 type FormState = {
   employeeId: string;
   attendanceDate: string;
-  status: AttendanceStatus;
   hasPunchIn: boolean;
   punchIn: Time12Parts;
   hasPunchOut: boolean;
@@ -70,15 +69,25 @@ type FormState = {
   reason: string;
 };
 
+const WEEKDAYS: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+function weekdayFor(date: string, timeZone: string): number {
+  const label = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    hourCycle: 'h23',
+  }).format(new Date(`${date}T12:00:00.000Z`));
+  return WEEKDAYS[label] ?? 1;
+}
+
 function emptyForm(): FormState {
   return {
     employeeId: '',
     attendanceDate: localTodayKey(),
-    status: 'PRESENT',
     hasPunchIn: true,
-    punchIn: minutesToTime12(9 * 60 + 30),
+    punchIn: minutesToTime12(9 * 60),
     hasPunchOut: false,
-    punchOut: minutesToTime12(18 * 60 + 30),
+    punchOut: minutesToTime12(18 * 60),
     reason: '',
   };
 }
@@ -99,6 +108,7 @@ export function AttendanceAddRecordDialog({
   const [form, setForm] = useState<FormState>(() => emptyForm());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [timeZone, setTimeZone] = useState('UTC');
+  const [history, setHistory] = useState<readonly AttendanceScheduleSettings[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -107,30 +117,58 @@ export function AttendanceAddRecordDialog({
       attendanceDate: defaultDate || localTodayKey(),
     });
     setFieldErrors({});
-    void fetchAttendanceSettings().then((settings) => {
-      const tz = settings.current?.timeZone ?? 'UTC';
+    void fetchAttendanceSettings().then((loaded) => {
+      setHistory(loaded.history);
+      const current = loaded.current;
+      const tz = current?.timeZone ?? 'UTC';
       setTimeZone(tz);
-      const start = settings.current?.officeStartMinutes ?? 9 * 60 + 30;
-      const end = settings.current?.officeEndMinutes ?? 18 * 60 + 30;
-      setForm((current) => ({
-        ...current,
+      const start = current?.officeStartMinutes ?? 9 * 60 + 30;
+      const end = current?.officeEndMinutes ?? 18 * 60 + 30;
+      setForm((formState) => ({
+        ...formState,
         punchIn: minutesToTime12(start),
         punchOut: minutesToTime12(end),
       }));
     });
   }, [open, defaultDate]);
 
+  const applicableSettings = scheduleEffectiveOn(history, form.attendanceDate);
+  const previewForForm = () => {
+    if (!applicableSettings) {
+      return previewPunchAttendance({
+        officeStartMinutes: 0,
+        officeEndMinutes: 1,
+        lateGraceMinutes: 0,
+        earlyPunchInAllowanceMinutes: 0,
+        minHalfDayMinutes: 1,
+        punchInMinutes: null,
+        punchOutMinutes: null,
+      });
+    }
+    const weekday = weekdayFor(form.attendanceDate, applicableSettings.timeZone);
+    const day = applicableSettings.daySchedules?.find((entry) => entry.day === weekday);
+    return previewPunchAttendance({
+      officeStartMinutes: day?.startMinutes ?? applicableSettings.officeStartMinutes,
+      officeEndMinutes: day?.endMinutes ?? applicableSettings.officeEndMinutes,
+      lateGraceMinutes: applicableSettings.lateGraceMinutes,
+      earlyPunchInAllowanceMinutes: applicableSettings.earlyPunchInAllowanceMinutes,
+      minHalfDayMinutes: applicableSettings.minHalfDayMinutes,
+      punchInMinutes: form.hasPunchIn ? time12ToMinutes(form.punchIn) : null,
+      punchOutMinutes: form.hasPunchOut ? time12ToMinutes(form.punchOut) : null,
+    });
+  };
+
   const onSubmit = async () => {
+    const zone = applicableSettings?.timeZone ?? timeZone;
     const payload = {
       employeeId: form.employeeId,
       attendanceDate: form.attendanceDate,
       reason: form.reason.trim(),
-      status: form.status,
       punchInAt: form.hasPunchIn
-        ? instantFromDateAndTime12(form.attendanceDate, form.punchIn, timeZone)
+        ? instantFromDateAndTime12(form.attendanceDate, form.punchIn, zone)
         : null,
       punchOutAt: form.hasPunchOut
-        ? instantFromDateAndTime12(form.attendanceDate, form.punchOut, timeZone)
+        ? instantFromDateAndTime12(form.attendanceDate, form.punchOut, zone)
         : null,
     };
     const parsed = createAttendanceRecordRequestSchema.safeParse(payload);
@@ -185,42 +223,19 @@ export function AttendanceAddRecordDialog({
               />
               <CrmInlineFieldError message={fieldErrors.employeeId} reserveSpace={false} />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <CrmFieldLabel htmlFor="add-date" required>
-                  Attendance date
-                </CrmFieldLabel>
-                <Input
-                  id="add-date"
-                  type="date"
-                  max={localTodayKey()}
-                  value={form.attendanceDate}
-                  disabled={pending}
-                  className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, formControlStateClass('neutral'))}
-                  onChange={(e) => setForm((c) => ({ ...c, attendanceDate: e.target.value }))}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <CrmFieldLabel htmlFor="add-status" required>
-                  Status
-                </CrmFieldLabel>
-                <Select
-                  value={form.status}
-                  onValueChange={(v) => setForm((c) => ({ ...c, status: v as AttendanceStatus }))}
-                  disabled={pending}
-                >
-                  <SelectTrigger id="add-status" className={CRM_PIPELINE_FORM_FIELD_CLASS}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ATTENDANCE_STATUS_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="grid gap-1.5 sm:max-w-xs">
+              <CrmFieldLabel htmlFor="add-date" required>
+                Attendance date
+              </CrmFieldLabel>
+              <Input
+                id="add-date"
+                type="date"
+                max={localTodayKey()}
+                value={form.attendanceDate}
+                disabled={pending}
+                className={cn(CRM_PIPELINE_FORM_FIELD_CLASS, formControlStateClass('neutral'))}
+                onChange={(e) => setForm((c) => ({ ...c, attendanceDate: e.target.value }))}
+              />
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2 rounded-lg border border-border/70 p-4">
@@ -262,9 +277,34 @@ export function AttendanceAddRecordDialog({
                 />
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground text-xs">Calculated result</span>
+              {previewForForm().rejection ? (
+                <span className="text-destructive text-xs">{previewForForm().rejection}</span>
+              ) : (
+                <>
+                  <AttendanceStatusBadge status={previewForForm().status} />
+                  {attendanceResultDetail({
+                    ...previewForForm(),
+                    punchInAt: form.hasPunchIn ? 'preview' : null,
+                    punchOutAt: form.hasPunchOut ? 'preview' : null,
+                  }) ? (
+                    <span className="text-muted-foreground text-xs">
+                      {attendanceResultDetail({
+                        ...previewForForm(),
+                        punchInAt: form.hasPunchIn ? 'preview' : null,
+                        punchOutAt: form.hasPunchOut ? 'preview' : null,
+                      })}
+                    </span>
+                  ) : null}
+                </>
+              )}
+            </div>
             <p className="text-muted-foreground text-xs">
-              Working hours, late duration and final status are calculated on save using office rules
-              for {form.attendanceDate} ({timeZone}).
+              Status, late arrival, early departure and working hours are calculated from these punch
+              times and the attendance settings effective on this date
+              {applicableSettings ? ` (${applicableSettings.timeZone})` : ''}. Approved leave can replace
+              Absent on save. A punch before the earliest allowed time is rejected.
             </p>
             <div className="grid gap-1.5">
               <CrmFieldLabel htmlFor="add-reason" required>

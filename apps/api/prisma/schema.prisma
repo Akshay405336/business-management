@@ -1828,7 +1828,6 @@ model AttendanceSchedule {
   officeStartMinutes          Int      @map("office_start_minutes")
   officeEndMinutes            Int      @map("office_end_minutes")
   lateGraceMinutes            Int      @default(0) @map("late_grace_minutes")
-  attendanceCutoffMinutes     Int      @map("attendance_cutoff_minutes")
   minFullDayMinutes           Int      @map("min_full_day_minutes")
   minHalfDayMinutes           Int      @map("min_half_day_minutes")
   weeklyOffDays               Json     @default("[]") @map("weekly_off_days")
